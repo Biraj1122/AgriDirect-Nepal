@@ -38,7 +38,7 @@ class HomeScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: const [
                       Text(
-                        "Hello, Biraj ",
+                        "Hello, Biraj",
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
@@ -46,7 +46,7 @@ class HomeScreen extends StatelessWidget {
                       ),
                       SizedBox(height: 2),
                       Text(
-                        "Good Morning",
+                        "Good morning",
                         style: TextStyle(color: Colors.grey),
                       ),
                     ],
@@ -212,10 +212,10 @@ class HomeScreen extends StatelessWidget {
                 ),
                 itemBuilder: (context, index) {
                   final products = [
-                    ["assets/images/tomato.png", "Fresh Tomatoes", "120", "1kg"],
-                    ["assets/images/potato.png", "Organic Potatoes", "80", "1kg"],
+                    ["assets/images/tomatoes.png", "Fresh Tomatoes", "120", "1kg"],
+                    ["assets/images/potato png.png", "Organic Potatoes", "80", "1kg"],
                     ["assets/images/cabbage.png", "Green Cabbage", "60", "1pc"],
-                    ["assets/images/milk.png", "Farm Fresh Milk", "110", "1L"],
+                    ["assets/images/milk png.png", "Farm Fresh Milk", "110", "1L"],
                   ];
 
                   return productCard(
