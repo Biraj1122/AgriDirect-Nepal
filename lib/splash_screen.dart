@@ -29,14 +29,17 @@ class _SplashScreenState extends State<SplashScreen> {
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: const [
-            Icon(
-              Icons.eco,
-              size: 100,
-              color: Colors.white,
+          children: [
+
+            // ✅ YOUR LOGO IMAGE
+            Image.asset(
+              'assets/images/logo.png',
+              height: 120,
             ),
-            SizedBox(height: 20),
-            Text(
+
+            const SizedBox(height: 20),
+
+            const Text(
               "AgriDirect Nepal",
               style: TextStyle(
                 fontSize: 24,
@@ -44,8 +47,10 @@ class _SplashScreenState extends State<SplashScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            SizedBox(height: 10),
-            Text(
+
+            const SizedBox(height: 10),
+
+            const Text(
               "Connecting Farmers & Market",
               style: TextStyle(
                 color: Colors.white70,
