@@ -22,7 +22,7 @@ class _ForgotPasswordScreenState
     super.dispose();
   }
 
-  /// STRONGER EMAIL VALIDATION
+
   bool isValidEmail(String email) {
     email = email.trim();
 
