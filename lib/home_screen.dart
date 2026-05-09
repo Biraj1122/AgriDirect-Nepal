@@ -15,80 +15,51 @@ class HomeScreen extends StatelessWidget {
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
         items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: "Home",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view),
-            label: "Categories",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart_outlined),
-            label: "Cart",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long),
-            label: "Orders",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: "Profile",
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
+          BottomNavigationBarItem(icon: Icon(Icons.grid_view), label: "Categories"),
+          BottomNavigationBarItem(icon: Icon(Icons.shopping_cart_outlined), label: "Cart"),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: "Orders"),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
         ],
       ),
 
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 10,
-          ),
-
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
 
               /// TOP BAR
               Row(
-                mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "Hello, Sam",
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text(
+                        "Hello, Biraj",
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
+                      SizedBox(height: 2),
                       Text(
-                        "Good Morning",
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                        ),
+                        "Good morning",
+                        style: TextStyle(color: Colors.grey),
                       ),
                     ],
                   ),
-
                   Row(
                     children: [
                       IconButton(
                         onPressed: () {},
-                        icon: const Icon(
-                          Icons.notifications_none,
-                        ),
+                        icon: const Icon(Icons.notifications_none),
                       ),
-
                       IconButton(
                         onPressed: () {},
-                        icon: const Icon(
-                          Icons.shopping_cart_outlined,
-                        ),
+                        icon: const Icon(Icons.shopping_cart_outlined),
                       ),
                     ],
                   ),
@@ -99,46 +70,17 @@ class HomeScreen extends StatelessWidget {
 
               /// SEARCH BAR
               Container(
-                padding:
-                const EdgeInsets.symmetric(
-                  horizontal: 15,
-                ),
-
+                padding: const EdgeInsets.symmetric(horizontal: 15),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius:
-                  BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.search,
-                      color: Colors.grey,
-                    ),
-
-                    const SizedBox(width: 10),
-
-                    Expanded(
-                      child: TextField(
-                        decoration: InputDecoration(
-                          hintText:
-                          "Search vegetables, fruits...",
-                          hintStyle: TextStyle(
-                            color:
-                            Colors.grey.shade500,
-                            fontSize: 14,
-                          ),
-                          border: InputBorder.none,
-                        ),
-                      ),
-                    ),
-
-                    const Icon(
-                      Icons.tune,
-                      color: Colors.grey,
-                    ),
-                  ],
+                child: const TextField(
+                  decoration: InputDecoration(
+                    icon: Icon(Icons.search, color: Colors.grey),
+                    hintText: "Search vegetables, fruits...",
+                    border: InputBorder.none,
+                  ),
                 ),
               ),
 
@@ -146,248 +88,143 @@ class HomeScreen extends StatelessWidget {
 
               /// CATEGORY TITLE
               Row(
-                mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     "Categories",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 17,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                   ),
-
                   TextButton(
                     onPressed: () {},
-                    child: const Text(
-                      "See all",
-                      style: TextStyle(
-                        color: Colors.green,
-                      ),
-                    ),
+                    child: const Text("See all", style: TextStyle(color: Colors.green)),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
-              /// CATEGORIES
-              Row(
-                mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
-                children: [
-                  categoryItem(
-                    Icons.eco_outlined,
-                    "Vegetables",
-                  ),
-
-                  categoryItem(
-                    Icons.apple,
-                    "Fruits",
-                  ),
-
-                  categoryItem(
-                    Icons.local_drink_outlined,
-                    "Dairy",
-                  ),
-
-                  categoryItem(
-                    Icons.grass,
-                    "Greens",
-                  ),
-
-                  categoryItem(
-                    Icons.energy_savings_leaf,
-                    "Organic",
-                  ),
-                ],
+              /// CATEGORIES (FIXED OVERFLOW → HORIZONTAL SCROLL)
+              SizedBox(
+                height: 90,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    categoryItem(Icons.eco_outlined, "Vegetables"),
+                    categoryItem(Icons.apple, "Fruits"),
+                    categoryItem(Icons.local_drink_outlined, "Dairy"),
+                    categoryItem(Icons.grass, "Greens"),
+                    categoryItem(Icons.energy_savings_leaf, "Organic"),
+                  ],
+                ),
               ),
 
-              const SizedBox(height: 28),
+              const SizedBox(height: 25),
 
-              /// OFFER CARD (FIXED OVERFLOW)
+              /// OFFER CARD
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
-
                 decoration: BoxDecoration(
-                  borderRadius:
-                  BorderRadius.circular(22),
-
+                  borderRadius: BorderRadius.circular(22),
                   gradient: const LinearGradient(
-                    colors: [
-                      Color(0xff7CB342),
-                      Color(0xff4CAF50),
-                    ],
+                    colors: [Color(0xff7CB342), Color(0xff4CAF50)],
                   ),
                 ),
-
                 child: Row(
                   children: [
-
-                    /// LEFT SIDE
                     Expanded(
                       flex: 2,
                       child: Column(
-                        crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                        mainAxisSize:
-                        MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-
                           const Text(
                             "Fresh Organic\nVegetables",
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 24,
-                              fontWeight:
-                              FontWeight.bold,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-
-                          const SizedBox(height: 15),
-
+                          const SizedBox(height: 10),
                           const Text(
                             "20% OFF",
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 30,
-                              fontWeight:
-                              FontWeight.bold,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-
-                          const SizedBox(height: 18),
-
-                          SizedBox(
-                            height: 45,
-
-                            child: ElevatedButton(
-                              style:
-                              ElevatedButton.styleFrom(
-                                backgroundColor:
-                                Colors.white,
-                                foregroundColor:
-                                Colors.green,
-                                elevation: 0,
-
-                                shape:
-                                RoundedRectangleBorder(
-                                  borderRadius:
-                                  BorderRadius
-                                      .circular(
-                                      12),
-                                ),
-                              ),
-
-                              onPressed: () {},
-
-                              child: const Text(
-                                "Shop now",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight:
-                                  FontWeight.w600,
-                                ),
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: Colors.green,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
+                            onPressed: () {},
+                            child: const Text("Shop now"),
                           ),
                         ],
                       ),
                     ),
-
                     const SizedBox(width: 10),
-
-                    /// RIGHT IMAGE
                     Expanded(
-                      flex: 1,
                       child: Image.asset(
-                        "assets/images/tomato.png",
-                        fit: BoxFit.contain,
-                        height: 130,
+                        "assets/images/tomatoes.png",
+                        height: 110,
                       ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 25),
 
               /// POPULAR PRODUCTS
               Row(
-                mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     "Popular Products",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                   ),
-
                   TextButton(
                     onPressed: () {},
-                    child: const Text(
-                      "See all",
-                      style: TextStyle(
-                        color: Colors.green,
-                      ),
-                    ),
+                    child: const Text("See all", style: TextStyle(color: Colors.green)),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
 
-              /// PRODUCT GRID
-              GridView.count(
-                crossAxisCount: 2,
+              /// PRODUCT GRID (FIXED SCROLL ISSUE)
+              GridView.builder(
+                itemCount: 4,
                 shrinkWrap: true,
-                physics:
-                const NeverScrollableScrollPhysics(),
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
-                childAspectRatio: 0.72,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: 0.75,
+                ),
+                itemBuilder: (context, index) {
+                  final products = [
+                    ["assets/images/tomatoes.png", "Fresh Tomatoes", "120", "1kg"],
+                    ["assets/images/potato png.png", "Organic Potatoes", "80", "1kg"],
+                    ["assets/images/green cabbage.png", "Green Cabbage", "60", "1kg"],
+                    ["assets/images/milk png.png", "Farm Fresh Milk", "110", "1L"],
+                  ];
 
-                children: [
-
-                  /// PRODUCT 1
-                  productCard(
-                    image:
-                    "assets/images/tomato.png",
-                    title: "Fresh Tomatoes",
-                    price: "120",
-                    unit: "1kg",
-                  ),
-
-                  /// PRODUCT 2
-                  productCard(
-                    image:
-                    "assets/images/potato.png",
-                    title: "Organic Potatoes",
-                    price: "80",
-                    unit: "1kg",
-                  ),
-
-                  /// PRODUCT 3
-                  productCard(
-                    image:
-                    "assets/images/cabbage.png",
-                    title: "Green Cabbage",
-                    price: "60",
-                    unit: "1pc",
-                  ),
-
-                  /// PRODUCT 4
-                  productCard(
-                    image:
-                    "assets/images/milk.png",
-                    title: "Farm Fresh Milk",
-                    price: "110",
-                    unit: "1L",
-                  ),
-                ],
+                  return productCard(
+                    image: products[index][0],
+                    title: products[index][1],
+                    price: products[index][2],
+                    unit: products[index][3],
+                  );
+                },
               ),
             ],
           ),
@@ -397,39 +234,25 @@ class HomeScreen extends StatelessWidget {
   }
 
   /// CATEGORY ITEM
-  Widget categoryItem(
-      IconData icon,
-      String title,
-      ) {
-    return Column(
-      children: [
-
-        Container(
-          height: 62,
-          width: 62,
-
-          decoration: BoxDecoration(
-            color: const Color(0xffEEF5E8),
-            borderRadius:
-            BorderRadius.circular(18),
+  Widget categoryItem(IconData icon, String title) {
+    return Container(
+      width: 80,
+      margin: const EdgeInsets.only(right: 10),
+      child: Column(
+        children: [
+          Container(
+            height: 60,
+            width: 60,
+            decoration: BoxDecoration(
+              color: const Color(0xffEEF5E8),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(icon, color: Colors.green, size: 28),
           ),
-
-          child: Icon(
-            icon,
-            color: Colors.green,
-            size: 30,
-          ),
-        ),
-
-        const SizedBox(height: 8),
-
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 12,
-          ),
-        ),
-      ],
+          const SizedBox(height: 6),
+          Text(title, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
     );
   }
 
@@ -442,80 +265,38 @@ class HomeScreen extends StatelessWidget {
   }) {
     return Container(
       padding: const EdgeInsets.all(12),
-
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius:
-        BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(22),
       ),
-
       child: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          /// PRODUCT IMAGE
-          Expanded(
-            child: Center(
-              child: Image.asset(
-                image,
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          /// TITLE
-          Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 15,
-            ),
-          ),
-
-          const SizedBox(height: 4),
-
-          /// UNIT
-          Text(
-            unit,
-            style: TextStyle(
-              color: Colors.grey.shade600,
-            ),
-          ),
-
+          Expanded(child: Center(child: Image.asset(image))),
           const SizedBox(height: 8),
-
-          /// PRICE + BUTTON
+          Text(title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(unit, style: TextStyle(color: Colors.grey.shade600)),
+          const SizedBox(height: 8),
           Row(
-            mainAxisAlignment:
-            MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-
               Text(
                 "Rs. $price",
                 style: const TextStyle(
                   color: Colors.green,
                   fontWeight: FontWeight.bold,
-                  fontSize: 18,
+                  fontSize: 16,
                 ),
               ),
-
               Container(
-                height: 36,
-                width: 36,
-
+                height: 34,
+                width: 34,
                 decoration: BoxDecoration(
                   color: Colors.green,
-                  borderRadius:
-                  BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-
-                child: const Icon(
-                  Icons.add,
-                  color: Colors.white,
-                ),
+                child: const Icon(Icons.add, color: Colors.white),
               ),
             ],
           ),

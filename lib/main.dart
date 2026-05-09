@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'splash_screen.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 
@@ -19,9 +21,8 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.green,
       ),
 
-      home: const LoginScreen(),
-
-      // home: const SignupScreen(),
+      // START FROM SPLASH SCREEN
+      home: const SplashScreen(),
     );
   }
 }
