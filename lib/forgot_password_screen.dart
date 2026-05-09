@@ -18,7 +18,7 @@ class _ForgotPasswordScreenState
 
   @override
   void dispose() {
-    EmailController.dispose();
+    emailController.dispose();
     super.dispose();
   }
 
@@ -41,7 +41,7 @@ class _ForgotPasswordScreenState
       resizeToAvoidBottomInset: true,
       backgroundColor: Colors.white,
 
-      appBar: AppBar(
+      AppBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
       ),
