@@ -95,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 10),
 
                 const Text(
-                  "Fresh from the farm to your home",
+                  "Fresh from the Farm to your house",
                   style: TextStyle(
                     color: Colors.green,
                     fontSize: 13,
