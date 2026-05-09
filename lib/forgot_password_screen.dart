@@ -41,7 +41,7 @@ class _ForgotPasswordScreenState
       resizeToAvoidBottomInset: true,
       backgroundColor: Colors.white,
 
-      AppBar: AppBar(
+      appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
       ),
