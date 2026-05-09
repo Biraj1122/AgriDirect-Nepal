@@ -18,7 +18,7 @@ class _ForgotPasswordScreenState
 
   @override
   void dispose() {
-    emailController.dispose();
+    EmailController.dispose();
     super.dispose();
   }
 
