@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatelessWidget
+{
   const HomeScreen({super.key});
 
   @override
@@ -38,7 +39,8 @@ class HomeScreen extends StatelessWidget {
               ),
               Expanded(
                 flex: 1,
-                child: Container(
+                child: Container
+                  (
                   height: 100,
                   child: Card(
                     child: Column(
