@@ -214,7 +214,7 @@ class HomeScreen extends StatelessWidget {
                   final products = [
                     ["assets/images/tomatoes.png", "Fresh Tomatoes", "120", "1kg"],
                     ["assets/images/potato png.png", "Organic Potatoes", "80", "1kg"],
-                    ["assets/images/green cabbage.png", "Green Cabbage", "60", "1pc"],
+                    ["assets/images/green cabbage.png", "Green Cabbage", "60", "1kg"],
                     ["assets/images/milk png.png", "Farm Fresh Milk", "110", "1L"],
                   ];
 
