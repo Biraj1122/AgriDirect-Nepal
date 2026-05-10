@@ -38,6 +38,7 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
 
+              // Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -58,7 +59,6 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-
                   Row(
                     children: [
                       IconButton(
@@ -83,6 +83,7 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
+              // Search
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15),
                 decoration: BoxDecoration(
@@ -100,22 +101,18 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
+              // Categories title
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     "Categories",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 17,
-                    ),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
                   ),
                   TextButton(
                     onPressed: () {},
-                    child: const Text(
-                      "See all",
-                      style: TextStyle(color: Colors.green),
-                    ),
+                    child: const Text("See all",
+                        style: TextStyle(color: Colors.green)),
                   ),
                 ],
               ),
@@ -138,6 +135,7 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
+              // Banner
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
@@ -162,9 +160,7 @@ class HomeScreen extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-
                           const SizedBox(height: 10),
-
                           const Text(
                             "20% OFF",
                             style: TextStyle(
@@ -173,9 +169,7 @@ class HomeScreen extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-
                           const SizedBox(height: 12),
-
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
@@ -187,7 +181,6 @@ class HomeScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-
                     Expanded(
                       child: Image.asset(
                         "assets/images/tomatoes.png",
@@ -196,6 +189,54 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+
+              const SizedBox(height: 25),
+
+              // Products title
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Popular Products",
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                  ),
+                  TextButton(
+                    onPressed: () {},
+                    child: const Text("See all",
+                        style: TextStyle(color: Colors.green)),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              // Grid
+              GridView.builder(
+                itemCount: 4,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: 0.75,
+                ),
+                itemBuilder: (context, index) {
+                  final products = [
+                    ["assets/images/tomatoes.png", "Fresh Tomatoes", "120", "1kg"],
+                    ["assets/images/potato png.png", "Organic Potatoes", "80", "1kg"],
+                    ["assets/images/green cabbage.png", "Green Cabbage", "60", "1kg"],
+                    ["assets/images/milk png.png", "Farm Fresh Milk", "110", "1L"],
+                  ];
+
+                  return productCard(
+                    image: products[index][0],
+                    title: products[index][1],
+                    price: products[index][2],
+                    unit: products[index][3],
+                  );
+                },
               ),
             ],
           ),
@@ -221,6 +262,31 @@ class HomeScreen extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(title, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget productCard({
+    required String image,
+    required String title,
+    required String price,
+    required String unit,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: Center(child: Image.asset(image))),
+          const SizedBox(height: 8),
+          Text(title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(unit, style: TextStyle(color: Colors.grey.shade600)),
         ],
       ),
     );
