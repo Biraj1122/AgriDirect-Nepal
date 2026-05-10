@@ -1,7 +1,7 @@
 import 'package:farmtech_agridirect/splash_screen.dart';
 import 'package:flutter/material.dart';
-import 'login_screen.dart';
-import 'signup_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/signup_screen.dart';
 
 void main()
 {
