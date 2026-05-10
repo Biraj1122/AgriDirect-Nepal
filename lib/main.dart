@@ -1,3 +1,4 @@
+import 'package:farmtech_agridirect/splash_screen.dart';
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
@@ -20,7 +21,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.green,
       ),
 
-      home: const LoginScreen(),
+      home: const SplashScreen(),
 
     );
   }
