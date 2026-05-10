@@ -8,6 +8,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xffF7F8F3),
+
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: 0,
         selectedItemColor: Colors.green,
@@ -29,12 +30,15 @@ class HomeScreen extends StatelessWidget {
           BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
         ],
       ),
+
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+
+              // Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -76,7 +80,10 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ],
               ),
+
               const SizedBox(height: 20),
+
+              // Search
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15),
                 decoration: BoxDecoration(
@@ -91,7 +98,10 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
+
               const SizedBox(height: 25),
+
+              // Categories title
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -101,11 +111,14 @@ class HomeScreen extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {},
-                    child: const Text("See all", style: TextStyle(color: Colors.green)),
+                    child: const Text("See all",
+                        style: TextStyle(color: Colors.green)),
                   ),
                 ],
               ),
+
               const SizedBox(height: 10),
+
               SizedBox(
                 height: 90,
                 child: ListView(
@@ -119,7 +132,10 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
               ),
+
               const SizedBox(height: 25),
+
+              // Banner
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
@@ -158,9 +174,6 @@ class HomeScreen extends StatelessWidget {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
                               foregroundColor: Colors.green,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
                             ),
                             onPressed: () {},
                             child: const Text("Shop now"),
@@ -168,7 +181,6 @@ class HomeScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
                     Expanded(
                       child: Image.asset(
                         "assets/images/tomatoes.png",
@@ -178,7 +190,10 @@ class HomeScreen extends StatelessWidget {
                   ],
                 ),
               ),
+
               const SizedBox(height: 25),
+
+              // Products title
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -188,11 +203,15 @@ class HomeScreen extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {},
-                    child: const Text("See all", style: TextStyle(color: Colors.green)),
+                    child: const Text("See all",
+                        style: TextStyle(color: Colors.green)),
                   ),
                 ],
               ),
+
               const SizedBox(height: 10),
+
+              // Grid
               GridView.builder(
                 itemCount: 4,
                 shrinkWrap: true,
@@ -265,30 +284,9 @@ class HomeScreen extends StatelessWidget {
         children: [
           Expanded(child: Center(child: Image.asset(image))),
           const SizedBox(height: 8),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           Text(unit, style: TextStyle(color: Colors.grey.shade600)),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Rs. $price",
-                style: const TextStyle(
-                  color: Colors.green,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: Colors.green,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.add, color: Colors.white, size: 18),
-              ),
-            ],
-          ),
         ],
       ),
     );
