@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'login_screen.dart';
-import 'signup_screen.dart';
-
-void main()
-{
+import 'splash_screen.dart';
+import 'home_screen.dart';
+import 'navigation_screen.dart';
+void main() {
   runApp(const MyApp());
 }
 
@@ -20,8 +19,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.green,
       ),
 
-      home: const LoginScreen(),
-
+      home: const SplashScreen(),
     );
   }
 }

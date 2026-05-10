@@ -1,19 +1,12 @@
 import 'package:flutter/material.dart';
 import 'my_cart.dart';
 
-class HomeScreen extends StatelessWidget
-{
+class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-<<<<<<< HEAD
-      backgroundColor: Colors.green,
-      appBar: AppBar(),
-      body: Column(
-        children: [
-=======
       backgroundColor: const Color(0xffF7F8F3),
 
       bottomNavigationBar: BottomNavigationBar(
@@ -65,6 +58,7 @@ class HomeScreen extends StatelessWidget
                       ),
                     ],
                   ),
+
                   Row(
                     children: [
                       IconButton(
@@ -111,11 +105,17 @@ class HomeScreen extends StatelessWidget
                 children: [
                   const Text(
                     "Categories",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
+                    ),
                   ),
                   TextButton(
                     onPressed: () {},
-                    child: const Text("See all", style: TextStyle(color: Colors.green)),
+                    child: const Text(
+                      "See all",
+                      style: TextStyle(color: Colors.green),
+                    ),
                   ),
                 ],
               ),
@@ -162,7 +162,9 @@ class HomeScreen extends StatelessWidget
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+
                           const SizedBox(height: 10),
+
                           const Text(
                             "20% OFF",
                             style: TextStyle(
@@ -171,14 +173,13 @@ class HomeScreen extends StatelessWidget
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+
                           const SizedBox(height: 12),
+
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
                               foregroundColor: Colors.green,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
                             ),
                             onPressed: () {},
                             child: const Text("Shop now"),
@@ -186,7 +187,7 @@ class HomeScreen extends StatelessWidget
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
+
                     Expanded(
                       child: Image.asset(
                         "assets/images/tomatoes.png",
@@ -195,51 +196,6 @@ class HomeScreen extends StatelessWidget
                     ),
                   ],
                 ),
-              ),
-
-              const SizedBox(height: 25),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Popular Products",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                  ),
-                  TextButton(
-                    onPressed: () {},
-                    child: const Text("See all", style: TextStyle(color: Colors.green)),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              GridView.builder(
-                itemCount: 4,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  childAspectRatio: 0.75,
-                ),
-                itemBuilder: (context, index) {
-                  final products = [
-                    ["assets/images/tomatoes.png", "Fresh Tomatoes", "120", "1kg"],
-                    ["assets/images/potato png.png", "Organic Potatoes", "80", "1kg"],
-                    ["assets/images/green cabbage.png", "Green Cabbage", "60", "1kg"],
-                    ["assets/images/milk png.png", "Farm Fresh Milk", "110", "1L"],
-                  ];
-
-                  return productCard(
-                    image: products[index][0],
-                    title: products[index][1],
-                    price: products[index][2],
-                    unit: products[index][3],
-                  );
-                },
               ),
             ],
           ),
@@ -265,90 +221,6 @@ class HomeScreen extends StatelessWidget
           ),
           const SizedBox(height: 6),
           Text(title, style: const TextStyle(fontSize: 12)),
-        ],
-      ),
-    );
-  }
-
-  Widget productCard({
-    required String image,
-    required String title,
-    required String price,
-    required String unit,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(child: Center(child: Image.asset(image))),
-          const SizedBox(height: 8),
-          Text(title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          Text(unit, style: TextStyle(color: Colors.grey.shade600)),
-          const SizedBox(height: 8),
->>>>>>> 3480fdaaddf1760feba99f26abd995cdf51f9bb5
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Image.asset("assets/images/user.png",
-                height: 50,
-                width: 50,
-              )
-            ],
-          ),
-
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: Container(
-                  height: 100,
-                  child: Card(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text("hello")
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 1,
-                child: Container
-                  (
-                  height: 100,
-                  child: Card(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text("hello")
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 2,
-                child: Container(
-                  height: 100,
-                  child: Card(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text("hello")
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          )
         ],
       ),
     );
