@@ -9,7 +9,8 @@ class SignupScreen extends StatefulWidget {
       _SignupScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen> {
+class _SignupScreenState extends State<SignupScreen>
+{
   final GlobalKey<FormState> _formKey =
   GlobalKey<FormState>();
 
@@ -33,20 +34,17 @@ class _SignupScreenState extends State<SignupScreen> {
 
   bool _confirmTouched = false;
 
-  /// EMAIL VALIDATION
   bool isValidEmail(String email) {
     String pattern =
         r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$';
     return RegExp(pattern).hasMatch(email);
   }
 
-  /// PHONE VALIDATION (Nepal)
   bool isValidNepaliPhone(String phone) {
     String pattern = r'^(98|97)\d{8}$';
     return RegExp(pattern).hasMatch(phone);
   }
 
-  /// PASSWORD VALIDATION (UPDATED: min 8 + strong rules)
   bool isValidPassword(String password) {
     String pattern =
         r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$';
