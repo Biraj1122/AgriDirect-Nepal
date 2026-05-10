@@ -38,6 +38,7 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
 
+              // Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -82,6 +83,7 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
+              // Search
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15),
                 decoration: BoxDecoration(
@@ -99,6 +101,7 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
+              // Categories title
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -108,7 +111,8 @@ class HomeScreen extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {},
-                    child: const Text("See all", style: TextStyle(color: Colors.green)),
+                    child: const Text("See all",
+                        style: TextStyle(color: Colors.green)),
                   ),
                 ],
               ),
@@ -131,6 +135,7 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
+              // Banner
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
@@ -169,9 +174,6 @@ class HomeScreen extends StatelessWidget {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
                               foregroundColor: Colors.green,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
                             ),
                             onPressed: () {},
                             child: const Text("Shop now"),
@@ -179,7 +181,6 @@ class HomeScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 10),
                     Expanded(
                       child: Image.asset(
                         "assets/images/tomatoes.png",
@@ -192,6 +193,7 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
+              // Products title
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -201,13 +203,15 @@ class HomeScreen extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {},
-                    child: const Text("See all", style: TextStyle(color: Colors.green)),
+                    child: const Text("See all",
+                        style: TextStyle(color: Colors.green)),
                   ),
                 ],
               ),
 
               const SizedBox(height: 10),
 
+              // Grid
               GridView.builder(
                 itemCount: 4,
                 shrinkWrap: true,
@@ -283,29 +287,6 @@ class HomeScreen extends StatelessWidget {
           Text(title,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           Text(unit, style: TextStyle(color: Colors.grey.shade600)),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Rs. $price",
-                style: const TextStyle(
-                  color: Colors.green,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              Container(
-                height: 34,
-                width: 34,
-                decoration: BoxDecoration(
-                  color: Colors.green,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.add, color: Colors.white),
-              ),
-            ],
-          ),
         ],
       ),
     );
