@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'signup_screen.dart';
 
-void main() {
+void main()
+{
   runApp(const MyApp());
 }
 
@@ -21,7 +22,6 @@ class MyApp extends StatelessWidget {
 
       home: const LoginScreen(),
 
-      // home: const SignupScreen(),
     );
   }
 }
