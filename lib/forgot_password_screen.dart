@@ -82,7 +82,7 @@ class _ForgotPasswordScreenState
                     style: TextStyle(
                       color: Colors.grey.shade600,
                     ),
-                  ),
+                  ,
 
                   const SizedBox(height: 35),
 
