@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'my_cart.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatelessWidget
+{
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+<<<<<<< HEAD
+      backgroundColor: Colors.green,
+      appBar: AppBar(),
+      body: Column(
+        children: [
+=======
       backgroundColor: const Color(0xffF7F8F3),
 
       bottomNavigationBar: BottomNavigationBar(
@@ -38,7 +45,6 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
 
-              // Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -83,7 +89,6 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              // Search
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15),
                 decoration: BoxDecoration(
@@ -101,7 +106,6 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              // Categories title
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -111,8 +115,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {},
-                    child: const Text("See all",
-                        style: TextStyle(color: Colors.green)),
+                    child: const Text("See all", style: TextStyle(color: Colors.green)),
                   ),
                 ],
               ),
@@ -135,7 +138,6 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              // Banner
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
@@ -174,6 +176,9 @@ class HomeScreen extends StatelessWidget {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
                               foregroundColor: Colors.green,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
                             onPressed: () {},
                             child: const Text("Shop now"),
@@ -181,6 +186,7 @@ class HomeScreen extends StatelessWidget {
                         ],
                       ),
                     ),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Image.asset(
                         "assets/images/tomatoes.png",
@@ -193,7 +199,6 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              // Products title
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -203,15 +208,13 @@ class HomeScreen extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {},
-                    child: const Text("See all",
-                        style: TextStyle(color: Colors.green)),
+                    child: const Text("See all", style: TextStyle(color: Colors.green)),
                   ),
                 ],
               ),
 
               const SizedBox(height: 10),
 
-              // Grid
               GridView.builder(
                 itemCount: 4,
                 shrinkWrap: true,
@@ -287,6 +290,65 @@ class HomeScreen extends StatelessWidget {
           Text(title,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
           Text(unit, style: TextStyle(color: Colors.grey.shade600)),
+          const SizedBox(height: 8),
+>>>>>>> 3480fdaaddf1760feba99f26abd995cdf51f9bb5
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Image.asset("assets/images/user.png",
+                height: 50,
+                width: 50,
+              )
+            ],
+          ),
+
+          Row(
+            children: [
+              Expanded(
+                flex: 2,
+                child: Container(
+                  height: 100,
+                  child: Card(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("hello")
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 1,
+                child: Container
+                  (
+                  height: 100,
+                  child: Card(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("hello")
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Container(
+                  height: 100,
+                  child: Card(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text("hello")
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
         ],
       ),
     );
