@@ -25,33 +25,34 @@ class _NavigationScreenState
   void initState() {
     super.initState();
 
-    screens = const [
-      HomeScreen(),
-      CategoriesScreen(),
-      CartScreen(),
-      OrdersScreen(),
-      ProfileScreen(),
+    screens = [
+      HomeScreen(onCartTap: () => changeTab(2)),
+      const CategoriesScreen(),
+      const CartScreen(),
+      const OrdersScreen(),
+      const ProfileScreen(),
     ];
+  }
+
+  void changeTab(int index) {
+    setState(() {
+      currentIndex = index;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
 
-      /// BODY
       body: IndexedStack(
         index: currentIndex,
         children: screens,
       ),
 
-      /// BOTTOM NAVIGATION
       bottomNavigationBar: Container(
         height: 82,
-
         decoration: BoxDecoration(
           color: Colors.white,
-
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(.06),
@@ -65,40 +66,14 @@ class _NavigationScreenState
           top: false,
 
           child: Row(
-            mainAxisAlignment:
-            MainAxisAlignment.spaceAround,
-
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
 
-              navItem(
-                icon: Icons.home_rounded,
-                label: "Home",
-                index: 0,
-              ),
-
-              navItem(
-                icon: Icons.grid_view_rounded,
-                label: "Categories",
-                index: 1,
-              ),
-
-              navItem(
-                icon: Icons.shopping_cart_rounded,
-                label: "Cart",
-                index: 2,
-              ),
-
-              navItem(
-                icon: Icons.receipt_long_rounded,
-                label: "Orders",
-                index: 3,
-              ),
-
-              navItem(
-                icon: Icons.person_rounded,
-                label: "Profile",
-                index: 4,
-              ),
+              navItem(Icons.home_rounded, "Home", 0),
+              navItem(Icons.grid_view_rounded, "Categories", 1),
+              navItem(Icons.shopping_cart_rounded, "Cart", 2),
+              navItem(Icons.receipt_long_rounded, "Orders", 3),
+              navItem(Icons.person_rounded, "Profile", 4),
             ],
           ),
         ),
@@ -106,19 +81,11 @@ class _NavigationScreenState
     );
   }
 
-  Widget navItem({
-    required IconData icon,
-    required String label,
-    required int index,
-  }) {
+  Widget navItem(IconData icon, String label, int index) {
 
-    final bool isSelected =
-        currentIndex == index;
+    final bool isSelected = currentIndex == index;
 
     return InkWell(
-      borderRadius:
-      BorderRadius.circular(18),
-
       onTap: () {
         setState(() {
           currentIndex = index;
@@ -126,11 +93,7 @@ class _NavigationScreenState
       },
 
       child: AnimatedContainer(
-        duration:
-        const Duration(milliseconds: 250),
-
-        curve: Curves.easeInOut,
-
+        duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 8,
@@ -140,46 +103,28 @@ class _NavigationScreenState
           color: isSelected
               ? Colors.green.withOpacity(.12)
               : Colors.transparent,
-
-          borderRadius:
-          BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(18),
         ),
 
         child: Column(
           mainAxisSize: MainAxisSize.min,
-
           children: [
 
-            AnimatedScale(
-              scale: isSelected ? 1.1 : 1,
-              duration:
-              const Duration(milliseconds: 250),
-
-              child: Icon(
-                icon,
-                size: 26,
-
-                color: isSelected
-                    ? Colors.green
-                    : Colors.grey,
-              ),
+            Icon(
+              icon,
+              size: 26,
+              color: isSelected ? Colors.green : Colors.grey,
             ),
 
             const SizedBox(height: 4),
 
             Text(
               label,
-
               style: TextStyle(
                 fontSize: 12,
-
-                color: isSelected
-                    ? Colors.green
-                    : Colors.grey,
-
-                fontWeight: isSelected
-                    ? FontWeight.bold
-                    : FontWeight.w500,
+                color: isSelected ? Colors.green : Colors.grey,
+                fontWeight:
+                isSelected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
           ],
