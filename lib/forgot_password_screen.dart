@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-class ForgotPasswordScreen extends StatefulWidget
-{
+class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
 
   @override
@@ -10,8 +9,7 @@ class ForgotPasswordScreen extends StatefulWidget
 }
 
 class _ForgotPasswordScreenState
-    extends State<ForgotPasswordScreen>
-{
+    extends State<ForgotPasswordScreen> {
   final GlobalKey<FormState> _formKey =
   GlobalKey<FormState>();
 
@@ -19,12 +17,12 @@ class _ForgotPasswordScreenState
   TextEditingController();
 
   @override
-  void dispose()
-  {
+  void dispose() {
     emailController.dispose();
     super.dispose();
   }
 
+  /// STRONGER EMAIL VALIDATION
   bool isValidEmail(String email) {
     email = email.trim();
 
