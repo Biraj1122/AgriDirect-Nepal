@@ -9,27 +9,7 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xffF7F8F3),
 
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        selectedItemColor: Colors.green,
-        unselectedItemColor: Colors.grey,
-        type: BottomNavigationBarType.fixed,
-        onTap: (index) {
-          if (index == 2) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const CartScreen()),
-            );
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.grid_view), label: "Categories"),
-          BottomNavigationBarItem(icon: Icon(Icons.shopping_cart_outlined), label: "Cart"),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: "Orders"),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
-        ],
-      ),
+      
 
       body: SafeArea(
         child: SingleChildScrollView(
@@ -193,7 +173,7 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              // Products title
+              // Products
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -211,7 +191,6 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 10),
 
-              // Grid
               GridView.builder(
                 itemCount: 4,
                 shrinkWrap: true,
