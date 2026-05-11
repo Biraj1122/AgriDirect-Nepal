@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'signup_screen.dart';
-import 'forgot_password_screen.dart';
+import '../forgot_password_screen.dart';
 import 'home_screen.dart';
+import '../navigation_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -10,7 +11,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+{
   final GlobalKey<FormState> _formKey =
   GlobalKey<FormState>();
 
@@ -291,7 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (context) =>
-                            const HomeScreen(),
+                            const NavigationScreen(),
                           ),
                         );
                       }
