@@ -183,6 +183,7 @@ class ProfileScreen extends StatelessWidget {
         ),
         if (!isLast)
           const Divider(height: 1, indent: 70, color: Color(0xffEEEEEE)),
+        //mamamama
       ],
     );
   }
