@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'about_us.dart';
+import 'help_support.dart';
+
 
 class ProfileScreen extends StatelessWidget {
   final String userName;
@@ -103,7 +105,16 @@ class ProfileScreen extends StatelessWidget {
                   menuItem(Icons.payment_outlined, "Payment Methods"),
                   menuItem(Icons.favorite_border_rounded, "My Favorites"),
                   menuItem(Icons.notifications_none_rounded, "Notifications"),
-                  menuItem(Icons.help_outline_rounded, "Help & Support"),
+                  menuItem(
+                    Icons.help_outline_rounded,
+                    "Help & Support",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const HelpSupportScreen()),
+                      );
+                    },
+                  ),
                   // Inside ProfileScreen, find the menuItem for "About Us"
                   menuItem(Icons.info_outline_rounded, "About Us", isLast: true,
                       onTap: () {
@@ -172,6 +183,7 @@ class ProfileScreen extends StatelessWidget {
         ),
         if (!isLast)
           const Divider(height: 1, indent: 70, color: Color(0xffEEEEEE)),
+        //mamamama
       ],
     );
   }
