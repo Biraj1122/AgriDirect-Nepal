@@ -2,12 +2,23 @@ import 'package:flutter/material.dart';
 import 'login_screen.dart';
 import 'about_us.dart';
 import 'help_support.dart';
-
+import 'my_favourites.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String userName;
+  final List<Map<String, dynamic>> favouriteProducts;
+  final List<Map<String, dynamic>> allProducts;
+  final Set<String> favouriteNames;
+  final Function(Map<String, dynamic>) onFavouriteToggle;
 
-  const ProfileScreen({super.key, required this.userName});
+  const ProfileScreen({
+    super.key,
+    required this.userName,
+    required this.favouriteProducts,
+    required this.allProducts,
+    required this.favouriteNames,
+    required this.onFavouriteToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -41,20 +52,21 @@ class ProfileScreen extends StatelessWidget {
                       const CircleAvatar(
                         radius: 45,
                         backgroundColor: Colors.white,
-                        child: Icon(Icons.person, size: 50, color: Colors.grey),
+                        child:
+                        Icon(Icons.person, size: 50, color: Colors.grey),
                       ),
                       const SizedBox(width: 15),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            userName, // Displays the login name
-                            style: const TextStyle(fontSize: 22,
-                                fontWeight: FontWeight.bold),
+                            userName,
+                            style: const TextStyle(
+                                fontSize: 22, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 4),
-                          const Text("+977 9812345678", style: TextStyle(
-                              color: Colors.black54)),
+                          const Text("+977 9812345678",
+                              style: TextStyle(color: Colors.black54)),
                         ],
                       ),
                     ],
@@ -62,6 +74,7 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ],
             ),
+
             // Orders Section
             Padding(
               padding: const EdgeInsets.all(18.0),
@@ -70,14 +83,15 @@ class ProfileScreen extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text("My Orders", style: TextStyle(
-                          fontSize: 17, fontWeight: FontWeight.bold)),
+                      const Text("My Orders",
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.bold)),
                       TextButton.icon(
                         onPressed: () {},
-                        icon: const Icon(Icons.arrow_forward_ios, size: 14,
-                            color: Colors.green),
-                        label: const Text(
-                            "See all", style: TextStyle(color: Colors.green)),
+                        icon: const Icon(Icons.arrow_forward_ios,
+                            size: 14, color: Colors.green),
+                        label: const Text("See all",
+                            style: TextStyle(color: Colors.green)),
                       ),
                     ],
                   ),
@@ -87,7 +101,8 @@ class ProfileScreen extends StatelessWidget {
                     children: [
                       orderStatusItem(
                           Icons.account_balance_wallet_outlined, "To Pay"),
-                      orderStatusItem(Icons.local_shipping_outlined, "To Ship"),
+                      orderStatusItem(
+                          Icons.local_shipping_outlined, "To Ship"),
                       orderStatusItem(
                           Icons.mark_email_read_outlined, "Delivered"),
                       orderStatusItem(Icons.cancel_outlined, "Cancelled"),
@@ -96,6 +111,7 @@ class ProfileScreen extends StatelessWidget {
                 ],
               ),
             ),
+
             // Menu
             Container(
               color: Colors.white,
@@ -103,45 +119,74 @@ class ProfileScreen extends StatelessWidget {
                 children: [
                   menuItem(Icons.location_on_outlined, "My Addresses"),
                   menuItem(Icons.payment_outlined, "Payment Methods"),
-                  menuItem(Icons.favorite_border_rounded, "My Favorites"),
-                  menuItem(Icons.notifications_none_rounded, "Notifications"),
+
+                  // ── MY FAVOURITES — connected ──────────────────────────
+                  menuItem(
+                    Icons.favorite_border_rounded,
+                    "My Favorites",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MyFavouritesScreen(
+                            favouriteProducts: favouriteProducts,
+                            onFavouriteToggle: onFavouriteToggle,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+                  menuItem(
+                      Icons.notifications_none_rounded, "Notifications"),
                   menuItem(
                     Icons.help_outline_rounded,
                     "Help & Support",
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const HelpSupportScreen()),
+                        MaterialPageRoute(
+                            builder: (context) =>
+                            const HelpSupportScreen()),
                       );
                     },
                   ),
-                  // Inside ProfileScreen, find the menuItem for "About Us"
-                  menuItem(Icons.info_outline_rounded, "About Us", isLast: true,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => const AboutUsScreen()),
-                        );
-                      }),
+                  menuItem(
+                    Icons.info_outline_rounded,
+                    "About Us",
+                    isLast: true,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const AboutUsScreen()),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
+
             const SizedBox(height: 25),
+
             GestureDetector(
-              onTap: () =>
-                  Navigator.pushAndRemoveUntil(context,
-                      MaterialPageRoute(builder: (c) => const LoginScreen()), (
-                          r) => false),
+              onTap: () => Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(
+                    builder: (c) => const LoginScreen()),
+                    (r) => false,
+              ),
               child: Container(
                 padding: const EdgeInsets.all(15),
                 color: Colors.white,
-                child: Row(
-                  children: const [
+                child: const Row(
+                  children: [
                     Icon(Icons.logout_rounded, color: Colors.redAccent),
                     SizedBox(width: 15),
-                    Text("Logout", style: TextStyle(
-                        color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                    Text("Logout",
+                        style: TextStyle(
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.bold)),
                   ],
                 ),
               ),
@@ -157,7 +202,8 @@ class ProfileScreen extends StatelessWidget {
       children: [
         Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(color: const Color(0xffF0F4EC),
+          decoration: BoxDecoration(
+              color: const Color(0xffF0F4EC),
               borderRadius: BorderRadius.circular(12)),
           child: Icon(icon, color: const Color(0xff4A6D32), size: 28),
         ),
@@ -175,15 +221,16 @@ class ProfileScreen extends StatelessWidget {
           leading: Icon(icon, color: const Color(0xff4A6D32)),
           title: Text(
             title,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+            style:
+            const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
           ),
-          trailing: const Icon(
-              Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+          trailing: const Icon(Icons.arrow_forward_ios,
+              size: 14, color: Colors.grey),
           onTap: onTap,
         ),
         if (!isLast)
-          const Divider(height: 1, indent: 70, color: Color(0xffEEEEEE)),
-        //mamamama
+          const Divider(
+              height: 1, indent: 70, color: Color(0xffEEEEEE)),
       ],
     );
   }
