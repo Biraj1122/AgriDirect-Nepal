@@ -9,7 +9,7 @@ class CartScreen extends StatelessWidget {
       backgroundColor: const Color(0xffF7F8F3),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        elevation: 0, wq q
+        elevation: 0,
         centerTitle: false,
         title: const Text(
           "My Cart",
