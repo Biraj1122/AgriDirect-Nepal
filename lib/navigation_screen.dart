@@ -7,11 +7,11 @@ import 'screens/orders_screen.dart';
 import 'screens/profile_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
-  const NavigationScreen({super.key});
+  final String userName; // 1. Add this field
+  const NavigationScreen({super.key, required this.userName}); // 2. Update constructor
 
   @override
-  State<NavigationScreen> createState() =>
-      _NavigationScreenState();
+  State<NavigationScreen> createState() => _NavigationScreenState();
 }
 
 class _NavigationScreenState
@@ -25,12 +25,18 @@ class _NavigationScreenState
   void initState() {
     super.initState();
 
+    screens = [ // Removed 'const'
+      const HomeScreen(),
+      const CategoriesScreen(),
+      const CartScreen(),
+      const OrdersScreen(),
+      ProfileScreen(userName: widget.userName), 
     screens = [
       HomeScreen(onCartTap: () => changeTab(2)),
       const CategoriesScreen(),
       const CartScreen(),
       const OrdersScreen(),
-      const ProfileScreen(),
+      const ProfileScreen(
     ];
   }
 

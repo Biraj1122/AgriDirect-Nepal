@@ -169,9 +169,16 @@ class _LoginScreenState extends State<LoginScreen>
 
                     suffixIcon: IconButton(
                       onPressed: () {
-                        setState(() {
-                          isHidden = !isHidden;
-                        });
+                        if (_formKey.currentState!.validate()) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => NavigationScreen(
+                                userName: emailController.text, // Sends the input name/email
+                              ),
+                            ),
+                          );
+                        }
                       },
                       icon: Icon(
                         isHidden
@@ -230,13 +237,13 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
 
                     onPressed: () {
-                      if (_formKey.currentState!
-                          .validate()) {
+                      if (_formKey.currentState!.validate()) {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) =>
-                            const NavigationScreen(),
+                            builder: (context) => NavigationScreen(
+                              userName: emailController.text, // Add this line to fix the error
+                            ),
                           ),
                         );
                       }
