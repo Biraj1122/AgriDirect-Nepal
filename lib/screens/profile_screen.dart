@@ -3,6 +3,9 @@ import 'login_screen.dart';
 import 'about_us.dart';
 import 'help_support.dart';
 import 'my_favourites.dart';
+import 'my_addresses_screen.dart';
+import 'notifications_screen.dart';
+import 'payment_methods_screen.dart'; // Handles safe standalone rendering instances
 
 class ProfileScreen extends StatelessWidget {
   final String userName;
@@ -52,8 +55,7 @@ class ProfileScreen extends StatelessWidget {
                       const CircleAvatar(
                         radius: 45,
                         backgroundColor: Colors.white,
-                        child:
-                        Icon(Icons.person, size: 50, color: Colors.grey),
+                        child: Icon(Icons.person, size: 50, color: Colors.grey),
                       ),
                       const SizedBox(width: 15),
                       Column(
@@ -112,15 +114,40 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
 
-            // Menu
+            // Menu Options List
             Container(
               color: Colors.white,
               child: Column(
                 children: [
-                  menuItem(Icons.location_on_outlined, "My Addresses"),
-                  menuItem(Icons.payment_outlined, "Payment Methods"),
+                  menuItem(
+                    Icons.location_on_outlined,
+                    "My Addresses",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const MyAddressesScreen(),
+                        ),
+                      );
+                    },
+                  ),
 
-                  // ── MY FAVOURITES — connected ──────────────────────────
+                  // CONNECTED SYSTEM ROUTE ENTRY
+                  menuItem(
+                    Icons.payment_outlined,
+                    "Payment Methods",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const PaymentMethodsScreen(
+                            isCheckoutMode: false,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
                   menuItem(
                     Icons.favorite_border_rounded,
                     "My Favorites",
@@ -136,9 +163,19 @@ class ProfileScreen extends StatelessWidget {
                       );
                     },
                   ),
-
                   menuItem(
-                      Icons.notifications_none_rounded, "Notifications"),
+                    Icons.notifications_none_rounded,
+                    "Notifications",
+                    badgeText: "3 items",
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const NotificationsScreen(),
+                        ),
+                      );
+                    },
+                  ),
                   menuItem(
                     Icons.help_outline_rounded,
                     "Help & Support",
@@ -146,8 +183,7 @@ class ProfileScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (context) =>
-                            const HelpSupportScreen()),
+                            builder: (context) => const HelpSupportScreen()),
                       );
                     },
                   ),
@@ -172,8 +208,7 @@ class ProfileScreen extends StatelessWidget {
             GestureDetector(
               onTap: () => Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(
-                    builder: (c) => const LoginScreen()),
+                MaterialPageRoute(builder: (c) => const LoginScreen()),
                     (r) => false,
               ),
               child: Container(
@@ -213,24 +248,46 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget menuItem(IconData icon, String title,
-      {bool isLast = false, VoidCallback? onTap}) {
+  Widget menuItem(IconData icon, String title, {
+    bool isLast = false,
+    VoidCallback? onTap,
+    String? badgeText,
+  }) {
     return Column(
       children: [
         ListTile(
           leading: Icon(icon, color: const Color(0xff4A6D32)),
           title: Text(
             title,
-            style:
-            const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
           ),
-          trailing: const Icon(Icons.arrow_forward_ios,
-              size: 14, color: Colors.grey),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (badgeText != null)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xffE8F5E9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    badgeText,
+                    style: const TextStyle(
+                      color: Color(0xff2E7D32),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+            ],
+          ),
           onTap: onTap,
         ),
         if (!isLast)
-          const Divider(
-              height: 1, indent: 70, color: Color(0xffEEEEEE)),
+          const Divider(height: 1, indent: 70, color: Color(0xffEEEEEE)),
       ],
     );
   }

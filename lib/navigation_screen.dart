@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import 'screens/home_screen.dart';
 import 'screens/my_cart.dart';
 import 'screens/categories_screen.dart';
@@ -20,33 +19,26 @@ class NavigationScreen extends StatefulWidget {
 
 class _NavigationScreenState extends State<NavigationScreen> {
   int currentIndex = 0;
+  int notificationCount = 3; // Active notification badge count state variable
 
-  late final List<Widget> screens;
-
-  @override
-  void initState() {
-    super.initState();
-
-    screens = [
-      HomeScreen(
-        onCartTap: () => changeTab(2),
-      ),
-      CategoriesScreen(
-        allProducts: const [],
-        favouriteNames: const {},
-        onFavouriteToggle: (product) {},
-      ),
-      const CartScreen(),
-      const OrderScreen(),
-      ProfileScreen(
-        userName: widget.userName,
-        allProducts: const [],
-        favouriteNames: const {},
-        favouriteProducts: const [],
-        onFavouriteToggle: (product) {},
-      ),
-    ];
-  }
+  // Dynamic list constructor to pass real-time notification states
+  List<Widget> get screens => [
+    HomeScreen(onCartTap: () => changeTab(2)),
+    CategoriesScreen(
+      allProducts: const [],
+      favouriteNames: const {},
+      onFavouriteToggle: (product) {},
+    ),
+    const CartScreen(),
+    const OrderScreen(),
+    ProfileScreen(
+      userName: widget.userName,
+      allProducts: const [],
+      favouriteNames: const {},
+      favouriteProducts: const [],
+      onFavouriteToggle: (product) {},
+    ),
+  ];
 
   void changeTab(int index) {
     setState(() {
@@ -63,13 +55,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
       ),
       bottomNavigationBar: Container(
         height: 82,
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: const Color.fromARGB(15, 0, 0, 0),
+              color: Color.fromARGB(15, 0, 0, 0),
               blurRadius: 15,
-              offset: const Offset(0, -2),
+              offset: Offset(0, -2),
             ),
           ],
         ),
@@ -98,10 +90,70 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 label: "Orders",
                 index: 3,
               ),
-              navItem(
-                icon: Icons.person_rounded,
-                label: "Profile",
-                index: 4,
+
+              // PROFILE NAVIGATION ITEM EQUIPPED WITH LIVE BADGE OVERLAY
+              InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => changeTab(4),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: currentIndex == 4
+                        ? const Color.fromARGB(30, 76, 175, 80)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none, // Fixed typo from ':' to '.'
+                        children: [
+                          Icon(
+                            Icons.person_rounded,
+                            size: 26,
+                            color: currentIndex == 4 ? Colors.green : Colors.grey,
+                          ),
+                          if (notificationCount > 0)
+                            Positioned(
+                              right: -4,
+                              top: -4,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '$notificationCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        "Profile",
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: currentIndex == 4 ? Colors.green : Colors.grey,
+                          fontWeight: currentIndex == 4
+                              ? FontWeight.bold
+                              : FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -116,38 +168,18 @@ class _NavigationScreenState extends State<NavigationScreen> {
     required int index,
   }) {
     final bool isSelected = currentIndex == index;
-
     return InkWell(
       borderRadius: BorderRadius.circular(18),
-      onTap: () {
-        setState(() {
-          currentIndex = index;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeInOut,
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 8,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? const Color.fromARGB(30, 76, 175, 80)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-        ),
+      onTap: () => changeTab(index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedScale(
-              scale: isSelected ? 1.1 : 1,
-              duration: const Duration(milliseconds: 250),
-              child: Icon(
-                icon,
-                size: 26,
-                color: isSelected ? Colors.green : Colors.grey,
-              ),
+            Icon(
+              icon,
+              size: 26,
+              color: isSelected ? Colors.green : Colors.grey,
             ),
             const SizedBox(height: 4),
             Text(
@@ -155,7 +187,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
               style: TextStyle(
                 fontSize: 12,
                 color: isSelected ? Colors.green : Colors.grey,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
           ],
