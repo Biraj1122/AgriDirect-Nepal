@@ -43,7 +43,7 @@ class _LoginScreenState extends State<LoginScreen>
     return isValidEmail(input) || isValidPhone(input);
   }
 
-  /// SAME PASSWORD RULES AS SIGNUP (STRICT)
+  /// PASSWORD VALIDATION
   bool isValidPassword(String password) {
     String pattern =
         r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$';
@@ -76,26 +76,32 @@ class _LoginScreenState extends State<LoginScreen>
 
                 const SizedBox(height: 20),
 
+                /// LOGIN TEXT
                 Align(
-                  alignment: Alignment.topRight,
-                  child: Text(
-                    "Login",
-                    style: TextStyle(
-                      color: Colors.grey.shade400,
-                      fontSize: 18,
+                  alignment: Alignment.topLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Text(
+                      "Login",
+                      style: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 18,
+                      ),
                     ),
                   ),
                 ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 18),
 
+                /// LOGO
                 Image.asset(
                   "assets/images/logo.png",
-                  height: 180,
+                  height: 165,
                 ),
 
                 const SizedBox(height: 10),
 
+                /// TAGLINE
                 const Text(
                   "Fresh from the farm to your home",
                   style: TextStyle(
@@ -106,7 +112,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                 const SizedBox(height: 35),
 
-                /// EMAIL OR PHONE
+                /// EMAIL OR PHONE FIELD
                 TextFormField(
                   controller: emailController,
                   keyboardType:
@@ -126,14 +132,35 @@ class _LoginScreenState extends State<LoginScreen>
                   },
 
                   decoration: InputDecoration(
-                    hintText: "Email or Phone number",
-                    prefixIcon:
-                    const Icon(Icons.email_outlined),
+                    hintText: "Phone number or Email",
+
+                    contentPadding:
+                    const EdgeInsets.symmetric(
+                        vertical: 16),
+
+                    prefixIcon: Icon(
+                      Icons.phone_outlined,
+                      size: 20,
+                      color: Colors.grey.shade600,
+                    ),
 
                     filled: true,
-                    fillColor: Colors.grey.shade100,
+                    fillColor:
+                    const Color(0xFFF7F7F7),
 
                     border: OutlineInputBorder(
+                      borderRadius:
+                      BorderRadius.circular(5),
+                      borderSide: BorderSide.none,
+                    ),
+
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius:
+                      BorderRadius.circular(5),
+                      borderSide: BorderSide.none,
+                    ),
+
+                    focusedBorder: OutlineInputBorder(
                       borderRadius:
                       BorderRadius.circular(5),
                       borderSide: BorderSide.none,
@@ -143,7 +170,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                 const SizedBox(height: 18),
 
-                /// PASSWORD (STRICT BUT CLEAN MESSAGE)
+                /// PASSWORD FIELD
                 TextFormField(
                   controller: passwordController,
                   obscureText: isHidden,
@@ -164,8 +191,15 @@ class _LoginScreenState extends State<LoginScreen>
                   decoration: InputDecoration(
                     hintText: "Password",
 
-                    prefixIcon:
-                    const Icon(Icons.lock_outline),
+                    contentPadding:
+                    const EdgeInsets.symmetric(
+                        vertical: 16),
+
+                    prefixIcon: Icon(
+                      Icons.lock_outline,
+                      size: 20,
+                      color: Colors.grey.shade600,
+                    ),
 
                     suffixIcon: IconButton(
                       onPressed: () {
@@ -182,15 +216,30 @@ class _LoginScreenState extends State<LoginScreen>
                       },
                       icon: Icon(
                         isHidden
-                            ? Icons.visibility_off
-                            : Icons.visibility,
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        size: 20,
+                        color: Colors.grey.shade600,
                       ),
                     ),
 
                     filled: true,
-                    fillColor: Colors.grey.shade100,
+                    fillColor:
+                    const Color(0xFFF7F7F7),
 
                     border: OutlineInputBorder(
+                      borderRadius:
+                      BorderRadius.circular(5),
+                      borderSide: BorderSide.none,
+                    ),
+
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius:
+                      BorderRadius.circular(5),
+                      borderSide: BorderSide.none,
+                    ),
+
+                    focusedBorder: OutlineInputBorder(
                       borderRadius:
                       BorderRadius.circular(5),
                       borderSide: BorderSide.none,
@@ -213,9 +262,13 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                       );
                     },
+
                     child: const Text(
                       "Forgot password?",
-                      style: TextStyle(color: Colors.green),
+                      style: TextStyle(
+                        color: Colors.green,
+                        fontSize: 13,
+                      ),
                     ),
                   ),
                 ),
@@ -225,11 +278,15 @@ class _LoginScreenState extends State<LoginScreen>
                 /// LOGIN BUTTON
                 SizedBox(
                   width: double.infinity,
-                  height: 52,
+                  height: 48,
 
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
+                      backgroundColor:
+                      const Color(0xFF56B947),
+
+                      elevation: 0,
+
                       shape: RoundedRectangleBorder(
                         borderRadius:
                         BorderRadius.circular(5),
@@ -261,24 +318,30 @@ class _LoginScreenState extends State<LoginScreen>
 
                 const SizedBox(height: 35),
 
-                /// SOCIAL LOGIN DIVIDER
+                /// DIVIDER
                 Row(
                   children: [
                     Expanded(
                       child: Divider(
                         color:
-                        Colors.black.withOpacity(.4),
+                        Colors.black.withOpacity(.3),
                       ),
                     ),
+
                     const Padding(
-                      padding: EdgeInsets.symmetric(
+                      padding:
+                      EdgeInsets.symmetric(
                           horizontal: 8),
-                      child: Text("or continue with"),
+                      child: Text(
+                        "or continue with",
+                        style: TextStyle(fontSize: 12),
+                      ),
                     ),
+
                     Expanded(
                       child: Divider(
                         color:
-                        Colors.black.withOpacity(.4),
+                        Colors.black.withOpacity(.3),
                       ),
                     ),
                   ],
@@ -289,13 +352,16 @@ class _LoginScreenState extends State<LoginScreen>
                 /// SOCIAL BUTTONS
                 Row(
                   children: [
+
                     Expanded(
                       child: socialButton(
                         "assets/images/Gmail_icon_(2020).svg.png",
                         "Google",
                       ),
                     ),
+
                     const SizedBox(width: 15),
+
                     Expanded(
                       child: socialButton(
                         "assets/images/Facebook.png",
@@ -311,9 +377,14 @@ class _LoginScreenState extends State<LoginScreen>
                 Row(
                   mainAxisAlignment:
                   MainAxisAlignment.center,
+
                   children: [
+
                     const Text(
-                        "Don’t have an account? "),
+                      "Create an account? ",
+                      style: TextStyle(fontSize: 13),
+                    ),
+
                     GestureDetector(
                       onTap: () {
                         Navigator.push(
@@ -324,11 +395,13 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                         );
                       },
+
                       child: const Text(
                         "Sign up",
                         style: TextStyle(
                           color: Colors.green,
                           fontWeight: FontWeight.bold,
+                          fontSize: 13,
                         ),
                       ),
                     ),
@@ -344,22 +417,34 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
+  /// SOCIAL BUTTON
   Widget socialButton(String image, String text) {
     return Container(
-      height: 50,
+      height: 46,
+
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(5),
+        color: const Color(0xFFF7F7F7),
+        borderRadius: BorderRadius.circular(3),
       ),
+
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment:
+        MainAxisAlignment.center,
+
         children: [
-          Image.asset(image, height: 24),
+
+          Image.asset(
+            image,
+            height: 24,
+          ),
+
           const SizedBox(width: 10),
+
           Text(
             text,
             style: const TextStyle(
               fontWeight: FontWeight.w600,
+              fontSize: 13,
             ),
           ),
         ],

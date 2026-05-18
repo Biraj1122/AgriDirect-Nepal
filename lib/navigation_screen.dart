@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 
 import 'screens/home_screen.dart';
@@ -7,135 +8,206 @@ import 'screens/orders_screen.dart';
 import 'screens/profile_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
-  final String userName; // 1. Add this field
-  const NavigationScreen({super.key, required this.userName}); // 2. Update constructor
 
-  @override
-  State<NavigationScreen> createState() => _NavigationScreenState();
+final String userName;
+
+const NavigationScreen({
+super.key,
+required this.userName,
+});
+
+@override
+State<NavigationScreen> createState() =>
+_NavigationScreenState();
 }
 
 class _NavigationScreenState
-    extends State<NavigationScreen> {
+extends State<NavigationScreen> {
 
-  int currentIndex = 0;
+int currentIndex = 0;
 
-  late final List<Widget> screens;
+late final List<Widget> screens;
 
-  @override
-  void initState() {
-    super.initState();
+@override
+void initState() {
+super.initState();
 
-    screens = [ // Removed 'const'
-      const HomeScreen(),
-      const CategoriesScreen(),
-      const CartScreen(),
-      const OrdersScreen(),
-      ProfileScreen(userName: widget.userName), 
-    screens = [
-      HomeScreen(onCartTap: () => changeTab(2)),
-      const CategoriesScreen(),
-      const CartScreen(),
-      const OrdersScreen(),
-      const ProfileScreen(
-    ];
-  }
+screens = [
 
-  void changeTab(int index) {
-    setState(() {
-      currentIndex = index;
-    });
-  }
+HomeScreen(
+onCartTap: () => changeTab(2),
+),
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
+const CategoriesScreen(),
 
-      body: IndexedStack(
-        index: currentIndex,
-        children: screens,
-      ),
+const CartScreen(),
 
-      bottomNavigationBar: Container(
-        height: 82,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(.06),
-              blurRadius: 15,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
+const OrderScreen(),
 
-        child: SafeArea(
-          top: false,
+ProfileScreen(
+userName: widget.userName,
+),
+];
+}
 
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
+void changeTab(int index) {
+setState(() {
+currentIndex = index;
+});
+}
 
-              navItem(Icons.home_rounded, "Home", 0),
-              navItem(Icons.grid_view_rounded, "Categories", 1),
-              navItem(Icons.shopping_cart_rounded, "Cart", 2),
-              navItem(Icons.receipt_long_rounded, "Orders", 3),
-              navItem(Icons.person_rounded, "Profile", 4),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+@override
+Widget build(BuildContext context) {
 
-  Widget navItem(IconData icon, String label, int index) {
+return Scaffold(
 
-    final bool isSelected = currentIndex == index;
+/// BODY
+body: IndexedStack(
+index: currentIndex,
+children: screens,
+),
 
-    return InkWell(
-      onTap: () {
-        setState(() {
-          currentIndex = index;
-        });
-      },
+/// BOTTOM NAVIGATION
+bottomNavigationBar: Container(
+height: 82,
 
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 8,
-        ),
+decoration: BoxDecoration(
+color: Colors.white,
 
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.green.withOpacity(.12)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-        ),
+boxShadow: [
+BoxShadow(
+color: Colors.black.withOpacity(.06),
+blurRadius: 15,
+offset: const Offset(0, -2),
+),
+],
+),
 
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+child: SafeArea(
+top: false,
 
-            Icon(
-              icon,
-              size: 26,
-              color: isSelected ? Colors.green : Colors.grey,
-            ),
+child: Row(
+mainAxisAlignment:
+MainAxisAlignment.spaceAround,
 
-            const SizedBox(height: 4),
+children: [
 
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: isSelected ? Colors.green : Colors.grey,
-                fontWeight:
-                isSelected ? FontWeight.bold : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+navItem(
+icon: Icons.home_rounded,
+label: "Home",
+index: 0,
+),
+
+navItem(
+icon: Icons.grid_view_rounded,
+label: "Categories",
+index: 1,
+),
+
+navItem(
+icon: Icons.shopping_cart_rounded,
+label: "Cart",
+index: 2,
+),
+
+navItem(
+icon: Icons.receipt_long_rounded,
+label: "Orders",
+index: 3,
+),
+
+navItem(
+icon: Icons.person_rounded,
+label: "Profile",
+index: 4,
+),
+],
+),
+),
+),
+);
+}
+
+Widget navItem({
+required IconData icon,
+required String label,
+required int index,
+}) {
+
+final bool isSelected =
+currentIndex == index;
+
+return InkWell(
+borderRadius:
+BorderRadius.circular(18),
+
+onTap: () {
+setState(() {
+currentIndex = index;
+});
+},
+
+child: AnimatedContainer(
+duration:
+const Duration(milliseconds: 250),
+
+curve: Curves.easeInOut,
+
+padding: const EdgeInsets.symmetric(
+horizontal: 14,
+vertical: 8,
+),
+
+decoration: BoxDecoration(
+color: isSelected
+? Colors.green.withOpacity(.12)
+    : Colors.transparent,
+
+borderRadius:
+BorderRadius.circular(18),
+),
+
+child: Column(
+mainAxisSize: MainAxisSize.min,
+
+children: [
+
+AnimatedScale(
+scale: isSelected ? 1.1 : 1,
+
+duration:
+const Duration(milliseconds: 250),
+
+child: Icon(
+icon,
+size: 26,
+
+color: isSelected
+? Colors.green
+    : Colors.grey,
+),
+),
+
+const SizedBox(height: 4),
+
+Text(
+label,
+
+style: TextStyle(
+fontSize: 12,
+
+color: isSelected
+? Colors.green
+    : Colors.grey,
+
+fontWeight: isSelected
+? FontWeight.bold
+    : FontWeight.w500,
+),
+),
+],
+),
+),
+);
+}
 }
