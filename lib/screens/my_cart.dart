@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../cart_model.dart';
-import 'payment_methods_screen.dart'; // Imported to navigate to checkout
+import '../payment_methods_screen.dart'; // Imported to navigate to checkout
 
 class CartScreen extends StatelessWidget {
   const CartScreen({super.key});

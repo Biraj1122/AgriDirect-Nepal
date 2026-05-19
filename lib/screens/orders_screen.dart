@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'farm_osm_screen.dart';
+import '../farm_osm_screen.dart';
 
 class OrderScreen extends StatefulWidget {
   const OrderScreen({super.key});

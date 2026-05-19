@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'login_screen.dart';
-import 'about_us.dart';
-import 'help_support.dart';
-import 'my_favourites.dart';
-import 'my_addresses_screen.dart';
-import 'notifications_screen.dart';
-import 'payment_methods_screen.dart'; // Handles safe standalone rendering instances
-
+import '../about_us.dart';
+import '../help_support.dart';
+import '../my_favourites.dart';
+import '../my_addresses_screen.dart';
+import '../notifications_screen.dart';
+import '../payment_methods_screen.dart'; // Handles safe standalone rendering instances
+import 'package:farmtech_agridirect/navigation_screen.dart';
 class ProfileScreen extends StatelessWidget {
   final String userName;
   final List<Map<String, dynamic>> favouriteProducts;

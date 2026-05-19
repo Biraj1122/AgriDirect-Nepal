@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../product.dart';
 import '../product_detail_screen.dart';
+import '../notifications_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onCartTap;
@@ -13,9 +14,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     final List<Product> products = [
-
       Product(
         image: "assets/images/tomatoes.png",
         title: "Fresh Tomatoes",
@@ -25,7 +24,6 @@ class HomeScreen extends StatelessWidget {
         longDescription:
         "Fresh tomatoes grown naturally without chemicals in local farms. Rich in vitamins, antioxidants and perfect for daily cooking.",
       ),
-
       Product(
         image: "assets/images/potato png.png",
         title: "Organic Potatoes",
@@ -35,7 +33,6 @@ class HomeScreen extends StatelessWidget {
         longDescription:
         "Organic potatoes grown without pesticides. High in fiber and perfect for curries, fries, and traditional meals.",
       ),
-
       Product(
         image: "assets/images/green cabbage.png",
         title: "Green Cabbage",
@@ -45,7 +42,6 @@ class HomeScreen extends StatelessWidget {
         longDescription:
         "Fresh cabbage packed with nutrients, good for digestion and immunity support.",
       ),
-
       Product(
         image: "assets/images/milk png.png",
         title: "Farm Fresh Milk",
@@ -62,24 +58,17 @@ class HomeScreen extends StatelessWidget {
 
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 10,
-          ),
-
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-              /// HEADER (UNCHANGED UI)
+              /// HEADER
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-
                   const Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-
                       Text(
                         "Hello, Biraj",
                         style: TextStyle(
@@ -87,9 +76,7 @@ class HomeScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
                       SizedBox(height: 2),
-
                       Text(
                         "Good morning",
                         style: TextStyle(color: Colors.grey),
@@ -99,18 +86,18 @@ class HomeScreen extends StatelessWidget {
 
                   Row(
                     children: [
-
+                      // ✅ NOTIFICATION ICON (FIXED NAVIGATION)
                       IconButton(
-                        onPressed: () {},
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                              const NotificationsScreen(),
+                            ),
+                          );
+                        },
                         icon: const Icon(Icons.notifications_none),
-                      ),
-
-                      /// ✅ FIXED CART NAVIGATION ONLY
-                      IconButton(
-                        onPressed: onCartTap,
-                        icon: const Icon(
-                          Icons.shopping_cart_outlined,
-                        ),
                       ),
                     ],
                   ),
@@ -119,14 +106,13 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 20),
 
-              /// SEARCH BAR (UNCHANGED)
+              /// SEARCH BAR
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 15),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(14),
                 ),
-
                 child: const TextField(
                   decoration: InputDecoration(
                     icon: Icon(Icons.search, color: Colors.grey),
@@ -138,11 +124,10 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              /// CATEGORY TITLE (UNCHANGED)
+              /// CATEGORY TITLE
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-
                   const Text(
                     "Categories",
                     style: TextStyle(
@@ -150,7 +135,6 @@ class HomeScreen extends StatelessWidget {
                       fontSize: 17,
                     ),
                   ),
-
                   TextButton(
                     onPressed: () {},
                     child: const Text(
@@ -163,13 +147,12 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 10),
 
-              /// CATEGORY LIST (UNCHANGED)
+              /// CATEGORY LIST
               SizedBox(
                 height: 90,
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   children: [
-
                     categoryItem(Icons.eco_outlined, "Vegetables"),
                     categoryItem(Icons.apple_outlined, "Fruits"),
                     categoryItem(Icons.local_drink_outlined, "Dairy"),
@@ -181,11 +164,10 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              /// BANNER (UNCHANGED)
+              /// BANNER
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
-
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(22),
                   gradient: const LinearGradient(
@@ -195,15 +177,12 @@ class HomeScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-
                 child: Row(
                   children: [
-
-                    Expanded(
+                    const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-
+                        children: [
                           Text(
                             "Fresh Organic\nVegetables",
                             style: TextStyle(
@@ -212,9 +191,7 @@ class HomeScreen extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-
                           SizedBox(height: 10),
-
                           Text(
                             "20% OFF",
                             style: TextStyle(
@@ -226,7 +203,6 @@ class HomeScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-
                     Image.asset(
                       "assets/images/tomatoes.png",
                       height: 110,
@@ -237,12 +213,11 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              /// PRODUCT GRID (UNCHANGED UI)
+              /// PRODUCT GRID
               GridView.builder(
                 itemCount: products.length,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-
                 gridDelegate:
                 const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
@@ -250,7 +225,6 @@ class HomeScreen extends StatelessWidget {
                   mainAxisSpacing: 14,
                   childAspectRatio: 0.75,
                 ),
-
                 itemBuilder: (context, index) {
                   return GestureDetector(
                     onTap: () {
@@ -263,7 +237,6 @@ class HomeScreen extends StatelessWidget {
                         ),
                       );
                     },
-
                     child: productCard(
                       image: products[index].image,
                       title: products[index].title,
@@ -280,15 +253,13 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// CATEGORY UI (UNCHANGED)
+  /// CATEGORY WIDGET
   Widget categoryItem(IconData icon, String title) {
     return Container(
       width: 80,
       margin: const EdgeInsets.only(right: 10),
-
       child: Column(
         children: [
-
           Container(
             height: 60,
             width: 60,
@@ -298,16 +269,14 @@ class HomeScreen extends StatelessWidget {
             ),
             child: Icon(icon, color: Colors.green, size: 28),
           ),
-
           const SizedBox(height: 6),
-
           Text(title, style: const TextStyle(fontSize: 12)),
         ],
       ),
     );
   }
 
-  /// PRODUCT CARD (UNCHANGED UI)
+  /// PRODUCT CARD
   Widget productCard({
     required String image,
     required String title,
@@ -316,22 +285,15 @@ class HomeScreen extends StatelessWidget {
   }) {
     return Container(
       padding: const EdgeInsets.all(12),
-
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
       ),
-
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          Expanded(
-            child: Center(child: Image.asset(image)),
-          ),
-
+          Expanded(child: Center(child: Image.asset(image))),
           const SizedBox(height: 8),
-
           Text(
             title,
             style: const TextStyle(
@@ -339,14 +301,9 @@ class HomeScreen extends StatelessWidget {
               fontSize: 14,
             ),
           ),
-
           const SizedBox(height: 4),
-
-          Text(unit,
-              style: TextStyle(color: Colors.grey.shade600)),
-
+          Text(unit, style: TextStyle(color: Colors.grey.shade600)),
           const SizedBox(height: 6),
-
           Text(
             "Rs. $price",
             style: const TextStyle(
