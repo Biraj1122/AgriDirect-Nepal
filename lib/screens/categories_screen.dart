@@ -31,6 +31,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     {'name': 'Herbs', 'icon': Icons.local_florist_rounded},
     {'name': 'Organic', 'icon': Icons.spa_rounded},
     {'name': 'Seasonal', 'icon': Icons.wb_sunny_rounded},
+
   ];
 
 
@@ -165,11 +166,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _openCartPage() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const CartScreen()),
-    );
+    Navigator.pop(context);
   }
+
+
 
   // ==================== UI WIDGETS ====================
   Widget _buildAppBar() {
@@ -439,7 +439,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             ListTile(
               leading: const Icon(Icons.shopping_cart_rounded),
               title: const Text('Cart'),
-              onTap: () { Navigator.pop(context); _openCartPage(); },
+              onTap: () {
+                Navigator.pop(context);
+              },
             ),
           ],
         ),

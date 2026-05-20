@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../product.dart';
 import '../product_detail_screen.dart';
-import 'categories_screen.dart';
 
 class HomeScreen extends StatelessWidget {
 
   final VoidCallback onCartTap;
-  final VoidCallback onCategoryTap;
+  final Function(String) onCategoryTap;  // CHANGE: Accept String parameter
 
   const HomeScreen({
     super.key,
@@ -19,7 +18,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
 
     final List<Product> products = [
-
+      // ... (keep all your products the same)
       Product(
         image: "assets/images/tomatoes.png",
         title: "Fresh Tomatoes",
@@ -146,7 +145,9 @@ class HomeScreen extends StatelessWidget {
                   ),
 
                   TextButton(
-                    onPressed: onCategoryTap,
+                    onPressed: () {
+                      onCategoryTap("");  // Empty string = show all categories
+                    },
 
                     child: const Text(
                       "See all",
@@ -281,23 +282,17 @@ class HomeScreen extends StatelessWidget {
                 ),
 
                 itemBuilder: (context, index) {
-
                   return GestureDetector(
-
                     onTap: () {
-
                       Navigator.push(
                         context,
-
                         MaterialPageRoute(
-                          builder: (_) =>
-                              ProductDetailScreen(
-                                product: products[index],
-                              ),
+                          builder: (context) => ProductDetailScreen(
+                            product: products[index],
+                          ),
                         ),
                       );
                     },
-
                     child: productCard(
                       image: products[index].image,
                       title: products[index].title,
@@ -323,16 +318,7 @@ class HomeScreen extends StatelessWidget {
     return GestureDetector(
 
       onTap: () {
-
-        Navigator.push(
-          context,
-
-          MaterialPageRoute(
-            builder: (_) => CategoriesScreen(
-              initialCategory: title,
-            ),
-          ),
-        );
+        onCategoryTap(title);  // CHANGE: Pass category title
       },
 
       child: Container(
