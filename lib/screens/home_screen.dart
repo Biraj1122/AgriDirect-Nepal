@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 
 import '../product.dart';
 import '../product_detail_screen.dart';
+import 'categories_screen.dart';
 
 class HomeScreen extends StatelessWidget {
+
   final VoidCallback onCartTap;
+  final VoidCallback onCategoryTap;
 
   const HomeScreen({
     super.key,
     required this.onCartTap,
+    required this.onCategoryTap,
   });
 
   @override
@@ -71,13 +75,17 @@ class HomeScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
 
-              /// HEADER (UNCHANGED UI)
+              /// HEADER
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+
                 children: [
 
                   const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+
                     children: [
 
                       Text(
@@ -92,7 +100,9 @@ class HomeScreen extends StatelessWidget {
 
                       Text(
                         "Good morning",
-                        style: TextStyle(color: Colors.grey),
+                        style: TextStyle(
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),
@@ -102,10 +112,11 @@ class HomeScreen extends StatelessWidget {
 
                       IconButton(
                         onPressed: () {},
-                        icon: const Icon(Icons.notifications_none),
+                        icon: const Icon(
+                          Icons.notifications_none,
+                        ),
                       ),
 
-                      /// ✅ FIXED CART NAVIGATION ONLY
                       IconButton(
                         onPressed: onCartTap,
                         icon: const Icon(
@@ -117,30 +128,13 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
 
-              const SizedBox(height: 20),
-
-              /// SEARCH BAR (UNCHANGED)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 15),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-
-                child: const TextField(
-                  decoration: InputDecoration(
-                    icon: Icon(Icons.search, color: Colors.grey),
-                    hintText: "Search vegetables, fruits...",
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-
               const SizedBox(height: 25),
 
-              /// CATEGORY TITLE (UNCHANGED)
+              /// CATEGORY TITLE
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+
                 children: [
 
                   const Text(
@@ -152,10 +146,13 @@ class HomeScreen extends StatelessWidget {
                   ),
 
                   TextButton(
-                    onPressed: () {},
+                    onPressed: onCategoryTap,
+
                     child: const Text(
                       "See all",
-                      style: TextStyle(color: Colors.green),
+                      style: TextStyle(
+                        color: Colors.green,
+                      ),
                     ),
                   ),
                 ],
@@ -163,31 +160,59 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 10),
 
-              /// CATEGORY LIST (UNCHANGED)
+              /// CATEGORY LIST
               SizedBox(
                 height: 90,
+
                 child: ListView(
                   scrollDirection: Axis.horizontal,
+
                   children: [
 
-                    categoryItem(Icons.eco_outlined, "Vegetables"),
-                    categoryItem(Icons.apple_outlined, "Fruits"),
-                    categoryItem(Icons.local_drink_outlined, "Dairy"),
-                    categoryItem(Icons.grass, "Greens"),
-                    categoryItem(Icons.energy_savings_leaf, "Organic"),
+                    categoryItem(
+                      context,
+                      Icons.eco_outlined,
+                      "Vegetables",
+                    ),
+
+                    categoryItem(
+                      context,
+                      Icons.apple_outlined,
+                      "Fruits",
+                    ),
+
+                    categoryItem(
+                      context,
+                      Icons.local_drink_outlined,
+                      "Dairy",
+                    ),
+
+                    categoryItem(
+                      context,
+                      Icons.grass,
+                      "Herbs",
+                    ),
+
+                    categoryItem(
+                      context,
+                      Icons.energy_savings_leaf,
+                      "Organic",
+                    ),
                   ],
                 ),
               ),
 
               const SizedBox(height: 25),
 
-              /// BANNER (UNCHANGED)
+              /// BANNER
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
 
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius:
+                  BorderRadius.circular(22),
+
                   gradient: const LinearGradient(
                     colors: [
                       Color(0xff7CB342),
@@ -201,7 +226,9 @@ class HomeScreen extends StatelessWidget {
 
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment:
+                        CrossAxisAlignment.start,
+
                         children: const [
 
                           Text(
@@ -237,11 +264,13 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              /// PRODUCT GRID (UNCHANGED UI)
+              /// PRODUCT GRID
               GridView.builder(
                 itemCount: products.length,
                 shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
+
+                physics:
+                const NeverScrollableScrollPhysics(),
 
                 gridDelegate:
                 const SliverGridDelegateWithFixedCrossAxisCount(
@@ -252,14 +281,19 @@ class HomeScreen extends StatelessWidget {
                 ),
 
                 itemBuilder: (context, index) {
+
                   return GestureDetector(
+
                     onTap: () {
+
                       Navigator.push(
                         context,
+
                         MaterialPageRoute(
-                          builder: (_) => ProductDetailScreen(
-                            product: products[index],
-                          ),
+                          builder: (_) =>
+                              ProductDetailScreen(
+                                product: products[index],
+                              ),
                         ),
                       );
                     },
@@ -280,40 +314,72 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// CATEGORY UI (UNCHANGED)
-  Widget categoryItem(IconData icon, String title) {
-    return Container(
-      width: 80,
-      margin: const EdgeInsets.only(right: 10),
+  Widget categoryItem(
+      BuildContext context,
+      IconData icon,
+      String title,
+      ) {
 
-      child: Column(
-        children: [
+    return GestureDetector(
 
-          Container(
-            height: 60,
-            width: 60,
-            decoration: BoxDecoration(
-              color: const Color(0xffEEF5E8),
-              borderRadius: BorderRadius.circular(18),
+      onTap: () {
+
+        Navigator.push(
+          context,
+
+          MaterialPageRoute(
+            builder: (_) => CategoriesScreen(
+              initialCategory: title,
             ),
-            child: Icon(icon, color: Colors.green, size: 28),
           ),
+        );
+      },
 
-          const SizedBox(height: 6),
+      child: Container(
+        width: 80,
+        margin: const EdgeInsets.only(right: 10),
 
-          Text(title, style: const TextStyle(fontSize: 12)),
-        ],
+        child: Column(
+          children: [
+
+            Container(
+              height: 60,
+              width: 60,
+
+              decoration: BoxDecoration(
+                color: const Color(0xffEEF5E8),
+                borderRadius:
+                BorderRadius.circular(18),
+              ),
+
+              child: Icon(
+                icon,
+                color: Colors.green,
+                size: 28,
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  /// PRODUCT CARD (UNCHANGED UI)
   Widget productCard({
     required String image,
     required String title,
     required String price,
     required String unit,
   }) {
+
     return Container(
       padding: const EdgeInsets.all(12),
 
@@ -323,11 +389,15 @@ class HomeScreen extends StatelessWidget {
       ),
 
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+
         children: [
 
           Expanded(
-            child: Center(child: Image.asset(image)),
+            child: Center(
+              child: Image.asset(image),
+            ),
           ),
 
           const SizedBox(height: 8),
@@ -342,8 +412,12 @@ class HomeScreen extends StatelessWidget {
 
           const SizedBox(height: 4),
 
-          Text(unit,
-              style: TextStyle(color: Colors.grey.shade600)),
+          Text(
+            unit,
+            style: TextStyle(
+              color: Colors.grey.shade600,
+            ),
+          ),
 
           const SizedBox(height: 6),
 
