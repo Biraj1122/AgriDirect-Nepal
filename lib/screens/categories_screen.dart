@@ -4,8 +4,13 @@ import '../product.dart';
 import 'my_cart.dart';
 
 class CategoriesScreen extends StatefulWidget {
-  const CategoriesScreen({super.key});
 
+  final String initialCategory;
+
+  const CategoriesScreen({
+    super.key,
+    this.initialCategory = 'All',
+  });
   @override
   State<CategoriesScreen> createState() => _CategoriesScreenState();
 }
@@ -26,7 +31,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     {'name': 'Herbs', 'icon': Icons.local_florist_rounded},
     {'name': 'Organic', 'icon': Icons.spa_rounded},
     {'name': 'Seasonal', 'icon': Icons.wb_sunny_rounded},
+
   ];
+
 
   List<Map<String, dynamic>> get _filteredProducts {
     final selectedCategory = _categories[_selectedCategoryIndex]['name'];
@@ -99,6 +106,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       {'name': 'Sweet Corn (मकै)', 'price': 90, 'unit': 'piece', 'category': 'Seasonal', 'farm': 'Terai Fresh', 'badge': 'Seasonal', 'badgeColor': Colors.amber, 'imagePath': 'sweet corn.png', 'discount': null},
       {'name': 'Fresh Peas (केराउ)', 'price': 110, 'unit': 'kg', 'category': 'Seasonal', 'farm': 'Kathmandu Valley', 'badge': 'Seasonal', 'badgeColor': Colors.green, 'imagePath': 'peas.png', 'discount': null},
     ];
+    final categoryIndex = _categories.indexWhere(
+          (category) =>
+      category['name'] == widget.initialCategory,
+    );
+
+    if (categoryIndex != -1) {
+      _selectedCategoryIndex = categoryIndex;
+    }
   }
 
   @override
@@ -151,11 +166,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _openCartPage() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const CartScreen()),
-    );
+    Navigator.pop(context);
   }
+
+
 
   // ==================== UI WIDGETS ====================
   Widget _buildAppBar() {
@@ -425,7 +439,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             ListTile(
               leading: const Icon(Icons.shopping_cart_rounded),
               title: const Text('Cart'),
-              onTap: () { Navigator.pop(context); _openCartPage(); },
+              onTap: () {
+                Navigator.pop(context);
+              },
             ),
           ],
         ),

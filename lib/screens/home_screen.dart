@@ -2,19 +2,23 @@ import 'package:flutter/material.dart';
 
 import '../product.dart';
 import '../product_detail_screen.dart';
-import '../notifications_screen.dart';
 
 class HomeScreen extends StatelessWidget {
+
   final VoidCallback onCartTap;
+  final Function(String) onCategoryTap;  // CHANGE: Accept String parameter
 
   const HomeScreen({
     super.key,
     required this.onCartTap,
+    required this.onCategoryTap,
   });
 
   @override
   Widget build(BuildContext context) {
+
     final List<Product> products = [
+      // ... (keep all your products the same)
       Product(
         image: "assets/images/tomatoes.png",
         title: "Fresh Tomatoes",
@@ -24,6 +28,7 @@ class HomeScreen extends StatelessWidget {
         longDescription:
         "Fresh tomatoes grown naturally without chemicals in local farms. Rich in vitamins, antioxidants and perfect for daily cooking.",
       ),
+
       Product(
         image: "assets/images/potato png.png",
         title: "Organic Potatoes",
@@ -33,6 +38,7 @@ class HomeScreen extends StatelessWidget {
         longDescription:
         "Organic potatoes grown without pesticides. High in fiber and perfect for curries, fries, and traditional meals.",
       ),
+
       Product(
         image: "assets/images/green cabbage.png",
         title: "Green Cabbage",
@@ -42,6 +48,7 @@ class HomeScreen extends StatelessWidget {
         longDescription:
         "Fresh cabbage packed with nutrients, good for digestion and immunity support.",
       ),
+
       Product(
         image: "assets/images/milk png.png",
         title: "Farm Fresh Milk",
@@ -58,17 +65,28 @@ class HomeScreen extends StatelessWidget {
 
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 18,
+            vertical: 10,
+          ),
+
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+
               /// HEADER
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+
                 children: [
+
                   const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+
                     children: [
+
                       Text(
                         "Hello, Biraj",
                         style: TextStyle(
@@ -76,58 +94,48 @@ class HomeScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+
                       SizedBox(height: 2),
+
                       Text(
                         "Good morning",
-                        style: TextStyle(color: Colors.grey),
+                        style: TextStyle(
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),
 
                   Row(
                     children: [
-                      // ✅ NOTIFICATION ICON (FIXED NAVIGATION)
+
                       IconButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                              const NotificationsScreen(),
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.notifications_none),
+                        onPressed: () {},
+                        icon: const Icon(
+                          Icons.notifications_none,
+                        ),
+                      ),
+
+                      IconButton(
+                        onPressed: onCartTap,
+                        icon: const Icon(
+                          Icons.shopping_cart_outlined,
+                        ),
                       ),
                     ],
                   ),
                 ],
               ),
 
-              const SizedBox(height: 20),
-
-              /// SEARCH BAR
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 15),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const TextField(
-                  decoration: InputDecoration(
-                    icon: Icon(Icons.search, color: Colors.grey),
-                    hintText: "Search vegetables, fruits...",
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-
               const SizedBox(height: 25),
 
               /// CATEGORY TITLE
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+
                 children: [
+
                   const Text(
                     "Categories",
                     style: TextStyle(
@@ -135,11 +143,17 @@ class HomeScreen extends StatelessWidget {
                       fontSize: 17,
                     ),
                   ),
+
                   TextButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      onCategoryTap("");  // Empty string = show all categories
+                    },
+
                     child: const Text(
                       "See all",
-                      style: TextStyle(color: Colors.green),
+                      style: TextStyle(
+                        color: Colors.green,
+                      ),
                     ),
                   ),
                 ],
@@ -150,14 +164,41 @@ class HomeScreen extends StatelessWidget {
               /// CATEGORY LIST
               SizedBox(
                 height: 90,
+
                 child: ListView(
                   scrollDirection: Axis.horizontal,
+
                   children: [
-                    categoryItem(Icons.eco_outlined, "Vegetables"),
-                    categoryItem(Icons.apple_outlined, "Fruits"),
-                    categoryItem(Icons.local_drink_outlined, "Dairy"),
-                    categoryItem(Icons.grass, "Greens"),
-                    categoryItem(Icons.energy_savings_leaf, "Organic"),
+
+                    categoryItem(
+                      context,
+                      Icons.eco_outlined,
+                      "Vegetables",
+                    ),
+
+                    categoryItem(
+                      context,
+                      Icons.apple_outlined,
+                      "Fruits",
+                    ),
+
+                    categoryItem(
+                      context,
+                      Icons.local_drink_outlined,
+                      "Dairy",
+                    ),
+
+                    categoryItem(
+                      context,
+                      Icons.grass,
+                      "Herbs",
+                    ),
+
+                    categoryItem(
+                      context,
+                      Icons.energy_savings_leaf,
+                      "Organic",
+                    ),
                   ],
                 ),
               ),
@@ -168,8 +209,11 @@ class HomeScreen extends StatelessWidget {
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
+
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius:
+                  BorderRadius.circular(22),
+
                   gradient: const LinearGradient(
                     colors: [
                       Color(0xff7CB342),
@@ -177,12 +221,17 @@ class HomeScreen extends StatelessWidget {
                     ],
                   ),
                 ),
+
                 child: Row(
                   children: [
-                    const Expanded(
+
+                    Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                        crossAxisAlignment:
+                        CrossAxisAlignment.start,
+
+                        children: const [
+
                           Text(
                             "Fresh Organic\nVegetables",
                             style: TextStyle(
@@ -191,7 +240,9 @@ class HomeScreen extends StatelessWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+
                           SizedBox(height: 10),
+
                           Text(
                             "20% OFF",
                             style: TextStyle(
@@ -203,6 +254,7 @@ class HomeScreen extends StatelessWidget {
                         ],
                       ),
                     ),
+
                     Image.asset(
                       "assets/images/tomatoes.png",
                       height: 110,
@@ -217,7 +269,10 @@ class HomeScreen extends StatelessWidget {
               GridView.builder(
                 itemCount: products.length,
                 shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
+
+                physics:
+                const NeverScrollableScrollPhysics(),
+
                 gridDelegate:
                 const SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
@@ -225,13 +280,14 @@ class HomeScreen extends StatelessWidget {
                   mainAxisSpacing: 14,
                   childAspectRatio: 0.75,
                 ),
+
                 itemBuilder: (context, index) {
                   return GestureDetector(
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => ProductDetailScreen(
+                          builder: (context) => ProductDetailScreen(
                             product: products[index],
                           ),
                         ),
@@ -253,47 +309,85 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// CATEGORY WIDGET
-  Widget categoryItem(IconData icon, String title) {
-    return Container(
-      width: 80,
-      margin: const EdgeInsets.only(right: 10),
-      child: Column(
-        children: [
-          Container(
-            height: 60,
-            width: 60,
-            decoration: BoxDecoration(
-              color: const Color(0xffEEF5E8),
-              borderRadius: BorderRadius.circular(18),
+  Widget categoryItem(
+      BuildContext context,
+      IconData icon,
+      String title,
+      ) {
+
+    return GestureDetector(
+
+      onTap: () {
+        onCategoryTap(title);  // CHANGE: Pass category title
+      },
+
+      child: Container(
+        width: 80,
+        margin: const EdgeInsets.only(right: 10),
+
+        child: Column(
+          children: [
+
+            Container(
+              height: 60,
+              width: 60,
+
+              decoration: BoxDecoration(
+                color: const Color(0xffEEF5E8),
+                borderRadius:
+                BorderRadius.circular(18),
+              ),
+
+              child: Icon(
+                icon,
+                color: Colors.green,
+                size: 28,
+              ),
             ),
-            child: Icon(icon, color: Colors.green, size: 28),
-          ),
-          const SizedBox(height: 6),
-          Text(title, style: const TextStyle(fontSize: 12)),
-        ],
+
+            const SizedBox(height: 6),
+
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  /// PRODUCT CARD
   Widget productCard({
     required String image,
     required String title,
     required String price,
     required String unit,
   }) {
+
     return Container(
       padding: const EdgeInsets.all(12),
+
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
       ),
+
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+
         children: [
-          Expanded(child: Center(child: Image.asset(image))),
+
+          Expanded(
+            child: Center(
+              child: Image.asset(image),
+            ),
+          ),
+
           const SizedBox(height: 8),
+
           Text(
             title,
             style: const TextStyle(
@@ -301,9 +395,18 @@ class HomeScreen extends StatelessWidget {
               fontSize: 14,
             ),
           ),
+
           const SizedBox(height: 4),
-          Text(unit, style: TextStyle(color: Colors.grey.shade600)),
+
+          Text(
+            unit,
+            style: TextStyle(
+              color: Colors.grey.shade600,
+            ),
+          ),
+
           const SizedBox(height: 6),
+
           Text(
             "Rs. $price",
             style: const TextStyle(
