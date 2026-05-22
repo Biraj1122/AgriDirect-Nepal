@@ -156,7 +156,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     Navigator.push
       (
       context,
-      MaterialPageRoute(
+      MaterialPageRoute
+        (
         builder: (context) => FavoritesPage(
           favoriteItems: _favoriteItems,
           allProducts: _allProducts,
