@@ -21,7 +21,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
   int currentIndex = 0;
   int notificationCount = 3;
 
-  // Temporary empty data (YOU MUST replace later with real state)
   final List<Map<String, dynamic>> _emptyProducts = [];
   final Set<String> _emptyFavNames = {};
 
@@ -31,16 +30,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
     });
   }
 
+  void handleCategoryTap(String category) {
+    setState(() {
+      currentIndex = 0; // go to home tab
+      // later you can filter products here
+    });
+  }
+
   List<Widget> get screens => [
-    HomeScreen(onCartTap: () => changeTab(2)),
-
+    HomeScreen(
+      onCartTap: () => changeTab(2),
+      onCategoryTap: handleCategoryTap,
+    ),
     const CategoriesScreen(),
-
     const CartScreen(),
-
     const OrderScreen(),
-
-    // ✅ FIXED PROFILE SCREEN CONSTRUCTOR
     ProfileScreen(
       userName: widget.userName,
       favouriteProducts: const [],
@@ -57,7 +61,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
         index: currentIndex,
         children: screens,
       ),
-
       bottomNavigationBar: Container(
         height: 82,
         decoration: const BoxDecoration(
@@ -79,51 +82,23 @@ class _NavigationScreenState extends State<NavigationScreen> {
               navItem(Icons.grid_view_rounded, "Categories", 1),
               navItem(Icons.shopping_cart_rounded, "Cart", 2),
               navItem(Icons.receipt_long_rounded, "Orders", 3),
-
               InkWell(
-                borderRadius: BorderRadius.circular(18),
                 onTap: () => changeTab(4),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Icon(
-                          Icons.person_rounded,
-                          size: 26,
-                          color:
-                          currentIndex == 4 ? Colors.green : Colors.grey,
-                        ),
-                        if (notificationCount > 0)
-                          Positioned(
-                            right: -4,
-                            top: -4,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Text(
-                                '$notificationCount',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9,
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
+                    Icon(
+                      Icons.person_rounded,
+                      size: 26,
+                      color: currentIndex == 4 ? Colors.green : Colors.grey,
                     ),
                     const SizedBox(height: 4),
                     Text(
                       "Profile",
                       style: TextStyle(
                         fontSize: 12,
-                        color: currentIndex == 4
-                            ? Colors.green
-                            : Colors.grey,
+                        color:
+                        currentIndex == 4 ? Colors.green : Colors.grey,
                       ),
                     ),
                   ],
@@ -140,7 +115,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final isSelected = currentIndex == index;
 
     return InkWell(
-      borderRadius: BorderRadius.circular(18),
       onTap: () => changeTab(index),
       child: Column(
         mainAxisSize: MainAxisSize.min,
