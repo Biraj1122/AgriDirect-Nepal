@@ -5,11 +5,14 @@ import '../product_detail_screen.dart';
 import '../notifications_screen.dart';
 
 class HomeScreen extends StatelessWidget {
+
   final VoidCallback onCartTap;
+  final Function(String) onCategoryTap;  // CHANGE: Accept String parameter
 
   const HomeScreen({
     super.key,
     required this.onCartTap,
+    required this.onCategoryTap,
   });
 
   @override
@@ -64,10 +67,14 @@ class HomeScreen extends StatelessWidget {
             children: [
               /// HEADER
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+
                 children: [
                   const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+
                     children: [
                       Text(
                         "Hello, Biraj",
@@ -79,7 +86,9 @@ class HomeScreen extends StatelessWidget {
                       SizedBox(height: 2),
                       Text(
                         "Good morning",
-                        style: TextStyle(color: Colors.grey),
+                        style: TextStyle(
+                          color: Colors.grey,
+                        ),
                       ),
                     ],
                   ),
@@ -126,7 +135,9 @@ class HomeScreen extends StatelessWidget {
 
               /// CATEGORY TITLE
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisAlignment:
+                MainAxisAlignment.spaceBetween,
+
                 children: [
                   const Text(
                     "Categories",
@@ -136,10 +147,15 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                   TextButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      onCategoryTap("");  // Empty string = show all categories
+                    },
+
                     child: const Text(
                       "See all",
-                      style: TextStyle(color: Colors.green),
+                      style: TextStyle(
+                        color: Colors.green,
+                      ),
                     ),
                   ),
                 ],
@@ -150,8 +166,10 @@ class HomeScreen extends StatelessWidget {
               /// CATEGORY LIST
               SizedBox(
                 height: 90,
+
                 child: ListView(
                   scrollDirection: Axis.horizontal,
+
                   children: [
                     categoryItem(Icons.eco_outlined, "Vegetables"),
                     categoryItem(Icons.apple_outlined, "Fruits"),
@@ -169,7 +187,9 @@ class HomeScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius:
+                  BorderRadius.circular(22),
+
                   gradient: const LinearGradient(
                     colors: [
                       Color(0xff7CB342),
@@ -231,7 +251,7 @@ class HomeScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => ProductDetailScreen(
+                          builder: (context) => ProductDetailScreen(
                             product: products[index],
                           ),
                         ),
@@ -283,6 +303,7 @@ class HomeScreen extends StatelessWidget {
     required String price,
     required String unit,
   }) {
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -290,7 +311,9 @@ class HomeScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+        CrossAxisAlignment.start,
+
         children: [
           Expanded(child: Center(child: Image.asset(image))),
           const SizedBox(height: 8),
