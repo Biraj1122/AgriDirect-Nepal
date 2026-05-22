@@ -1,26 +1,29 @@
 import 'package:flutter/material.dart';
-import 'login_screen.dart';
+
+import '../login_screen.dart';
 import '../about_us.dart';
 import '../help_support.dart';
 import '../my_favourites.dart';
-import '../my_addresses_screen.dart';
+import 'my_addresses_screen.dart';
 import '../notifications_screen.dart';
-import '../payment_methods_screen.dart'; // Handles safe standalone rendering instances
-import 'package:farmtech_agridirect/navigation_screen.dart';
+import '../payment_methods_screen.dart';
+import '../user_data.dart';
+
 class ProfileScreen extends StatelessWidget {
   final String userName;
+
   final List<Map<String, dynamic>> favouriteProducts;
   final List<Map<String, dynamic>> allProducts;
   final Set<String> favouriteNames;
-  final Function(Map<String, dynamic>) onFavouriteToggle;
+  final Function(Map<String, dynamic>)? onFavouriteToggle;
 
   const ProfileScreen({
     super.key,
     required this.userName,
-    required this.favouriteProducts,
-    required this.allProducts,
-    required this.favouriteNames,
-    required this.onFavouriteToggle,
+    this.favouriteProducts = const [],
+    this.allProducts = const [],
+    this.favouriteNames = const {},
+    this.onFavouriteToggle,
   });
 
   @override
@@ -30,91 +33,51 @@ class ProfileScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
-            Stack(
-              children: [
-                Container(
-                  height: 220,
-                  width: double.infinity,
-                  decoration: const BoxDecoration(
-                    color: Color(0xffE8F5E9),
-                  ),
-                ),
-                Positioned(
-                  top: 50,
-                  right: 20,
-                  child: IconButton(
-                    icon: const Icon(Icons.settings_outlined),
-                    onPressed: () {},
-                  ),
-                ),
-                Positioned(
-                  bottom: 40,
-                  left: 25,
-                  child: Row(
-                    children: [
-                      const CircleAvatar(
-                        radius: 45,
-                        backgroundColor: Colors.white,
-                        child: Icon(Icons.person, size: 50, color: Colors.grey),
-                      ),
-                      const SizedBox(width: 15),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            userName,
-                            style: const TextStyle(
-                                fontSize: 22, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text("+977 9812345678",
-                              style: TextStyle(color: Colors.black54)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            // Orders Section
-            Padding(
-              padding: const EdgeInsets.all(18.0),
-              child: Column(
+            Container(
+              height: 220,
+              width: double.infinity,
+              color: const Color(0xffE8F5E9),
+              child: Stack(
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("My Orders",
-                          style: TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.bold)),
-                      TextButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.arrow_forward_ios,
-                            size: 14, color: Colors.green),
-                        label: const Text("See all",
-                            style: TextStyle(color: Colors.green)),
-                      ),
-                    ],
+                  Positioned(
+                    top: 50,
+                    right: 20,
+                    child: IconButton(
+                      icon: const Icon(Icons.settings_outlined),
+                      onPressed: () {},
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      orderStatusItem(
-                          Icons.account_balance_wallet_outlined, "To Pay"),
-                      orderStatusItem(
-                          Icons.local_shipping_outlined, "To Ship"),
-                      orderStatusItem(
-                          Icons.mark_email_read_outlined, "Delivered"),
-                      orderStatusItem(Icons.cancel_outlined, "Cancelled"),
-                    ],
+                  Positioned(
+                    bottom: 40,
+                    left: 25,
+                    child: Row(
+                      children: [
+                        const CircleAvatar(
+                          radius: 45,
+                          child: Icon(Icons.person, size: 50),
+                        ),
+                        const SizedBox(width: 15),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              userName,
+                              style: const TextStyle(
+                                  fontSize: 22, fontWeight: FontWeight.bold),
+                            ),
+                            const Text("+977 9812345678"),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
 
-            // Menu Options List
+            const SizedBox(height: 20),
+
+            /// MENU
             Container(
               color: Colors.white,
               child: Column(
@@ -126,22 +89,24 @@ class ProfileScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const MyAddressesScreen(),
+                          builder: (_) => const MyAddressesScreen(),
                         ),
                       );
                     },
                   ),
 
-                  // CONNECTED SYSTEM ROUTE ENTRY
                   menuItem(
                     Icons.payment_outlined,
                     "Payment Methods",
                     onTap: () {
+                      // FIXED: safe dummy values (prevents crash)
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const PaymentMethodsScreen(
-                            isCheckoutMode: false,
+                          builder: (_) => const PaymentMethodsScreen(
+                            subtotal: 0,
+                            deliveryFee: 0,
+                            total: 0,
                           ),
                         ),
                       );
@@ -149,66 +114,51 @@ class ProfileScreen extends StatelessWidget {
                   ),
 
                   menuItem(
-                    Icons.favorite_border_rounded,
+                    Icons.favorite_border,
                     "My Favorites",
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => MyFavouritesScreen(
+                          builder: (_) => MyFavouritesScreen(
                             favouriteProducts: favouriteProducts,
-                            onFavouriteToggle: onFavouriteToggle,
+                            onFavouriteToggle:
+                            onFavouriteToggle ?? (item) {},
                           ),
                         ),
                       );
                     },
                   ),
+
                   menuItem(
-                    Icons.notifications_none_rounded,
+                    Icons.notifications,
                     "Notifications",
-                    badgeText: "3 items",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const NotificationsScreen(),
-                        ),
-                      );
-                    },
+                    badgeText: "3",
+                    onTap: () {},
                   ),
+
                   menuItem(
-                    Icons.help_outline_rounded,
+                    Icons.help_outline,
                     "Help & Support",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const HelpSupportScreen()),
-                      );
-                    },
+                    onTap: () {},
                   ),
+
                   menuItem(
-                    Icons.info_outline_rounded,
+                    Icons.info_outline,
                     "About Us",
                     isLast: true,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const AboutUsScreen()),
-                      );
-                    },
+                    onTap: () {},
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 25),
+            const SizedBox(height: 20),
 
             GestureDetector(
               onTap: () => Navigator.pushAndRemoveUntil(
                 context,
-                MaterialPageRoute(builder: (c) => const LoginScreen()),
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
                     (r) => false,
               ),
               child: Container(
@@ -216,12 +166,12 @@ class ProfileScreen extends StatelessWidget {
                 color: Colors.white,
                 child: const Row(
                   children: [
-                    Icon(Icons.logout_rounded, color: Colors.redAccent),
-                    SizedBox(width: 15),
-                    Text("Logout",
-                        style: TextStyle(
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.bold)),
+                    Icon(Icons.logout, color: Colors.red),
+                    SizedBox(width: 10),
+                    Text(
+                      "Logout",
+                      style: TextStyle(color: Colors.red),
+                    ),
                   ],
                 ),
               ),
@@ -232,62 +182,37 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget orderStatusItem(IconData icon, String label) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-              color: const Color(0xffF0F4EC),
-              borderRadius: BorderRadius.circular(12)),
-          child: Icon(icon, color: const Color(0xff4A6D32), size: 28),
-        ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(fontSize: 13)),
-      ],
-    );
-  }
-
-  Widget menuItem(IconData icon, String title, {
-    bool isLast = false,
-    VoidCallback? onTap,
-    String? badgeText,
-  }) {
+  Widget menuItem(
+      IconData icon,
+      String title, {
+        VoidCallback? onTap,
+        bool isLast = false,
+        String? badgeText,
+      }) {
     return Column(
       children: [
         ListTile(
-          leading: Icon(icon, color: const Color(0xff4A6D32)),
-          title: Text(
-            title,
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-          ),
+          leading: Icon(icon),
+          title: Text(title),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (badgeText != null)
                 Container(
-                  margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: const Color(0xffE8F5E9),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(
-                    badgeText,
-                    style: const TextStyle(
-                      color: Color(0xff2E7D32),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: Text(badgeText),
                 ),
-              const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+              const Icon(Icons.arrow_forward_ios, size: 14),
             ],
           ),
           onTap: onTap,
         ),
-        if (!isLast)
-          const Divider(height: 1, indent: 70, color: Color(0xffEEEEEE)),
+        if (!isLast) const Divider(height: 1),
       ],
     );
   }
