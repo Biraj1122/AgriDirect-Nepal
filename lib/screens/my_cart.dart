@@ -27,32 +27,35 @@ class _MyCartScreenState extends State<MyCartScreen> {
     }
   }
 
+  /// ✅ FIXED SAFE ADDRESS HANDLING
   Future<void> _selectAddress() async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(builder: (_) => const FarmOsmScreen()),
     );
 
-    if (result == null || result['address'] == null) return;
+    if (result == null) return;
 
-    final String address = result['address'].toString();
-    final double? lat = (result['lat'] as num?)?.toDouble();
-    final double? lng = (result['lng'] as num?)?.toDouble();
+    final address = result["address"];
+    final lat = result["lat"];
+    final lng = result["lng"];
+
+    if (address == null || lat == null || lng == null) {
+      return; // SAFE EXIT (no crash, no overwrite)
+    }
 
     setState(() {
-      selectedAddress = address;
-      selectedLat = lat;
-      selectedLng = lng;
+      selectedAddress = address.toString();
+      selectedLat = (lat as num).toDouble();
+      selectedLng = (lng as num).toDouble();
     });
 
-    // SAFE SAVE (NO CRASH)
-    if (lat != null && lng != null) {
-      UserData.setAddress(
-        address: address,
-        latitude: lat,
-        longitude: lng,
-      );
-    }
+    /// SAVE GLOBALLY (NO DATA LOSS)
+    UserData.setAddress(
+      address: selectedAddress,
+      latitude: selectedLat!,
+      longitude: selectedLng!,
+    );
   }
 
   @override
@@ -129,7 +132,8 @@ class _MyCartScreenState extends State<MyCartScreen> {
                               children: [
                                 Text(product.title,
                                     style: const TextStyle(
-                                        fontWeight: FontWeight.bold)),
+                                        fontWeight:
+                                        FontWeight.bold)),
                                 Text(product.unit),
                                 Text("Rs. ${product.price}"),
                               ],
@@ -173,8 +177,8 @@ class _MyCartScreenState extends State<MyCartScreen> {
                               "Select delivery address") {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                content:
-                                Text("Select delivery address first"),
+                                content: Text(
+                                    "Select delivery address first"),
                               ),
                             );
                             return;
@@ -196,8 +200,10 @@ class _MyCartScreenState extends State<MyCartScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
                         ),
-                        child: const Text("Checkout",
-                            style: TextStyle(color: Colors.white)),
+                        child: const Text(
+                          "Checkout",
+                          style: TextStyle(color: Colors.white),
+                        ),
                       ),
                     )
                   ],
@@ -218,7 +224,8 @@ class _MyCartScreenState extends State<MyCartScreen> {
         Text(
           "Rs. ${value.toStringAsFixed(0)}",
           style: TextStyle(
-            fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+            fontWeight:
+            bold ? FontWeight.bold : FontWeight.normal,
           ),
         ),
       ],

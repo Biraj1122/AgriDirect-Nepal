@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../login_screen.dart';
-import '../about_us.dart';
-import '../help_support.dart';
 import '../my_favourites.dart';
 import 'my_addresses_screen.dart';
 import '../notifications_screen.dart';
 import '../payment_methods_screen.dart';
-import '../user_data.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String userName;
@@ -33,6 +30,7 @@ class ProfileScreen extends StatelessWidget {
       body: SingleChildScrollView(
         child: Column(
           children: [
+            /// HEADER
             Container(
               height: 220,
               width: double.infinity,
@@ -63,7 +61,9 @@ class ProfileScreen extends StatelessWidget {
                             Text(
                               userName,
                               style: const TextStyle(
-                                  fontSize: 22, fontWeight: FontWeight.bold),
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             const Text("+977 9812345678"),
                           ],
@@ -99,7 +99,6 @@ class ProfileScreen extends StatelessWidget {
                     Icons.payment_outlined,
                     "Payment Methods",
                     onTap: () {
-                      // FIXED: safe dummy values (prevents crash)
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -130,11 +129,19 @@ class ProfileScreen extends StatelessWidget {
                     },
                   ),
 
+                  /// 🔔 FIXED NOTIFICATIONS BUTTON
                   menuItem(
                     Icons.notifications,
                     "Notifications",
                     badgeText: "3",
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NotificationsScreen(),
+                        ),
+                      );
+                    },
                   ),
 
                   menuItem(
@@ -155,6 +162,7 @@ class ProfileScreen extends StatelessWidget {
 
             const SizedBox(height: 20),
 
+            /// LOGOUT
             GestureDetector(
               onTap: () => Navigator.pushAndRemoveUntil(
                 context,
@@ -199,8 +207,10 @@ class ProfileScreen extends StatelessWidget {
             children: [
               if (badgeText != null)
                 Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xffE8F5E9),
                     borderRadius: BorderRadius.circular(10),
