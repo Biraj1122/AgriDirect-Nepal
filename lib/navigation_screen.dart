@@ -20,7 +20,7 @@ class NavigationScreen extends StatefulWidget {
 
 class _NavigationScreenState extends State<NavigationScreen> {
   int currentIndex = 0;
-  String selectedCategory = "All"; // ← default is "All" not ""
+  String selectedCategory = "All";
 
   void changeTab(int index) {
     setState(() {
@@ -30,8 +30,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-
-    // ✅ FIXED: Moved here so it rebuilds every time selectedCategory changes
     final List<Widget> screens = [
       HomeScreen(
         onCartTap: () {
@@ -48,14 +46,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
       ),
 
       CategoriesScreen(
-      key: ValueKey(selectedCategory),
-      initialCategory: selectedCategory,
+        key: ValueKey(selectedCategory),
+        initialCategory: selectedCategory,
       ),
-
 
       const CartScreen(),
       const OrderScreen(),
-      ProfileScreen(userName: widget.userName),
+
+      // ✅ FIXED PROFILE SCREEN CALL
+      ProfileScreen(
+        userName: widget.userName,
+        favouriteProducts: const [],
+        allProducts: const [],
+        favouriteNames: const {},
+        onFavouriteToggle: null,
+      ),
     ];
 
     return Scaffold(

@@ -1,26 +1,28 @@
 import 'package:flutter/material.dart';
+
 import 'login_screen.dart';
 import '../about_us.dart';
 import '../help_support.dart';
 import '../my_favourites.dart';
 import '../my_addresses_screen.dart';
 import '../notifications_screen.dart';
-import '../payment_methods_screen.dart'; // Handles safe standalone rendering instances
-import 'package:farmtech_agridirect/navigation_screen.dart';
+import '../payment_methods_screen.dart';
+
 class ProfileScreen extends StatelessWidget {
   final String userName;
+
   final List<Map<String, dynamic>> favouriteProducts;
   final List<Map<String, dynamic>> allProducts;
   final Set<String> favouriteNames;
-  final Function(Map<String, dynamic>) onFavouriteToggle;
+  final Function(Map<String, dynamic>)? onFavouriteToggle;
 
   const ProfileScreen({
     super.key,
     required this.userName,
-    required this.favouriteProducts,
-    required this.allProducts,
-    required this.favouriteNames,
-    required this.onFavouriteToggle,
+    this.favouriteProducts = const [],
+    this.allProducts = const [],
+    this.favouriteNames = const {},
+    this.onFavouriteToggle,
   });
 
   @override
@@ -64,11 +66,15 @@ class ProfileScreen extends StatelessWidget {
                           Text(
                             userName,
                             style: const TextStyle(
-                                fontSize: 22, fontWeight: FontWeight.bold),
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                           const SizedBox(height: 4),
-                          const Text("+977 9812345678",
-                              style: TextStyle(color: Colors.black54)),
+                          const Text(
+                            "+977 9812345678",
+                            style: TextStyle(color: Colors.black54),
+                          ),
                         ],
                       ),
                     ],
@@ -77,44 +83,8 @@ class ProfileScreen extends StatelessWidget {
               ],
             ),
 
-            // Orders Section
-            Padding(
-              padding: const EdgeInsets.all(18.0),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text("My Orders",
-                          style: TextStyle(
-                              fontSize: 17, fontWeight: FontWeight.bold)),
-                      TextButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.arrow_forward_ios,
-                            size: 14, color: Colors.green),
-                        label: const Text("See all",
-                            style: TextStyle(color: Colors.green)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      orderStatusItem(
-                          Icons.account_balance_wallet_outlined, "To Pay"),
-                      orderStatusItem(
-                          Icons.local_shipping_outlined, "To Ship"),
-                      orderStatusItem(
-                          Icons.mark_email_read_outlined, "Delivered"),
-                      orderStatusItem(Icons.cancel_outlined, "Cancelled"),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+            const SizedBox(height: 18),
 
-            // Menu Options List
             Container(
               color: Colors.white,
               child: Column(
@@ -131,8 +101,6 @@ class ProfileScreen extends StatelessWidget {
                       );
                     },
                   ),
-
-                  // CONNECTED SYSTEM ROUTE ENTRY
                   menuItem(
                     Icons.payment_outlined,
                     "Payment Methods",
@@ -147,7 +115,6 @@ class ProfileScreen extends StatelessWidget {
                       );
                     },
                   ),
-
                   menuItem(
                     Icons.favorite_border_rounded,
                     "My Favorites",
@@ -157,7 +124,7 @@ class ProfileScreen extends StatelessWidget {
                         MaterialPageRoute(
                           builder: (context) => MyFavouritesScreen(
                             favouriteProducts: favouriteProducts,
-                            onFavouriteToggle: onFavouriteToggle,
+                            onFavouriteToggle: onFavouriteToggle ?? (item) {},
                           ),
                         ),
                       );
@@ -183,7 +150,8 @@ class ProfileScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (context) => const HelpSupportScreen()),
+                          builder: (context) => const HelpSupportScreen(),
+                        ),
                       );
                     },
                   ),
@@ -195,7 +163,8 @@ class ProfileScreen extends StatelessWidget {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (context) => const AboutUsScreen()),
+                          builder: (context) => const AboutUsScreen(),
+                        ),
                       );
                     },
                   ),
@@ -218,10 +187,13 @@ class ProfileScreen extends StatelessWidget {
                   children: [
                     Icon(Icons.logout_rounded, color: Colors.redAccent),
                     SizedBox(width: 15),
-                    Text("Logout",
-                        style: TextStyle(
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.bold)),
+                    Text(
+                      "Logout",
+                      style: TextStyle(
+                        color: Colors.redAccent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -232,27 +204,13 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget orderStatusItem(IconData icon, String label) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-              color: const Color(0xffF0F4EC),
-              borderRadius: BorderRadius.circular(12)),
-          child: Icon(icon, color: const Color(0xff4A6D32), size: 28),
-        ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(fontSize: 13)),
-      ],
-    );
-  }
-
-  Widget menuItem(IconData icon, String title, {
-    bool isLast = false,
-    VoidCallback? onTap,
-    String? badgeText,
-  }) {
+  Widget menuItem(
+      IconData icon,
+      String title, {
+        bool isLast = false,
+        VoidCallback? onTap,
+        String? badgeText,
+      }) {
     return Column(
       children: [
         ListTile(
@@ -267,7 +225,10 @@ class ProfileScreen extends StatelessWidget {
               if (badgeText != null)
                 Container(
                   margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xffE8F5E9),
                     borderRadius: BorderRadius.circular(12),
