@@ -5,15 +5,23 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.11.0
+  sdk: ">=3.7.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+
+  # MAPS
   google_maps_flutter: ^2.17.0
+  geolocator: ^14.0.2
+  geocoding: ^3.0.0
+
+  # OPTIONAL OSM PACKAGE
   osm_search_and_pick: ^0.4.0
+
+  # FIREBASE
   firebase_core: ^4.9.0
 
 dev_dependencies:
@@ -22,20 +30,20 @@ dev_dependencies:
 
   flutter_lints: ^6.0.0
 
-
   flutter_launcher_icons: ^0.14.4
 
 flutter:
-
   uses-material-design: true
 
   assets:
     - assets/
     - assets/images/
 
-
 flutter_launcher_icons:
   android: true
+  ios: true
+
   image_path: "assets/images/logo.png"
+
   adaptive_icon_background: "#ffffff"
   adaptive_icon_foreground: "assets/images/logo1.png"

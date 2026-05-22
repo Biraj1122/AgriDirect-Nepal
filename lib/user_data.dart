@@ -3,40 +3,27 @@ class UserData {
   static double? defaultLat;
   static double? defaultLng;
 
-  static List<Map<String, dynamic>> savedAddresses = [];
-
-
-  static void setDefaultAddress({
-    required String address,
-    required double lat,
-    required double lng,
-  }) {
-    defaultAddress = address;
-    defaultLat = lat;
-    defaultLng = lng;
-
-    savedAddresses.add({
-      "address": address,
-      "lat": lat,
-      "lng": lng,
-    });
-  }
-
-
+  /// ✅ Save selected address globally
   static void setAddress({
     required String address,
-    required double? latitude,
-    required double? longitude,
+    required double latitude,
+    required double longitude,
   }) {
-    if (latitude == null || longitude == null) return;
-
-    setDefaultAddress(
-      address: address,
-      lat: latitude,
-      lng: longitude,
-    );
+    defaultAddress = address;
+    defaultLat = latitude;
+    defaultLng = longitude;
   }
 
+  /// ✅ Clear address (optional use for logout/reset)
+  static void clearAddress() {
+    defaultAddress = null;
+    defaultLat = null;
+    defaultLng = null;
+  }
 
-  static bool get hasAddress => defaultAddress != null;
+  /// ✅ Check if address exists
+  static bool get hasAddress =>
+      defaultAddress != null &&
+          defaultLat != null &&
+          defaultLng != null;
 }
