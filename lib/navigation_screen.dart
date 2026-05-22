@@ -22,14 +22,24 @@ class _NavigationScreenState extends State<NavigationScreen> {
   int currentIndex = 0;
   String selectedCategory = "All";
 
+  void changeTab(int index) {
+    setState(() {
+      currentIndex = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final screens = [
       HomeScreen(
-        onCartTap: () => setState(() => currentIndex = 2),
-        onCategoryTap: (cat) {
+        onCartTap: () {
           setState(() {
-            selectedCategory = cat.isEmpty ? "All" : cat;
+            currentIndex = 2;
+          });
+        },
+        onCategoryTap: (String category) {
+          setState(() {
+            selectedCategory = category.isEmpty ? "All" : category;
             currentIndex = 1;
           });
         },
@@ -40,8 +50,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         initialCategory: selectedCategory,
       ),
 
-      const MyCartScreen(), // ✅ FIXED HERE
-
+      const MyCartScreen(),
       const OrderScreen(),
 
       ProfileScreen(
@@ -58,16 +67,79 @@ class _NavigationScreenState extends State<NavigationScreen> {
         index: currentIndex,
         children: screens,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: (i) => setState(() => currentIndex = i),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.grid_view), label: "Cat"),
-          BottomNavigationBarItem(icon: Icon(Icons.shopping_cart), label: "Cart"),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt), label: "Orders"),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
-        ],
+
+      // ✅ MODERN BOTTOM NAV BAR
+      bottomNavigationBar: Container(
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            navItem(Icons.home_rounded, "Home", 0),
+            navItem(Icons.grid_view_rounded, "Categories", 1),
+            navItem(Icons.shopping_cart_rounded, "Cart", 2),
+            navItem(Icons.receipt_long_rounded, "Orders", 3),
+            navItem(Icons.person_rounded, "Profile", 4),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget navItem(IconData icon, String label, int index) {
+    final bool isSelected = currentIndex == index;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          currentIndex = index;
+        });
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Colors.green.withOpacity(0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(15),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedScale(
+              scale: isSelected ? 1.2 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                icon,
+                size: 26,
+                color: isSelected ? Colors.green : Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight:
+                isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected ? Colors.green : Colors.grey,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

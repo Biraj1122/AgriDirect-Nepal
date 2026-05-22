@@ -5,8 +5,6 @@ class PaymentMethodsScreen extends StatefulWidget {
   final double subtotal;
   final double deliveryFee;
   final double total;
-
-  // ✅ ADD THESE (FIX FOR YOUR ERROR)
   final double? selectedLat;
   final double? selectedLng;
 
@@ -24,8 +22,6 @@ class PaymentMethodsScreen extends StatefulWidget {
 }
 
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
-  String _selectedMethod = 'cod';
-
   void _success() {
     showDialog(
       context: context,
@@ -45,22 +41,9 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               const Text(
                 "Payment Successful",
                 style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                ),
+                    fontWeight: FontWeight.bold, fontSize: 18),
               ),
               const SizedBox(height: 20),
-
-              // OPTIONAL DEBUG (you can remove later)
-              Text(
-                "Location saved:\n"
-                    "Lat: ${widget.selectedLat}\n"
-                    "Lng: ${widget.selectedLng}",
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 20),
-
               ElevatedButton(
                 onPressed: () {
                   Navigator.pushAndRemoveUntil(
