@@ -1,15 +1,64 @@
 import 'package:flutter/material.dart';
 import '../cart_model.dart';
-import '../payment_methods_screen.dart'; // Imported to navigate to checkout
+import '../payment_methods_screen.dart';
+import '../farm_osm_screen.dart';
+import '../user_data.dart';
 
-class CartScreen extends StatelessWidget {
-  const CartScreen({super.key});
+class MyCartScreen extends StatefulWidget {
+  const MyCartScreen({super.key});
+
+  @override
+  State<MyCartScreen> createState() => _MyCartScreenState();
+}
+
+class _MyCartScreenState extends State<MyCartScreen> {
+  String selectedAddress = "Select delivery address";
+  double? selectedLat;
+  double? selectedLng;
+
+  @override
+  void initState() {
+    super.initState();
+
+    if (UserData.defaultAddress != null) {
+      selectedAddress = UserData.defaultAddress!;
+      selectedLat = UserData.defaultLat;
+      selectedLng = UserData.defaultLng;
+    }
+  }
+
+  Future<void> _selectAddress() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(builder: (_) => const FarmOsmScreen()),
+    );
+
+    if (result == null || result['address'] == null) return;
+
+    final String address = result['address'].toString();
+    final double? lat = (result['lat'] as num?)?.toDouble();
+    final double? lng = (result['lng'] as num?)?.toDouble();
+
+    setState(() {
+      selectedAddress = address;
+      selectedLat = lat;
+      selectedLng = lng;
+    });
+
+    // SAFE SAVE (NO CRASH)
+    if (lat != null && lng != null) {
+      UserData.setAddress(
+        address: address,
+        latitude: lat,
+        longitude: lng,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: cartModel,
-
       builder: (context, _) {
         return Scaffold(
           backgroundColor: const Color(0xffF7F8F3),
@@ -28,74 +77,69 @@ class CartScreen extends StatelessWidget {
 
           body: Column(
             children: [
+              // ADDRESS
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on, color: Colors.green),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(selectedAddress)),
+                      TextButton(
+                        onPressed: _selectAddress,
+                        child: const Text("Change"),
+                      )
+                    ],
+                  ),
+                ),
+              ),
 
+              // CART ITEMS
               Expanded(
                 child: cartModel.items.isEmpty
-                    ? const Center(
-                  child: Text("Cart is empty"),
-                )
+                    ? const Center(child: Text("Cart is empty"))
                     : ListView.builder(
                   padding: const EdgeInsets.all(18),
                   itemCount: cartModel.items.length,
-
                   itemBuilder: (context, index) {
                     final product = cartModel.items[index];
 
                     return Container(
-                      margin: const EdgeInsets.only(bottom: 15),
+                      margin: const EdgeInsets.only(bottom: 12),
                       padding: const EdgeInsets.all(12),
-
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(15),
                       ),
-
                       child: Row(
                         children: [
-
-                          Image.asset(
-                            product.image,
-                            height: 70,
-                            width: 70,
-                          ),
-
-                          const SizedBox(width: 15),
-
+                          Image.asset(product.image,
+                              height: 60, width: 60),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment:
                               CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  product.title,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-
-                                const SizedBox(height: 5),
-
+                                Text(product.title,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold)),
                                 Text(product.unit),
-
-                                const SizedBox(height: 8),
-
-                                Text(
-                                  "Rs. ${product.price}",
-                                  style: const TextStyle(
-                                    color: Colors.green,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                Text("Rs. ${product.price}"),
                               ],
                             ),
                           ),
-
                           IconButton(
-                            onPressed: () {
-                              cartModel.removeAt(index);
-                            },
-                            icon: const Icon(Icons.delete_outline),
-                          ),
+                            icon: const Icon(Icons.delete),
+                            onPressed: () =>
+                                cartModel.removeAt(index),
+                          )
                         ],
                       ),
                     );
@@ -103,64 +147,62 @@ class CartScreen extends StatelessWidget {
                 ),
               ),
 
+              // SUMMARY
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(30),
-                  ),
+                  borderRadius:
+                  BorderRadius.vertical(top: Radius.circular(25)),
                 ),
-
                 child: Column(
                   children: [
-
-                    billingRow("Subtotal",
-                        "Rs. ${cartModel.subtotal}"),
-
-                    billingRow("Delivery Fee",
-                        "Rs. ${cartModel.deliveryFee}"),
-
+                    _row("Subtotal", cartModel.subtotal),
+                    _row("Delivery", cartModel.deliveryFee),
                     const Divider(),
+                    _row("Total", cartModel.total, bold: true),
 
-                    billingRow(
-                      "Total",
-                      "Rs. ${cartModel.total}",
-                    ),
-
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 15),
 
                     SizedBox(
                       width: double.infinity,
-                      height: 55,
-
+                      height: 50,
                       child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                        ),
-
-                        // ONLY CHANGE: Added the required payment navigation configuration
                         onPressed: () {
+                          if (selectedAddress ==
+                              "Select delivery address") {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content:
+                                Text("Select delivery address first"),
+                              ),
+                            );
+                            return;
+                          }
+
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => PaymentMethodsScreen(
+                              builder: (_) => PaymentMethodsScreen(
                                 subtotal: cartModel.subtotal,
-                                isCheckoutMode: true,
+                                deliveryFee: cartModel.deliveryFee,
+                                total: cartModel.total,
+                                selectedLat: selectedLat,
+                                selectedLng: selectedLng,
                               ),
                             ),
                           );
                         },
-
-                        child: const Text(
-                          "Proceed to Checkout",
-                          style: TextStyle(color: Colors.white),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
                         ),
+                        child: const Text("Checkout",
+                            style: TextStyle(color: Colors.white)),
                       ),
-                    ),
+                    )
                   ],
                 ),
-              ),
+              )
             ],
           ),
         );
@@ -168,14 +210,16 @@ class CartScreen extends StatelessWidget {
     );
   }
 
-  Widget billingRow(String title, String value) {
+  Widget _row(String title, double value, {bool bold = false}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(title),
         Text(
-          value,
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          "Rs. ${value.toStringAsFixed(0)}",
+          style: TextStyle(
+            fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+          ),
         ),
       ],
     );
