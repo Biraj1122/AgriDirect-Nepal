@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "705986132915",
+    "project_id": "agridirectnepal",
+    "storage_bucket": "agridirectnepal.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:705986132915:android:283879a4d00157411529c6",
+        "android_client_info": {
+          "package_name": "com.example.farmtech_agridirect"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "705986132915-ssd0ngeuhdhv4659t3gi9avt78fq60ma.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBk7QdUh-nRP9Q5hhy9gbAUuKXEWMzRmg0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "705986132915-ssd0ngeuhdhv4659t3gi9avt78fq60ma.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "705986132915-80oeri43eqj3meb2burvpkeffsnqdrbp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.farmtechAgridirect"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
