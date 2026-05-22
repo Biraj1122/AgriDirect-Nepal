@@ -20,6 +20,7 @@ class NavigationScreen extends StatefulWidget {
 class _NavigationScreenState extends State<NavigationScreen> {
   int currentIndex = 0;
   int notificationCount = 3;
+  String _selectedCategory = 'All'; // ← CHANGED: added this line
 
   final List<Map<String, dynamic>> _emptyProducts = [];
   final Set<String> _emptyFavNames = {};
@@ -32,8 +33,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   void handleCategoryTap(String category) {
     setState(() {
-      currentIndex = 0; // go to home tab
-      // later you can filter products here
+      _selectedCategory = category.isEmpty ? 'All' : category; // ← CHANGED
+      currentIndex = 1; // ← CHANGED: was 0, now goes to Categories tab
     });
   }
 
@@ -42,7 +43,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
       onCartTap: () => changeTab(2),
       onCategoryTap: handleCategoryTap,
     ),
-    const CategoriesScreen(),
+    CategoriesScreen(
+      key: ValueKey(_selectedCategory),
+      initialCategory: _selectedCategory,
+    ),
     const CartScreen(),
     const OrderScreen(),
     ProfileScreen(
@@ -97,8 +101,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                       "Profile",
                       style: TextStyle(
                         fontSize: 12,
-                        color:
-                        currentIndex == 4 ? Colors.green : Colors.grey,
+                        color: currentIndex == 4 ? Colors.green : Colors.grey,
                       ),
                     ),
                   ],

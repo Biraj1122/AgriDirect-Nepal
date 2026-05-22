@@ -7,7 +7,7 @@ import '../notifications_screen.dart';
 class HomeScreen extends StatelessWidget {
 
   final VoidCallback onCartTap;
-  final Function(String) onCategoryTap;  // CHANGE: Accept String parameter
+  final Function(String) onCategoryTap;
 
   const HomeScreen({
     super.key,
@@ -67,14 +67,10 @@ class HomeScreen extends StatelessWidget {
             children: [
               /// HEADER
               Row(
-                mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
-
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
-
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         "Hello, Biraj",
@@ -95,14 +91,12 @@ class HomeScreen extends StatelessWidget {
 
                   Row(
                     children: [
-                      // ✅ NOTIFICATION ICON (FIXED NAVIGATION)
                       IconButton(
                         onPressed: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                              const NotificationsScreen(),
+                              builder: (_) => const NotificationsScreen(),
                             ),
                           );
                         },
@@ -135,9 +129,7 @@ class HomeScreen extends StatelessWidget {
 
               /// CATEGORY TITLE
               Row(
-                mainAxisAlignment:
-                MainAxisAlignment.spaceBetween,
-
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     "Categories",
@@ -148,9 +140,8 @@ class HomeScreen extends StatelessWidget {
                   ),
                   TextButton(
                     onPressed: () {
-                      onCategoryTap("");  // Empty string = show all categories
+                      onCategoryTap('All'); // ← CHANGED: was "", now 'All'
                     },
-
                     child: const Text(
                       "See all",
                       style: TextStyle(
@@ -166,15 +157,13 @@ class HomeScreen extends StatelessWidget {
               /// CATEGORY LIST
               SizedBox(
                 height: 90,
-
                 child: ListView(
                   scrollDirection: Axis.horizontal,
-
                   children: [
                     categoryItem(Icons.eco_outlined, "Vegetables"),
                     categoryItem(Icons.apple_outlined, "Fruits"),
                     categoryItem(Icons.local_drink_outlined, "Dairy"),
-                    categoryItem(Icons.grass, "Greens"),
+                    categoryItem(Icons.grass, "Grains"),       // ← CHANGED: "Greens" → "Grains" (matches category screen)
                     categoryItem(Icons.energy_savings_leaf, "Organic"),
                   ],
                 ),
@@ -187,9 +176,7 @@ class HomeScreen extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  borderRadius:
-                  BorderRadius.circular(22),
-
+                  borderRadius: BorderRadius.circular(22),
                   gradient: const LinearGradient(
                     colors: [
                       Color(0xff7CB342),
@@ -273,25 +260,28 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// CATEGORY WIDGET
+  /// CATEGORY WIDGET — ← CHANGED: wrapped Container in GestureDetector
   Widget categoryItem(IconData icon, String title) {
-    return Container(
-      width: 80,
-      margin: const EdgeInsets.only(right: 10),
-      child: Column(
-        children: [
-          Container(
-            height: 60,
-            width: 60,
-            decoration: BoxDecoration(
-              color: const Color(0xffEEF5E8),
-              borderRadius: BorderRadius.circular(18),
+    return GestureDetector(
+      onTap: () => onCategoryTap(title),
+      child: Container(
+        width: 80,
+        margin: const EdgeInsets.only(right: 10),
+        child: Column(
+          children: [
+            Container(
+              height: 60,
+              width: 60,
+              decoration: BoxDecoration(
+                color: const Color(0xffEEF5E8),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: Icon(icon, color: Colors.green, size: 28),
             ),
-            child: Icon(icon, color: Colors.green, size: 28),
-          ),
-          const SizedBox(height: 6),
-          Text(title, style: const TextStyle(fontSize: 12)),
-        ],
+            const SizedBox(height: 6),
+            Text(title, style: const TextStyle(fontSize: 12)),
+          ],
+        ),
       ),
     );
   }
@@ -303,7 +293,6 @@ class HomeScreen extends StatelessWidget {
     required String price,
     required String unit,
   }) {
-
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -311,9 +300,7 @@ class HomeScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(22),
       ),
       child: Column(
-        crossAxisAlignment:
-        CrossAxisAlignment.start,
-
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(child: Center(child: Image.asset(image))),
           const SizedBox(height: 8),
