@@ -153,7 +153,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _openFavoritesPage() {
-    Navigator.push(
+    Navigator.push
+      (
       context,
       MaterialPageRoute(
         builder: (context) => FavoritesPage(
