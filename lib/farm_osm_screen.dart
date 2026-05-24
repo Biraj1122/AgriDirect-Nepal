@@ -2,158 +2,195 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:geocoding/geocoding.dart';
+
+import 'location_service.dart';
 
 class FarmOsmScreen extends StatefulWidget {
   const FarmOsmScreen({super.key});
 
   @override
-  State<FarmOsmScreen> createState() => _FarmOsmScreenState();
+  State<FarmOsmScreen> createState() =>
+      _FarmOsmScreenState();
 }
 
-class _FarmOsmScreenState extends State<FarmOsmScreen> {
-  final Completer<GoogleMapController> _controller = Completer();
+class _FarmOsmScreenState
+    extends State<FarmOsmScreen> {
 
-  LatLng? currentPosition;
-  LatLng? selectedPosition;
+  GoogleMapController? mapController;
 
-  bool isLoading = true;
+  final LocationService locationService =
+  LocationService();
+
+  StreamSubscription<Position>?
+  positionStream;
+
+  LatLng currentPosition =
+  const LatLng(
+    27.7172,
+    85.3240,
+  );
+
+  bool loading = true;
+
+  Set<Marker> markers = {};
 
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation();
+    initializeLocation();
   }
 
-  /// GET CURRENT LOCATION
-  Future<void> _getCurrentLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      setState(() => isLoading = false);
+  Future<void> initializeLocation() async {
+
+    bool granted =
+    await locationService
+        .requestPermission();
+
+    if (!granted) {
+
+      setState(() {
+        loading = false;
+      });
+
       return;
     }
 
-    LocationPermission permission = await Geolocator.checkPermission();
+    positionStream =
+        locationService
+            .getLiveLocation()
+            .listen((Position position) {
 
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
+          LatLng newLocation = LatLng(
+            position.latitude,
+            position.longitude,
+          );
 
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      setState(() => isLoading = false);
-      return;
-    }
+          setState(() {
 
-    Position position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
+            currentPosition =
+                newLocation;
+
+            markers = {
+
+              Marker(
+                markerId:
+                const MarkerId(
+                    "current"),
+
+                position:
+                newLocation,
+              )
+            };
+
+            loading = false;
+          });
+
+          mapController?.animateCamera(
+            CameraUpdate.newCameraPosition(
+              CameraPosition(
+                target:
+                newLocation,
+                zoom: 18,
+                tilt: 45,
+              ),
+            ),
+          );
+
+        });
+  }
+
+  void moveCurrentLocation() {
+
+    mapController?.animateCamera(
+      CameraUpdate.newLatLngZoom(
+        currentPosition,
+        18,
+      ),
     );
-
-    setState(() {
-      currentPosition = LatLng(position.latitude, position.longitude);
-      selectedPosition = currentPosition;
-      isLoading = false;
-    });
-  }
-
-  /// 🔥 FIXED: REAL ADDRESS CONVERSION
-  Future<void> _confirmLocation() async {
-    if (selectedPosition == null) return;
-
-    try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(
-        selectedPosition!.latitude,
-        selectedPosition!.longitude,
-      );
-
-      final place = placemarks.first;
-
-      final String fullAddress =
-          "${place.name ?? ''}, "
-          "${place.subLocality ?? ''}, "
-          "${place.locality ?? ''}, "
-          "${place.country ?? ''}";
-
-      Navigator.pop(context, {
-        "address": fullAddress.trim(),
-        "lat": selectedPosition!.latitude,
-        "lng": selectedPosition!.longitude,
-      });
-    } catch (e) {
-      // fallback if geocoding fails
-      Navigator.pop(context, {
-        "address": "Selected Location",
-        "lat": selectedPosition!.latitude,
-        "lng": selectedPosition!.longitude,
-      });
-    }
   }
 
   @override
-  Widget build(BuildContext context) {
+  void dispose() {
+
+    positionStream?.cancel();
+
+    super.dispose();
+  }
+
+  @override
+  Widget build(
+      BuildContext context) {
+
     return Scaffold(
+
       appBar: AppBar(
-        title: const Text("Select Address"),
-        backgroundColor: Colors.green,
+        title:
+        const Text(
+            "Live Map"),
+        backgroundColor:
+        Colors.green,
       ),
 
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+      body: loading
+          ? const Center(
+        child:
+        CircularProgressIndicator(),
+      )
           : Stack(
+
         children: [
-          /// GOOGLE MAP
+
           GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: currentPosition!,
-              zoom: 16,
+
+            initialCameraPosition:
+            CameraPosition(
+              target:
+              currentPosition,
+              zoom: 18,
             ),
-            myLocationEnabled: true,
-            myLocationButtonEnabled: true,
-            zoomControlsEnabled: false,
 
-            onMapCreated: (controller) {
-              _controller.complete(controller);
-            },
+            myLocationEnabled:
+            true,
 
-            onTap: (LatLng position) {
-              setState(() {
-                selectedPosition = position;
-              });
-            },
+            myLocationButtonEnabled:
+            false,
 
-            markers: selectedPosition == null
-                ? {}
-                : {
-              Marker(
-                markerId: const MarkerId("selected"),
-                position: selectedPosition!,
-                draggable: true,
-                onDragEnd: (newPos) {
-                  setState(() {
-                    selectedPosition = newPos;
-                  });
-                },
-              )
+            zoomControlsEnabled:
+            false,
+
+            markers:
+            markers,
+
+            onMapCreated:
+                (controller) {
+
+              mapController =
+                  controller;
             },
           ),
 
-          /// CONFIRM BUTTON
           Positioned(
-            bottom: 20,
-            left: 20,
-            right: 20,
-            child: ElevatedButton(
-              onPressed: _confirmLocation,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                padding: const EdgeInsets.all(15),
-              ),
-              child: const Text(
-                "Confirm Location",
-                style: TextStyle(color: Colors.white),
+
+            right: 16,
+            bottom: 120,
+
+            child:
+            FloatingActionButton(
+
+              backgroundColor:
+              Colors.white,
+
+              onPressed:
+              moveCurrentLocation,
+
+              child:
+              const Icon(
+                Icons.my_location,
+                color:
+                Colors.black,
               ),
             ),
-          ),
+          )
         ],
       ),
     );
