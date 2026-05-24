@@ -4,14 +4,19 @@ import '../payment_methods_screen.dart';
 import '../farm_osm_screen.dart';
 import '../user_data.dart';
 
-class MyCartScreen extends StatefulWidget {
-  const MyCartScreen({super.key});
+class CartScreen extends StatefulWidget {
+  final VoidCallback? onBackTap;
+
+  const CartScreen({
+    super.key,
+    this.onBackTap,
+  });
 
   @override
-  State<MyCartScreen> createState() => _MyCartScreenState();
+  State<CartScreen> createState() => _CartScreenState();
 }
 
-class _MyCartScreenState extends State<MyCartScreen> {
+class _CartScreenState extends State<CartScreen> {
   String selectedAddress = "Select delivery address";
   double? selectedLat;
   double? selectedLng;
@@ -27,7 +32,6 @@ class _MyCartScreenState extends State<MyCartScreen> {
     }
   }
 
-  /// ✅ FIXED SAFE ADDRESS HANDLING
   Future<void> _selectAddress() async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -41,7 +45,7 @@ class _MyCartScreenState extends State<MyCartScreen> {
     final lng = result["lng"];
 
     if (address == null || lat == null || lng == null) {
-      return; // SAFE EXIT (no crash, no overwrite)
+      return;
     }
 
     setState(() {
@@ -50,7 +54,6 @@ class _MyCartScreenState extends State<MyCartScreen> {
       selectedLng = (lng as num).toDouble();
     });
 
-    /// SAVE GLOBALLY (NO DATA LOSS)
     UserData.setAddress(
       address: selectedAddress,
       latitude: selectedLat!,
@@ -65,10 +68,19 @@ class _MyCartScreenState extends State<MyCartScreen> {
       builder: (context, _) {
         return Scaffold(
           backgroundColor: const Color(0xffF7F8F3),
-
           appBar: AppBar(
             backgroundColor: Colors.transparent,
             elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.black),
+              onPressed: () {
+                if (widget.onBackTap != null) {
+                  widget.onBackTap!();
+                } else {
+                  Navigator.pop(context);
+                }
+              },
+            ),
             title: const Text(
               "My Cart",
               style: TextStyle(
@@ -77,10 +89,8 @@ class _MyCartScreenState extends State<MyCartScreen> {
               ),
             ),
           ),
-
           body: Column(
             children: [
-              // ADDRESS
               Padding(
                 padding: const EdgeInsets.all(18),
                 child: Container(
@@ -103,61 +113,72 @@ class _MyCartScreenState extends State<MyCartScreen> {
                 ),
               ),
 
-              // CART ITEMS
               Expanded(
                 child: cartModel.items.isEmpty
                     ? const Center(child: Text("Cart is empty"))
                     : ListView.builder(
-                  padding: const EdgeInsets.all(18),
-                  itemCount: cartModel.items.length,
-                  itemBuilder: (context, index) {
-                    final product = cartModel.items[index];
+                        padding: const EdgeInsets.all(18),
+                        itemCount: cartModel.items.length,
+                        itemBuilder: (context, index) {
+                          final product = cartModel.items[index];
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                      child: Row(
-                        children: [
-                          Image.asset(product.image,
-                              height: 60, width: 60),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: Row(
                               children: [
-                                Text(product.title,
-                                    style: const TextStyle(
-                                        fontWeight:
-                                        FontWeight.bold)),
-                                Text(product.unit),
-                                Text("Rs. ${product.price}"),
+                                Image.asset(
+                                  product.image,
+                                  height: 70,
+                                  width: 70,
+                                ),
+                                const SizedBox(width: 15),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        product.title,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 5),
+                                      Text(product.unit),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        "Rs. ${product.price}",
+                                        style: const TextStyle(
+                                          color: Colors.green,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete),
+                                  onPressed: () =>
+                                      cartModel.removeAt(index),
+                                )
                               ],
                             ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete),
-                            onPressed: () =>
-                                cartModel.removeAt(index),
-                          )
-                        ],
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
 
-              // SUMMARY
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: const BoxDecoration(
                   color: Colors.white,
                   borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(25)),
+                      BorderRadius.vertical(top: Radius.circular(25)),
                 ),
                 child: Column(
                   children: [
@@ -170,7 +191,7 @@ class _MyCartScreenState extends State<MyCartScreen> {
 
                     SizedBox(
                       width: double.infinity,
-                      height: 50,
+                      height: 55,
                       child: ElevatedButton(
                         onPressed: () {
                           if (selectedAddress ==
@@ -178,7 +199,8 @@ class _MyCartScreenState extends State<MyCartScreen> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
-                                    "Select delivery address first"),
+                                  "Select delivery address first",
+                                ),
                               ),
                             );
                             return;
@@ -225,7 +247,7 @@ class _MyCartScreenState extends State<MyCartScreen> {
           "Rs. ${value.toStringAsFixed(0)}",
           style: TextStyle(
             fontWeight:
-            bold ? FontWeight.bold : FontWeight.normal,
+                bold ? FontWeight.bold : FontWeight.normal,
           ),
         ),
       ],
