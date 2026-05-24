@@ -239,6 +239,7 @@ class ProfileScreen extends StatelessWidget {
           onTap: onTap,
         ),
         if (!isLast) const Divider(height: 1),
+
       ],
     );
   }
