@@ -6,12 +6,18 @@ import '../notifications_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onCartTap;
+  final VoidCallback onFavoritesTap;
   final Function(String) onCategoryTap;
+  final List<Map<String, dynamic>> favouriteProducts;
+  final Function(Map<String, dynamic>) onFavouriteToggle;
 
   const HomeScreen({
     super.key,
     required this.onCartTap,
+    required this.onFavoritesTap,
     required this.onCategoryTap,
+    required this.favouriteProducts,
+    required this.onFavouriteToggle,
   });
 
   @override
@@ -86,17 +92,25 @@ class HomeScreen extends StatelessWidget {
                     ],
                   ),
 
-                  /// NOTIFICATION BUTTON ONLY
-                  IconButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const NotificationsScreen(),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.notifications_none),
+                  /// NOTIFICATION & FAVOURITE BUTTONS
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: onFavoritesTap,
+                        icon: const Icon(Icons.favorite_border, color: Colors.red),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const NotificationsScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.notifications_none),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -209,22 +223,35 @@ class HomeScreen extends StatelessWidget {
                   childAspectRatio: 0.75,
                 ),
                 itemBuilder: (context, index) {
+                  final product = products[index];
+                  final isFavorite = favouriteProducts.any((p) => p['name'] == product.title);
+
                   return GestureDetector(
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (context) => ProductDetailScreen(
-                            product: products[index],
+                            product: product,
                           ),
                         ),
                       );
                     },
                     child: productCard(
-                      image: products[index].image,
-                      title: products[index].title,
-                      price: products[index].price,
-                      unit: products[index].unit,
+                      image: product.image,
+                      title: product.title,
+                      price: product.price,
+                      unit: product.unit,
+                      isFavorite: isFavorite,
+                      onFavoriteToggle: () {
+                        onFavouriteToggle({
+                          'name': product.title,
+                          'price': product.price,
+                          'unit': product.unit,
+                          'imagePath': product.image.split('/').last,
+                          // Add other fields if needed by MyFavouritesScreen
+                        });
+                      },
                     ),
                   );
                 },
@@ -279,6 +306,8 @@ class HomeScreen extends StatelessWidget {
     required String title,
     required String price,
     required String unit,
+    required bool isFavorite,
+    required VoidCallback onFavoriteToggle,
   }) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -290,8 +319,23 @@ class HomeScreen extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Center(
-              child: Image.asset(image),
+            child: Stack(
+              children: [
+                Center(
+                  child: Image.asset(image),
+                ),
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: GestureDetector(
+                    onTap: onFavoriteToggle,
+                    child: Icon(
+                      isFavorite ? Icons.favorite : Icons.favorite_border,
+                      color: isFavorite ? Colors.red : Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 8),

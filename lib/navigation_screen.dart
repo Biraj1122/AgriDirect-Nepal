@@ -21,6 +21,18 @@ class NavigationScreen extends StatefulWidget {
 class _NavigationScreenState extends State<NavigationScreen> {
   int currentIndex = 0;
   String selectedCategory = "All";
+  final List<Map<String, dynamic>> _favouriteProducts = [];
+
+  void _toggleFavourite(Map<String, dynamic> product) {
+    setState(() {
+      final index = _favouriteProducts.indexWhere((p) => p['name'] == product['name']);
+      if (index >= 0) {
+        _favouriteProducts.removeAt(index);
+      } else {
+        _favouriteProducts.add(product);
+      }
+    });
+  }
 
   void changeTab(int index) {
     setState(() {
@@ -37,17 +49,26 @@ class _NavigationScreenState extends State<NavigationScreen> {
             currentIndex = 2;
           });
         },
+        onFavoritesTap: () {
+          setState(() {
+            currentIndex = 4; // Navigate to Profile tab
+          });
+        },
         onCategoryTap: (String category) {
           setState(() {
             selectedCategory = category.isEmpty ? "All" : category;
             currentIndex = 1;
           });
         },
+        favouriteProducts: _favouriteProducts,
+        onFavouriteToggle: _toggleFavourite,
       ),
 
       CategoriesScreen(
         key: ValueKey(selectedCategory),
         initialCategory: selectedCategory,
+        externalFavouriteProducts: _favouriteProducts,
+        onExternalFavouriteToggle: _toggleFavourite,
       ),
 
       const MyCartScreen(),
@@ -55,10 +76,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
       ProfileScreen(
         userName: widget.userName,
-        favouriteProducts: const [],
+        favouriteProducts: _favouriteProducts,
         allProducts: const [],
-        favouriteNames: const {},
-        onFavouriteToggle: null,
+        favouriteNames: _favouriteProducts.map((p) => p['name'] as String).toSet(),
+        onFavouriteToggle: _toggleFavourite,
       ),
     ];
 

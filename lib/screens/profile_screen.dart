@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../help_support.dart';
+import 'about_us.dart';
 import '../login_screen.dart';
 import '../my_favourites.dart';
 import 'my_addresses_screen.dart';
@@ -147,14 +149,28 @@ class ProfileScreen extends StatelessWidget {
                   menuItem(
                     Icons.help_outline,
                     "Help & Support",
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const HelpSupportScreen(),
+                        ),
+                      );
+                    },
                   ),
 
                   menuItem(
                     Icons.info_outline,
                     "About Us",
                     isLast: true,
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AboutUsScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import '../cart_model.dart';
 import '../product.dart';
-import 'my_cart.dart';
 
 class CategoriesScreen extends StatefulWidget {
 
   final String initialCategory;
+  final List<Map<String, dynamic>> externalFavouriteProducts;
+  final Function(Map<String, dynamic>) onExternalFavouriteToggle;
 
   const CategoriesScreen({
     super.key,
     this.initialCategory = 'All',
+    required this.externalFavouriteProducts,
+    required this.onExternalFavouriteToggle,
   });
   @override
   State<CategoriesScreen> createState() => _CategoriesScreenState();
@@ -19,7 +22,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   int _selectedCategoryIndex = 0;
-  final Set<String> _favoriteItems = {};
   late final List<Map<String, dynamic>> _allProducts;
 
   final List<Map<String, dynamic>> _categories = [
@@ -142,36 +144,21 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _toggleFavorite(Map<String, dynamic> product) {
-    setState(() {
-      final name = product['name'].toString();
-      if (_favoriteItems.contains(name)) {
-        _favoriteItems.remove(name);
-      } else {
-        _favoriteItems.add(name);
-      }
-    });
+    widget.onExternalFavouriteToggle(product);
   }
 
   void _openFavoritesPage() {
-    Navigator.push
-      (
+    Navigator.push(
       context,
-      MaterialPageRoute
-        (
+      MaterialPageRoute(
         builder: (context) => FavoritesPage(
-          favoriteItems: _favoriteItems,
+          favoriteItems: widget.externalFavouriteProducts.map((p) => p['name'] as String).toSet(),
           allProducts: _allProducts,
           onFavoriteToggle: _toggleFavorite,
         ),
       ),
     );
   }
-
-  void _openCartPage() {
-    Navigator.pop(context);
-  }
-
-
 
   // ==================== UI WIDGETS ====================
   Widget _buildAppBar() {
@@ -203,6 +190,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 Text('Categories', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))),
                 Text('Fresh from local farms', style: TextStyle(fontSize: 12, color: Colors.grey)),
               ],
+            ),
+          ),
+          IconButton(
+            onPressed: _openFavoritesPage,
+            icon: const Icon(Icons.favorite_border, color: Colors.red),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ],
@@ -292,7 +287,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   Widget _buildProductCard(Map<String, dynamic> product) {
     final name = product['name'].toString();
-    final isFavorite = _favoriteItems.contains(name);
+    final isFavorite = widget.externalFavouriteProducts.any((p) => p['name'] == name);
 
     return Container(
       decoration: BoxDecoration(
@@ -435,7 +430,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.favorite_rounded),
-              title: Text('Favorites (${_favoriteItems.length})'),
+              title: Text('Favorites (${widget.externalFavouriteProducts.length})'),
               onTap: () { Navigator.pop(context); _openFavoritesPage(); },
             ),
             ListTile(
