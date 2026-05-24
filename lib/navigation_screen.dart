@@ -19,6 +19,10 @@ class NavigationScreen extends StatefulWidget {
 
 class _NavigationScreenState extends State<NavigationScreen> {
   int currentIndex = 0;
+  String selectedCategory = "All";
+
+  final List<Map<String, dynamic>> _favouriteProducts = [];
+
   late final List<Widget> screens;
 
   @override
@@ -26,15 +30,56 @@ class _NavigationScreenState extends State<NavigationScreen> {
     super.initState();
 
     screens = [
-      HomeScreen(onCartTap: () => changeTab(2)),
-      const CategoriesScreen(),
-      CartScreen(onBackTap: () => changeTab(0)),
+      HomeScreen(
+        onCartTap: () => changeTab(2),
+        onFavoritesTap: () => changeTab(4),
+        onCategoryTap: (String category) {
+          setState(() {
+            selectedCategory = category.isEmpty ? "All" : category;
+            currentIndex = 1;
+          });
+        },
+        favouriteProducts: _favouriteProducts,
+        onFavouriteToggle: _toggleFavourite,
+      ),
+
+      CategoriesScreen(
+        key: ValueKey(selectedCategory),
+        initialCategory: selectedCategory,
+        externalFavouriteProducts: _favouriteProducts,
+        onExternalFavouriteToggle: _toggleFavourite,
+      ),
+
+      CartScreen(
+        onBackTap: () => changeTab(0),
+      ),
+
       const OrdersScreen(),
-      ProfileScreen(userName: widget.userName),
+
+      ProfileScreen(
+        userName: widget.userName,
+        favouriteProducts: _favouriteProducts,
+        allProducts: const [],
+        favouriteNames:
+            _favouriteProducts.map((p) => p['name'] as String).toSet(),
+        onFavouriteToggle: _toggleFavourite,
+      ),
     ];
   }
-  // ABU
-  //abu
+
+  void _toggleFavourite(Map<String, dynamic> product) {
+    setState(() {
+      final index = _favouriteProducts.indexWhere(
+        (p) => p['name'] == product['name'],
+      );
+
+      if (index >= 0) {
+        _favouriteProducts.removeAt(index);
+      } else {
+        _favouriteProducts.add(product);
+      }
+    });
+  }
 
   void changeTab(int index) {
     setState(() {
@@ -49,18 +94,23 @@ class _NavigationScreenState extends State<NavigationScreen> {
         index: currentIndex,
         children: screens,
       ),
+
+      // Bottom Navigation Bar
       bottomNavigationBar: Container(
-        height: 82,
+        margin: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: Colors.white,
+          borderRadius: BorderRadius.circular(25),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(.06),
-              blurRadius: 15,
-              offset: const Offset(0, -2),
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
+
         child: SafeArea(
           top: false,
           child: Row(
@@ -81,7 +131,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   Widget navItem(IconData icon, String label, int index) {
     final bool isSelected = currentIndex == index;
 
-    return InkWell(
+    return GestureDetector(
       onTap: () => changeTab(index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
@@ -91,25 +141,32 @@ class _NavigationScreenState extends State<NavigationScreen> {
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? Colors.green.withOpacity(.12)
+              ? Colors.green.withOpacity(0.12)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(15),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 26,
-              color: isSelected ? Colors.green : Colors.grey,
+            AnimatedScale(
+              scale: isSelected ? 1.2 : 1.0,
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                icon,
+                size: 26,
+                color: isSelected ? Colors.green : Colors.grey,
+              ),
             ),
+
             const SizedBox(height: 4),
+
             Text(
               label,
               style: TextStyle(
                 fontSize: 12,
                 color: isSelected ? Colors.green : Colors.grey,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                fontWeight:
+                    isSelected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
           ],
