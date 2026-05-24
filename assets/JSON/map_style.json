@@ -1,0 +1,30 @@
+GoogleMap(
+initialCameraPosition: CameraPosition(
+target: currentPosition!,
+zoom: 17,
+),
+
+myLocationEnabled: true,
+myLocationButtonEnabled: false,
+zoomControlsEnabled: false,
+compassEnabled: false,
+buildingsEnabled: true,
+
+onMapCreated: (GoogleMapController controller) async {
+
+if (!_controller.isCompleted) {
+_controller.complete(controller);
+}
+
+String style = await DefaultAssetBundle.of(context)
+.loadString('assets/map_style.json');
+
+controller.setMapStyle(style);
+},
+
+onCameraMove: (position) {
+selectedPosition = position.target;
+},
+
+markers: {},
+),
