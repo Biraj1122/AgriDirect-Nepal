@@ -4,15 +4,15 @@ import '../payment_methods_screen.dart';
 import '../farm_osm_screen.dart';
 import '../user_data.dart';
 
-class MyCartScreen extends StatefulWidget {
-  final VoidCallback? onBackToHome;
-  const MyCartScreen({super.key, this.onBackToHome});
+class CartScreen extends StatefulWidget {
+  final VoidCallback? onBackTap;
+  const CartScreen({super.key, this.onBackTap});
 
   @override
-  State<MyCartScreen> createState() => _MyCartScreenState();
+  State<CartScreen> createState() => _CartScreenState();
 }
 
-class _MyCartScreenState extends State<MyCartScreen> {
+class _CartScreenState extends State<CartScreen> {
   String selectedAddress = "Select delivery address";
   double? selectedLat;
   double? selectedLng;
@@ -29,7 +29,6 @@ class _MyCartScreenState extends State<MyCartScreen> {
     }
   }
 
-  /// ✅ FIXED SAFE ADDRESS HANDLING
   Future<void> _selectAddress() async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -43,7 +42,7 @@ class _MyCartScreenState extends State<MyCartScreen> {
     final lng = result["lng"];
 
     if (address == null || lat == null || lng == null) {
-      return; // SAFE EXIT (no crash, no overwrite)
+      return;
     }
 
     final double distance = (result["distance"] as num?)?.toDouble() ?? 0.0;
@@ -55,7 +54,6 @@ class _MyCartScreenState extends State<MyCartScreen> {
       selectedLng = (lng as num).toDouble();
     });
 
-    /// SAVE GLOBALLY (NO DATA LOSS)
     UserData.setAddress(
       address: selectedAddress,
       latitude: selectedLat!,
@@ -66,15 +64,15 @@ class _MyCartScreenState extends State<MyCartScreen> {
   void _handleBack() {
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
-    } else if (widget.onBackToHome != null) {
-      widget.onBackToHome!();
+    } else if (widget.onBackTap != null) {
+      widget.onBackTap!();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false, // Intercept back button
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         _handleBack();
@@ -88,7 +86,7 @@ class _MyCartScreenState extends State<MyCartScreen> {
               backgroundColor: Colors.transparent,
               elevation: 0,
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+                icon: const Icon(Icons.arrow_back, color: Colors.black),
                 onPressed: _handleBack,
               ),
               title: const Text(
@@ -101,7 +99,6 @@ class _MyCartScreenState extends State<MyCartScreen> {
             ),
             body: Column(
               children: [
-                // ADDRESS
                 Padding(
                   padding: const EdgeInsets.all(18),
                   child: Container(
@@ -123,7 +120,6 @@ class _MyCartScreenState extends State<MyCartScreen> {
                     ),
                   ),
                 ),
-                // CART ITEMS
                 Expanded(
                   child: cartModel.items.isEmpty
                       ? const Center(child: Text("Cart is empty"))
@@ -141,19 +137,33 @@ class _MyCartScreenState extends State<MyCartScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Image.asset(product.image,
-                                      height: 60, width: 60),
-                                  const SizedBox(width: 12),
+                                  Image.asset(
+                                    product.image,
+                                    height: 70,
+                                    width: 70,
+                                  ),
+                                  const SizedBox(width: 15),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(product.title,
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold)),
+                                        Text(
+                                          product.title,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 5),
                                         Text(product.unit),
-                                        Text("Rs. ${product.price}"),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          "Rs. ${product.price}",
+                                          style: const TextStyle(
+                                            color: Colors.green,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -167,7 +177,6 @@ class _MyCartScreenState extends State<MyCartScreen> {
                           },
                         ),
                 ),
-                // SUMMARY
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: const BoxDecoration(
@@ -184,13 +193,15 @@ class _MyCartScreenState extends State<MyCartScreen> {
                       const SizedBox(height: 15),
                       SizedBox(
                         width: double.infinity,
-                        height: 50,
+                        height: 55,
                         child: ElevatedButton(
                           onPressed: () {
                             if (selectedAddress == "Select delivery address") {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text("Select delivery address first"),
+                                  content: Text(
+                                    "Select delivery address first",
+                                  ),
                                 ),
                               );
                               return;
