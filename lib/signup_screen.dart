@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'login_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -320,16 +322,58 @@ class _SignupScreenState extends State<SignupScreen>
                       ),
                     ),
 
-                    onPressed: () {
-                      if (_formKey.currentState!
-                          .validate()) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                            const LoginScreen(),
-                          ),
-                        );
+                    onPressed: () async {
+                      if (_formKey.currentState!.validate()) {
+                        try {
+                          // Show loading indicator
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (context) => const Center(child: CircularProgressIndicator()),
+                          );
+
+                          UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                            email: emailController.text.trim(),
+                            password: passwordController.text.trim(),
+                          );
+
+                          // Save user details to Firestore
+                          await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+                            'uid': userCredential.user!.uid,
+                            'fullName': firstNameController.text.trim(),
+                            'email': emailController.text.trim(),
+                            'phone': phoneController.text.trim(),
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
+
+                          // Set display name if possible
+                          await userCredential.user?.updateDisplayName(firstNameController.text.trim());
+
+                          if (mounted) {
+                            Navigator.pop(context); // Pop loading
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Account created successfully! Please login.")),
+                            );
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (context) => const LoginScreen()),
+                            );
+                          }
+                        } on FirebaseAuthException catch (e) {
+                          if (mounted) {
+                            Navigator.pop(context); // Pop loading
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.message ?? "Registration failed")),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            Navigator.pop(context); // Pop loading
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("An error occurred: $e")),
+                            );
+                          }
+                        }
                       }
                     },
 

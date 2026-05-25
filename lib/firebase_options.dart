@@ -15,8 +15,6 @@ import 'package:flutter/foundation.dart'
 /// );
 /// ```
 
-
-
 class DefaultFirebaseOptions
 {
   static FirebaseOptions get currentPlatform {
@@ -45,50 +43,49 @@ class DefaultFirebaseOptions
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyA_W7J3iFa3Sk-jqflQ0bZhF1_C1pCdnsY',
-    appId: '1:662664573348:web:731f848b707c922aa4d131',
-    messagingSenderId: '662664573348',
-    projectId: 'agridirect-nepal',
-    authDomain: 'agridirect-nepal.firebaseapp.com',
-    storageBucket: 'agridirect-nepal.firebasestorage.app',
-    measurementId: 'G-EQ64HL4J55',
+    apiKey: 'AIzaSyAioavGNsG2CgnNq2O4tbfUNZ7B8tzOBFs',
+    appId: '1:931317017971:web:b6266933117f06f8816906',
+    messagingSenderId: '931317017971',
+    projectId: 'agridirect-nepal-9fecd',
+    authDomain: 'agridirect-nepal-9fecd.firebaseapp.com',
+    storageBucket: 'agridirect-nepal-9fecd.firebasestorage.app',
+    measurementId: 'G-NKZRMFXCY1',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyABpuQigraQcMv5oju2GBfOgEPk2IXoxB8',
-    appId: '1:662664573348:android:0429e226e32fc134a4d131',
-    messagingSenderId: '662664573348',
-    projectId: 'agridirect-nepal',
-    storageBucket: 'agridirect-nepal.firebasestorage.app',
+    apiKey: 'AIzaSyC5LYXahPufsCGJwhReMKQ_qkwiOSYsRi0',
+    appId: '1:931317017971:android:fd1517137fa36761816906',
+    messagingSenderId: '931317017971',
+    projectId: 'agridirect-nepal-9fecd',
+    storageBucket: 'agridirect-nepal-9fecd.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyB4ZGak1v7VUqz0OHEnLfTUbIWlvrB-27Q',
-    appId: '1:662664573348:ios:591c39565e29802ea4d131',
-    messagingSenderId: '662664573348',
-    projectId: 'agridirect-nepal',
-    storageBucket: 'agridirect-nepal.firebasestorage.app',
-    iosClientId: '662664573348-luo2n0kb87us5os7dasq810083q1rcqk.apps.googleusercontent.com',
+    apiKey: 'AIzaSyBxLLWgnhJqpUrKU0pD9ClvJvxeJ9O-3CQ',
+    appId: '1:931317017971:ios:0bc4e90273dd28ef816906',
+    messagingSenderId: '931317017971',
+    projectId: 'agridirect-nepal-9fecd',
+    storageBucket: 'agridirect-nepal-9fecd.firebasestorage.app',
     iosBundleId: 'com.example.farmtechAgridirect',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyB4ZGak1v7VUqz0OHEnLfTUbIWlvrB-27Q',
-    appId: '1:662664573348:ios:591c39565e29802ea4d131',
-    messagingSenderId: '662664573348',
-    projectId: 'agridirect-nepal',
-    storageBucket: 'agridirect-nepal.firebasestorage.app',
-    iosClientId: '662664573348-luo2n0kb87us5os7dasq810083q1rcqk.apps.googleusercontent.com',
+    apiKey: 'AIzaSyBxLLWgnhJqpUrKU0pD9ClvJvxeJ9O-3CQ',
+    appId: '1:931317017971:ios:0bc4e90273dd28ef816906',
+    messagingSenderId: '931317017971',
+    projectId: 'agridirect-nepal-9fecd',
+    storageBucket: 'agridirect-nepal-9fecd.firebasestorage.app',
     iosBundleId: 'com.example.farmtechAgridirect',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyA_W7J3iFa3Sk-jqflQ0bZhF1_C1pCdnsY',
-    appId: '1:662664573348:web:da52fef659de4253a4d131',
-    messagingSenderId: '662664573348',
-    projectId: 'agridirect-nepal',
-    authDomain: 'agridirect-nepal.firebaseapp.com',
-    storageBucket: 'agridirect-nepal.firebasestorage.app',
-    measurementId: 'G-CB1TXPP6R2',
+    apiKey: 'AIzaSyAioavGNsG2CgnNq2O4tbfUNZ7B8tzOBFs',
+    appId: '1:931317017971:web:2445e6084b90c5ff816906',
+    messagingSenderId: '931317017971',
+    projectId: 'agridirect-nepal-9fecd',
+    authDomain: 'agridirect-nepal-9fecd.firebaseapp.com',
+    storageBucket: 'agridirect-nepal-9fecd.firebasestorage.app',
+    measurementId: 'G-QKQFFL2B6Q',
   );
+
 }

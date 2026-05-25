@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'screens/orders_screen.dart';
+import 'cart_model.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
   final double subtotal;
@@ -22,7 +25,52 @@ class PaymentMethodsScreen extends StatefulWidget {
 }
 
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
-  void _success() {
+  bool _isProcessing = false;
+
+  Future<void> _processPayment() async {
+    setState(() => _isProcessing = true);
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      String? orderId;
+      if (user != null) {
+        // Save Order to Firestore
+        final docRef = await FirebaseFirestore.instance.collection('orders').add({
+          'userId': user.uid,
+          'userName': user.displayName ?? "User",
+          'subtotal': widget.subtotal,
+          'deliveryFee': widget.deliveryFee,
+          'total': widget.total,
+          'lat': widget.selectedLat,
+          'lng': widget.selectedLng,
+          'status': 'Pending',
+          'createdAt': FieldValue.serverTimestamp(),
+          'items': cartModel.items.map((item) => {
+            'title': item.title,
+            'price': item.price,
+            'image': item.image,
+            'unit': item.unit,
+          }).toList(),
+        });
+        orderId = docRef.id;
+      }
+
+      if (mounted) {
+        cartModel.clear();
+        _success(orderId);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Order failed: $e")),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+
+  void _success(String? orderId) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -49,7 +97,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const OrderScreen(),
+                      builder: (_) => OrderScreen(orderId: orderId),
                     ),
                         (route) => false,
                   );
@@ -57,7 +105,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                 ),
-                child: const Text("Track Order"),
+                child: const Text("Track Order", style: TextStyle(color: Colors.white)),
               ),
             ],
           ),
@@ -89,11 +137,13 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: _success,
+                onPressed: _isProcessing ? null : _processPayment,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                 ),
-                child: const Text("Confirm Payment"),
+                child: _isProcessing
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text("Confirm Payment", style: TextStyle(color: Colors.white)),
               ),
             ),
           ],

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../farm_osm_screen.dart';
 import '../user_data.dart';
 
@@ -14,16 +16,40 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
 
   double? _lat;
   double? _lng;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _loadAddress();
+  }
 
-    if (UserData.defaultAddress != null) {
-      _savedAddress = UserData.defaultAddress!;
-      _lat = UserData.defaultLat;
-      _lng = UserData.defaultLng;
+  Future<void> _loadAddress() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (doc.exists && doc.data()?['address'] != null) {
+        setState(() {
+          _savedAddress = doc.data()?['address'];
+          _lat = doc.data()?['lat'];
+          _lng = doc.data()?['lng'];
+          _isLoading = false;
+        });
+        // Sync to local SharedPreferences as fallback
+        UserData.setAddress(address: _savedAddress, latitude: _lat!, longitude: _lng!);
+        return;
+      }
     }
+    
+    // Fallback to local
+    if (UserData.defaultAddress != null) {
+      setState(() {
+        _savedAddress = UserData.defaultAddress!;
+        _lat = UserData.defaultLat;
+        _lng = UserData.defaultLng;
+      });
+    }
+    setState(() => _isLoading = false);
   }
 
   Future<void> _pickAddress() async {
@@ -45,11 +71,22 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
     });
 
     if (lat != null && lng != null) {
+      // Save Locally
       UserData.setAddress(
         address: address,
         latitude: lat,
         longitude: lng,
       );
+      
+      // Save to Firestore
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'address': address,
+          'lat': lat,
+          'lng': lng,
+        });
+      }
     }
   }
 
@@ -67,44 +104,85 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(18),
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.home, color: Colors.green),
-                  SizedBox(width: 10),
-                  Text("Home Address",
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Row(
+                    children: [
+                      Icon(Icons.home, color: Colors.green),
+                      SizedBox(width: 10),
+                      Text("Home Address",
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(_savedAddress),
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: _pickAddress,
+                      icon: const Icon(Icons.map),
+                      label: const Text("Select Address"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(_savedAddress),
-              const SizedBox(height: 20),
-
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  onPressed: _pickAddress,
-                  icon: const Icon(Icons.map),
-                  label: const Text("Select Address"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
+            ),
+            const SizedBox(height: 20),
+            if (UserData.hasAddress)
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: InkWell(
+                  onTap: _removeAddress,
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.delete_outline, color: Colors.red),
+                      SizedBox(width: 10),
+                      Text("Remove Address", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
+  }
+
+  void _removeAddress() async {
+    UserData.clearAddress();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'address': FieldValue.delete(),
+        'lat': FieldValue.delete(),
+        'lng': FieldValue.delete(),
+      });
+    }
+    setState(() {
+      _savedAddress = "Select your address";
+      _lat = null;
+      _lng = null;
+    });
   }
 }

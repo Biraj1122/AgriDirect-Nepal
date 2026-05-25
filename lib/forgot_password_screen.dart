@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -137,16 +138,41 @@ class _ForgotPasswordScreenState
                         ),
                       ),
 
-                      onPressed: () {
-                        if (_formKey.currentState!
-                            .validate()) {
-                          ScaffoldMessenger.of(context)
-                              .showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  "Password reset link sent"),
-                            ),
-                          );
+                      onPressed: () async {
+                        if (_formKey.currentState!.validate()) {
+                          try {
+                            showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (context) => const Center(child: CircularProgressIndicator()),
+                            );
+
+                            await FirebaseAuth.instance.sendPasswordResetEmail(
+                              email: emailController.text.trim(),
+                            );
+
+                            if (mounted) {
+                              Navigator.pop(context); // Pop loading
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("Password reset link sent to your email")),
+                              );
+                              Navigator.pop(context); // Go back to login
+                            }
+                          } on FirebaseAuthException catch (e) {
+                            if (mounted) {
+                              Navigator.pop(context); // Pop loading
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.message ?? "Error sending reset link")),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              Navigator.pop(context); // Pop loading
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("An error occurred: $e")),
+                              );
+                            }
+                          }
                         }
                       },
 

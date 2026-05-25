@@ -22,7 +22,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
   String selectedCategory = "All";
 
   final List<Map<String, dynamic>> _favouriteProducts = [];
-
   late final List<Widget> screens;
 
   @override
@@ -31,6 +30,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
     screens = [
       HomeScreen(
+        userName: widget.userName,
         onCartTap: () => changeTab(2),
         onFavoritesTap: () => changeTab(4),
         onCategoryTap: (String category) {
@@ -48,16 +48,20 @@ class _NavigationScreenState extends State<NavigationScreen> {
         initialCategory: selectedCategory,
         externalFavouriteProducts: _favouriteProducts,
         onExternalFavouriteToggle: _toggleFavourite,
+        onBackToHome: () => changeTab(0),
       ),
 
       CartScreen(
         onBackTap: () => changeTab(0),
       ),
 
-      const OrdersScreen(),
+      OrdersScreen(
+        onBackToHome: () => changeTab(0),
+      ),
 
       ProfileScreen(
         userName: widget.userName,
+        onBackToHome: () => changeTab(0),
         favouriteProducts: _favouriteProducts,
         allProducts: const [],
         favouriteNames:
@@ -94,8 +98,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
         index: currentIndex,
         children: screens,
       ),
-
-      // Bottom Navigation Bar
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(12),
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -110,7 +112,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
             ),
           ],
         ),
-
         child: SafeArea(
           top: false,
           child: Row(
@@ -157,9 +158,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 color: isSelected ? Colors.green : Colors.grey,
               ),
             ),
-
             const SizedBox(height: 4),
-
             Text(
               label,
               style: TextStyle(
