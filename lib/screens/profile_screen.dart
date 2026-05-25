@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../help_support.dart';
 import 'about_us.dart';
 import '../login_screen.dart';
 import '../my_favourites.dart';
 import 'my_addresses_screen.dart';
+import 'order_history_screen.dart';
 import '../notifications_screen.dart';
 import '../payment_methods_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   final String userName;
   final VoidCallback? onBackToHome;
 
@@ -27,11 +30,38 @@ class ProfileScreen extends StatelessWidget {
     this.onFavouriteToggle,
   });
 
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  String? phone;
+  String? fullName;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserData();
+  }
+
+  Future<void> _fetchUserData() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (doc.exists && mounted) {
+        setState(() {
+          fullName = doc.data()?['fullName'];
+          phone = doc.data()?['phone'];
+        });
+      }
+    }
+  }
+
   void _handleBack(BuildContext context) {
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
-    } else if (onBackToHome != null) {
-      onBackToHome!();
+    } else if (widget.onBackToHome != null) {
+      widget.onBackToHome!();
     }
   }
 
@@ -86,13 +116,13 @@ class ProfileScreen extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                userName,
+                                fullName ?? widget.userName,
                                 style: const TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const Text("+977 9812345678"),
+                              Text(phone ?? "+977 98XXXXXXXX"),
                             ],
                           ),
                         ],
@@ -123,6 +153,19 @@ class ProfileScreen extends StatelessWidget {
                     ),
 
                     menuItem(
+                      Icons.history,
+                      "Order History",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const OrderHistoryScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
                       Icons.payment_outlined,
                       "Payment Methods",
                       onTap: () {
@@ -147,9 +190,9 @@ class ProfileScreen extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                             builder: (_) => MyFavouritesScreen(
-                              favouriteProducts: favouriteProducts,
+                              favouriteProducts: widget.favouriteProducts,
                               onFavouriteToggle:
-                              onFavouriteToggle ?? (item) {},
+                              widget.onFavouriteToggle ?? (item) {},
                             ),
                           ),
                         );
@@ -205,11 +248,16 @@ class ProfileScreen extends StatelessWidget {
 
               /// LOGOUT
               GestureDetector(
-                onTap: () => Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                onTap: () async {
+                  await FirebaseAuth.instance.signOut();
+                  if (context.mounted) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
                       (r) => false,
-                ),
+                    );
+                  }
+                },
                 child: Container(
                   padding: const EdgeInsets.all(15),
                   color: Colors.white,
@@ -239,7 +287,7 @@ class ProfileScreen extends StatelessWidget {
         bool isLast = false,
         String? badgeText,
       }) {
-    //ajshd
+
     return Column(
       children: [
         ListTile(

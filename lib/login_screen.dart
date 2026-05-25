@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 import 'navigation_screen.dart';
@@ -82,14 +83,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: emailController,
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) return "Enter email or phone number";
-                    if (!isValidLoginInput(value)) return "Enter valid email or phone number";
+                    if (value == null || value.trim().isEmpty) return "Enter your email";
+                    if (!isValidEmail(value.trim())) return "Enter a valid email address";
                     return null;
                   },
                   decoration: InputDecoration(
-                    hintText: "Phone number or Email",
+                    hintText: "Email Address",
                     contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                    prefixIcon: Icon(Icons.phone_outlined, size: 20, color: Colors.grey.shade600),
+                    prefixIcon: Icon(Icons.email_outlined, size: 20, color: Colors.grey.shade600),
                     filled: true,
                     fillColor: const Color(0xFFF7F7F7),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(5), borderSide: BorderSide.none),
@@ -139,12 +140,47 @@ class _LoginScreenState extends State<LoginScreen> {
                       elevation: 0,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
                       if (_formKey.currentState!.validate()) {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) => NavigationScreen(userName: emailController.text)),
-                        );
+                        try {
+                          // Show loading indicator
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (context) => const Center(child: CircularProgressIndicator()),
+                          );
+
+                          final UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+                            email: emailController.text.trim(),
+                            password: passwordController.text.trim(),
+                          );
+
+                          if (mounted) {
+                            Navigator.pop(context); // Pop loading
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => NavigationScreen(
+                                  userName: userCredential.user?.displayName ?? userCredential.user?.email ?? "User",
+                                ),
+                              ),
+                            );
+                          }
+                        } on FirebaseAuthException catch (e) {
+                          if (mounted) {
+                            Navigator.pop(context); // Pop loading
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.message ?? "Login failed")),
+                            );
+                          }
+                        } catch (e) {
+                          if (mounted) {
+                            Navigator.pop(context); // Pop loading
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("An error occurred: $e")),
+                            );
+                          }
+                        }
                       }
                     },
                     child: const Text("Login", style: TextStyle(color: Colors.white, fontSize: 16)),

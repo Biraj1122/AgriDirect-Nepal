@@ -44,6 +44,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   Widget build(BuildContext context) {
     final screens = [
       HomeScreen(
+        userName: widget.userName,
         onCartTap: () {
           setState(() {
             currentIndex = 2;

@@ -5,6 +5,7 @@ import 'product_detail_screen.dart';
 import '../notifications_screen.dart';
 
 class HomeScreen extends StatelessWidget {
+  final String userName;
   final VoidCallback onCartTap;
   final VoidCallback onFavoritesTap;
   final Function(String) onCategoryTap;
@@ -13,6 +14,7 @@ class HomeScreen extends StatelessWidget {
 
   const HomeScreen({
     super.key,
+    required this.userName,
     required this.onCartTap,
     required this.onFavoritesTap,
     required this.onCategoryTap,
@@ -74,12 +76,12 @@ class HomeScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Column(
+                  Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Hello, Biraj",
-                        style: TextStyle(
+                        "Hello, $userName",
+                        style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,
                         ),

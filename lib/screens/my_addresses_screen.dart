@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../farm_osm_screen.dart';
 import '../user_data.dart';
 
@@ -14,16 +16,40 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
 
   double? _lat;
   double? _lng;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _loadAddress();
+  }
 
-    if (UserData.defaultAddress != null) {
-      _savedAddress = UserData.defaultAddress!;
-      _lat = UserData.defaultLat;
-      _lng = UserData.defaultLng;
+  Future<void> _loadAddress() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (doc.exists && doc.data()?['address'] != null) {
+        setState(() {
+          _savedAddress = doc.data()?['address'];
+          _lat = doc.data()?['lat'];
+          _lng = doc.data()?['lng'];
+          _isLoading = false;
+        });
+        // Sync to local SharedPreferences as fallback
+        UserData.setAddress(address: _savedAddress, latitude: _lat!, longitude: _lng!);
+        return;
+      }
     }
+    
+    // Fallback to local
+    if (UserData.defaultAddress != null) {
+      setState(() {
+        _savedAddress = UserData.defaultAddress!;
+        _lat = UserData.defaultLat;
+        _lng = UserData.defaultLng;
+      });
+    }
+    setState(() => _isLoading = false);
   }
 
   Future<void> _pickAddress() async {
@@ -45,11 +71,22 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
     });
 
     if (lat != null && lng != null) {
+      // Save Locally
       UserData.setAddress(
         address: address,
         latitude: lat,
         longitude: lng,
       );
+      
+      // Save to Firestore
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'address': address,
+          'lat': lat,
+          'lng': lng,
+        });
+      }
     }
   }
 
@@ -115,14 +152,7 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: InkWell(
-                  onTap: () {
-                    setState(() {
-                      UserData.clearAddress();
-                      _savedAddress = "Select your address";
-                      _lat = null;
-                      _lng = null;
-                    });
-                  },
+                  onTap: _removeAddress,
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -137,5 +167,22 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
         ),
       ),
     );
+  }
+
+  void _removeAddress() async {
+    UserData.clearAddress();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'address': FieldValue.delete(),
+        'lat': FieldValue.delete(),
+        'lng': FieldValue.delete(),
+      });
+    }
+    setState(() {
+      _savedAddress = "Select your address";
+      _lat = null;
+      _lng = null;
+    });
   }
 }

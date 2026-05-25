@@ -22,6 +22,12 @@ class CartModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clear() {
+    _items.clear();
+    _distanceInKm = 0;
+    notifyListeners();
+  }
+
   double get subtotal {
     return _items.fold(
       0,

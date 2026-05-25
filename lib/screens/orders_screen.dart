@@ -2,20 +2,23 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../user_data.dart';
 import '../location_service.dart';
 import '../navigation_screen.dart';
 
 class OrderScreen extends StatefulWidget {
+  final String? orderId;
   final VoidCallback? onBackToHome;
-  const OrderScreen({super.key, this.onBackToHome});
+  const OrderScreen({super.key, this.orderId, this.onBackToHome});
 
   @override
   State<OrderScreen> createState() => _OrderScreenState();
 }
 
 class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin {
-  String status = "On the way";
+  String status = "Pending";
   MapLibreMapController? mapController;
   final LocationService _locationService = LocationService();
   double distance = 0.0;
@@ -27,6 +30,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   Symbol? riderSymbol;
   LatLng? riderPosition;
   Timer? _trackingTimer;
+  StreamSubscription? _orderSubscription;
 
   @override
   void initState() {
@@ -34,6 +38,25 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     _calculateTrackingDetails();
     _setupAnimation();
     _startTrackingSimulation();
+    _listenToOrderUpdates();
+  }
+
+  void _listenToOrderUpdates() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || widget.orderId == null) return;
+
+    _orderSubscription = FirebaseFirestore.instance
+        .collection('orders')
+        .doc(widget.orderId)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists && mounted) {
+        final data = snapshot.data() as Map<String, dynamic>;
+        setState(() {
+          status = data['status'] ?? status;
+        });
+      }
+    });
   }
 
   void _setupAnimation() {
@@ -146,6 +169,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   void dispose() {
     _riderCardController.dispose();
     _trackingTimer?.cancel();
+    _orderSubscription?.cancel();
     super.dispose();
   }
 
