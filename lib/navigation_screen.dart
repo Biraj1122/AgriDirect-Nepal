@@ -69,13 +69,35 @@ class _NavigationScreenState extends State<NavigationScreen> {
         initialCategory: selectedCategory,
         externalFavouriteProducts: _favouriteProducts,
         onExternalFavouriteToggle: _toggleFavourite,
+        onBackToHome: () {
+          setState(() {
+            currentIndex = 0;
+          });
+        },
       ),
 
-      const MyCartScreen(),
-      const OrderScreen(),
+      MyCartScreen(
+        onBackToHome: () {
+          setState(() {
+            currentIndex = 0;
+          });
+        },
+      ),
+      OrderScreen(
+        onBackToHome: () {
+          setState(() {
+            currentIndex = 0;
+          });
+        },
+      ),
 
       ProfileScreen(
         userName: widget.userName,
+        onBackToHome: () {
+          setState(() {
+            currentIndex = 0;
+          });
+        },
         favouriteProducts: _favouriteProducts,
         allProducts: const [],
         favouriteNames: _favouriteProducts.map((p) => p['name'] as String).toSet(),

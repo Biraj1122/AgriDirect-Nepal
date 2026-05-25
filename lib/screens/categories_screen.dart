@@ -8,11 +8,14 @@ class CategoriesScreen extends StatefulWidget {
   final List<Map<String, dynamic>> externalFavouriteProducts;
   final Function(Map<String, dynamic>) onExternalFavouriteToggle;
 
+  final VoidCallback? onBackToHome;
+
   const CategoriesScreen({
     super.key,
     this.initialCategory = 'All',
     required this.externalFavouriteProducts,
     required this.onExternalFavouriteToggle,
+    this.onBackToHome,
   });
   @override
   State<CategoriesScreen> createState() => _CategoriesScreenState();
@@ -418,8 +421,18 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7F5),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        } else if (widget.onBackToHome != null) {
+          widget.onBackToHome!();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F7F5),
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
@@ -483,6 +496,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           ],
         ),
       ),
+    ),
     );
   }
 }

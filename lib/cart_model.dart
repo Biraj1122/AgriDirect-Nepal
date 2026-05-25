@@ -3,6 +3,7 @@ import 'product.dart';
 
 class CartModel extends ChangeNotifier {
   final List<Product> _items = [];
+  double _distanceInKm = 0;
 
   List<Product> get items => _items;
 
@@ -16,14 +17,23 @@ class CartModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setDistance(double distance) {
+    _distanceInKm = distance;
+    notifyListeners();
+  }
+
   double get subtotal {
     return _items.fold(
       0,
-          (sum, item) => sum + double.parse(item.price),
+      (sum, item) => sum + double.parse(item.price),
     );
   }
 
-  double get deliveryFee => _items.isEmpty ? 0 : 40;
+  double get deliveryFee {
+    if (_items.isEmpty) return 0;
+    // Base fee 40 + 5 per km
+    return 40 + (_distanceInKm * 5);
+  }
 
   double get total => subtotal + deliveryFee;
 }

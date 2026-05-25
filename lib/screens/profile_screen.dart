@@ -10,6 +10,7 @@ import '../payment_methods_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   final String userName;
+  final VoidCallback? onBackToHome;
 
   final List<Map<String, dynamic>> favouriteProducts;
   final List<Map<String, dynamic>> allProducts;
@@ -19,188 +20,213 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen({
     super.key,
     required this.userName,
+    this.onBackToHome,
     this.favouriteProducts = const [],
     this.allProducts = const [],
     this.favouriteNames = const {},
     this.onFavouriteToggle,
   });
 
+  void _handleBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else if (onBackToHome != null) {
+      onBackToHome!();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xffF7F8F3),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            /// HEADER
-            Container(
-              height: 220,
-              width: double.infinity,
-              color: const Color(0xffE8F5E9),
-              child: Stack(
-                children: [
-                  Positioned(
-                    top: 50,
-                    right: 20,
-                    child: IconButton(
-                      icon: const Icon(Icons.settings_outlined),
-                      onPressed: () {},
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 40,
-                    left: 25,
-                    child: Row(
-                      children: [
-                        const CircleAvatar(
-                          radius: 45,
-                          child: Icon(Icons.person, size: 50),
-                        ),
-                        const SizedBox(width: 15),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              userName,
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const Text("+977 9812345678"),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            /// MENU
-            Container(
-              color: Colors.white,
-              child: Column(
-                children: [
-                  menuItem(
-                    Icons.location_on_outlined,
-                    "My Addresses",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const MyAddressesScreen(),
-                        ),
-                      );
-                    },
-                  ),
-
-                  menuItem(
-                    Icons.payment_outlined,
-                    "Payment Methods",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const PaymentMethodsScreen(
-                            subtotal: 0,
-                            deliveryFee: 0,
-                            total: 0,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-
-                  menuItem(
-                    Icons.favorite_border,
-                    "My Favorites",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => MyFavouritesScreen(
-                            favouriteProducts: favouriteProducts,
-                            onFavouriteToggle:
-                            onFavouriteToggle ?? (item) {},
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-
-                  /// 🔔 FIXED NOTIFICATIONS BUTTON
-                  menuItem(
-                    Icons.notifications,
-                    "Notifications",
-                    badgeText: "3",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const NotificationsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-
-                  menuItem(
-                    Icons.help_outline,
-                    "Help & Support",
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const HelpSupportScreen(),
-                        ),
-                      );
-                    },
-                  ),
-
-                  menuItem(
-                    Icons.info_outline,
-                    "About Us",
-                    isLast: true,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AboutUsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            /// LOGOUT
-            GestureDetector(
-              onTap: () => Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    (r) => false,
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(15),
-                color: Colors.white,
-                child: const Row(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack(context);
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xffF7F8F3),
+        body: SingleChildScrollView(
+          child: Column(
+            children: [
+              /// HEADER
+              Container(
+                height: 220,
+                width: double.infinity,
+                color: const Color(0xffE8F5E9),
+                child: Stack(
                   children: [
-                    Icon(Icons.logout, color: Colors.red),
-                    SizedBox(width: 10),
-                    Text(
-                      "Logout",
-                      style: TextStyle(color: Colors.red),
+                    // Back Button
+                    Positioned(
+                      top: 50,
+                      left: 15,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+                        onPressed: () => _handleBack(context),
+                      ),
+                    ),
+                    Positioned(
+                      top: 50,
+                      right: 20,
+                      child: IconButton(
+                        icon: const Icon(Icons.settings_outlined),
+                        onPressed: () {},
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 40,
+                      left: 25,
+                      child: Row(
+                        children: [
+                          const CircleAvatar(
+                            radius: 45,
+                            child: Icon(Icons.person, size: 50),
+                          ),
+                          const SizedBox(width: 15),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                userName,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const Text("+977 9812345678"),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+
+              const SizedBox(height: 20),
+
+              /// MENU
+              Container(
+                color: Colors.white,
+                child: Column(
+                  children: [
+                    menuItem(
+                      Icons.location_on_outlined,
+                      "My Addresses",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MyAddressesScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.payment_outlined,
+                      "Payment Methods",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PaymentMethodsScreen(
+                              subtotal: 0,
+                              deliveryFee: 0,
+                              total: 0,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.favorite_border,
+                      "My Favorites",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MyFavouritesScreen(
+                              favouriteProducts: favouriteProducts,
+                              onFavouriteToggle:
+                              onFavouriteToggle ?? (item) {},
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    /// 🔔 FIXED NOTIFICATIONS BUTTON
+                    menuItem(
+                      Icons.notifications,
+                      "Notifications",
+                      badgeText: "3",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.help_outline,
+                      "Help & Support",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const HelpSupportScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.info_outline,
+                      "About Us",
+                      isLast: true,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AboutUsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              /// LOGOUT
+              GestureDetector(
+                onTap: () => Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      (r) => false,
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(15),
+                  color: Colors.white,
+                  child: const Row(
+                    children: [
+                      Icon(Icons.logout, color: Colors.red),
+                      SizedBox(width: 10),
+                      Text(
+                        "Logout",
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

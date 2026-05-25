@@ -67,42 +67,73 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(18),
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Row(
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.home, color: Colors.green),
-                  SizedBox(width: 10),
-                  Text("Home Address",
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const Row(
+                    children: [
+                      Icon(Icons.home, color: Colors.green),
+                      SizedBox(width: 10),
+                      Text("Home Address",
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(_savedAddress),
+                  const SizedBox(height: 20),
+
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      onPressed: _pickAddress,
+                      icon: const Icon(Icons.map),
+                      label: const Text("Select Address"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Text(_savedAddress),
-              const SizedBox(height: 20),
-
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  onPressed: _pickAddress,
-                  icon: const Icon(Icons.map),
-                  label: const Text("Select Address"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
+            ),
+            const SizedBox(height: 20),
+            if (UserData.hasAddress)
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      UserData.clearAddress();
+                      _savedAddress = "Select your address";
+                      _lat = null;
+                      _lng = null;
+                    });
+                  },
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.delete_outline, color: Colors.red),
+                      SizedBox(width: 10),
+                      Text("Remove Address", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                    ],
                   ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
       ),
     );
