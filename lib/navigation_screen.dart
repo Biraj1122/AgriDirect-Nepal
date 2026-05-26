@@ -22,13 +22,30 @@ class _NavigationScreenState extends State<NavigationScreen> {
   String selectedCategory = "All";
 
   final List<Map<String, dynamic>> _favouriteProducts = [];
-  late final List<Widget> screens;
+
+  void _toggleFavourite(Map<String, dynamic> product) {
+    setState(() {
+      final index = _favouriteProducts.indexWhere(
+            (p) => p['name'] == product['name'],
+      );
+
+      if (index >= 0) {
+        _favouriteProducts.removeAt(index);
+      } else {
+        _favouriteProducts.add(product);
+      }
+    });
+  }
+
+  void changeTab(int index) {
+    setState(() {
+      currentIndex = index;
+    });
+  }
 
   @override
-  void initState() {
-    super.initState();
-
-    screens = [
+  Widget build(BuildContext context) {
+    final List<Widget> screens = [
       HomeScreen(
         userName: widget.userName,
         onCartTap: () => changeTab(2),
@@ -55,7 +72,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         onBackTap: () => changeTab(0),
       ),
 
-      OrdersScreen(
+      OrderScreen(
         onBackToHome: () => changeTab(0),
       ),
 
@@ -65,39 +82,17 @@ class _NavigationScreenState extends State<NavigationScreen> {
         favouriteProducts: _favouriteProducts,
         allProducts: const [],
         favouriteNames:
-            _favouriteProducts.map((p) => p['name'] as String).toSet(),
+        _favouriteProducts.map((p) => p['name'] as String).toSet(),
         onFavouriteToggle: _toggleFavourite,
       ),
     ];
-  }
 
-  void _toggleFavourite(Map<String, dynamic> product) {
-    setState(() {
-      final index = _favouriteProducts.indexWhere(
-        (p) => p['name'] == product['name'],
-      );
-
-      if (index >= 0) {
-        _favouriteProducts.removeAt(index);
-      } else {
-        _favouriteProducts.add(product);
-      }
-    });
-  }
-
-  void changeTab(int index) {
-    setState(() {
-      currentIndex = index;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
         index: currentIndex,
         children: screens,
       ),
+
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(12),
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -136,10 +131,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
       onTap: () => changeTab(index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 8,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
               ? Colors.green.withOpacity(0.12)
@@ -165,7 +157,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 fontSize: 12,
                 color: isSelected ? Colors.green : Colors.grey,
                 fontWeight:
-                    isSelected ? FontWeight.bold : FontWeight.w500,
+                isSelected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
           ],
