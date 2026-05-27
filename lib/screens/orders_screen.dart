@@ -253,15 +253,23 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
           ),
           Expanded(
             flex: 2,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(25, 10, 25, 15), // ✅ reduced vertical padding
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(25, 10, 25, 15),
               child: Column(
                 children: [
-                  _step(Icons.check_circle, "Order Received", "We have received your order", true),
-                  _step(Icons.local_shipping, "On the way", "Rider is heading to you", status == "On the way" || status == "Arrived"),
-                  _step(Icons.home, "Delivered", "Enjoy your fresh produce!", status == "Arrived", isLast: true),
-                  const SizedBox(height: 8), // ✅ replaced Spacer()
-                  SizedBox(
+                  Expanded(                              // ✅ steps scroll freely
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          _step(Icons.check_circle, "Order Received", "We have received your order", true),
+                          _step(Icons.local_shipping, "On the way", "Rider is heading to you", status == "On the way" || status == "Arrived"),
+                          _step(Icons.home, "Delivered", "Enjoy your fresh produce!", status == "Arrived", isLast: true),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(                             // ✅ button always pinned at bottom
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
