@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 import 'navigation_screen.dart';
+import 'screens/admin_page.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -39,7 +40,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// PASSWORD VALIDATION (At least 6 characters)
   bool isValidPassword(String password) {
-    return password.length >= 6;
+    // Standard Firebase requires 6, but we check length and allow admin password
+    return password.length >= 6 || password == "Farmadmin@1";
   }
 
   @override
@@ -142,6 +144,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     onPressed: () async {
                       if (_formKey.currentState!.validate()) {
+                        final String email = emailController.text.trim();
+                        final String password = passwordController.text.trim();
+
                         try {
                           // Show loading indicator
                           showDialog(
@@ -150,9 +155,21 @@ class _LoginScreenState extends State<LoginScreen> {
                             builder: (context) => const Center(child: CircularProgressIndicator()),
                           );
 
+                          // Check for Admin Login
+                          if (email == "farmadmin@gmail.com" && password == "Farmadmin@1") {
+                            if (mounted) {
+                              Navigator.pop(context); // Pop loading
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (context) => const AdminPage()),
+                              );
+                            }
+                            return;
+                          }
+
                           final UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-                            email: emailController.text.trim(),
-                            password: passwordController.text.trim(),
+                            email: email,
+                            password: password,
                           );
 
                           if (mounted) {
