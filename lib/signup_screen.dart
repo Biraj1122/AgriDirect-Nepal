@@ -7,38 +7,31 @@ class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 
   @override
-  State<SignupScreen> createState() =>
-      _SignupScreenState();
+  State<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen>
-{
-  final GlobalKey<FormState> _formKey =
-  GlobalKey<FormState>();
+class _SignupScreenState extends State<SignupScreen> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
-  final TextEditingController firstNameController =
-  TextEditingController();
+  final TextEditingController firstNameController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController confirmPasswordController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
 
-  final TextEditingController emailController =
-  TextEditingController();
+  // Farmer-specific controllers
+  final TextEditingController farmNameController = TextEditingController();
+  final TextEditingController farmLocationController = TextEditingController();
 
-  final TextEditingController passwordController =
-  TextEditingController();
-
-  final TextEditingController confirmPasswordController =
-  TextEditingController();
-
-  final TextEditingController phoneController =
-  TextEditingController();
+  String selectedRole = 'Customer';
+  final List<String> roles = ['Customer', 'Farmer', 'Delivery Person'];
 
   bool hidePassword = true;
   bool hideConfirmPassword = true;
-
   bool _confirmTouched = false;
 
   bool isValidEmail(String email) {
-    String pattern =
-        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$';
+    String pattern = r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$';
     return RegExp(pattern).hasMatch(email);
   }
 
@@ -48,59 +41,53 @@ class _SignupScreenState extends State<SignupScreen>
   }
 
   bool isValidPassword(String password) {
-    String pattern =
-        r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$';
-
+    String pattern = r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$';
     return RegExp(pattern).hasMatch(password);
+  }
+
+  @override
+  void dispose() {
+    firstNameController.dispose();
+    emailController.dispose();
+    passwordController.dispose();
+    confirmPasswordController.dispose();
+    phoneController.dispose();
+    farmNameController.dispose();
+    farmLocationController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-
       body: SafeArea(
         child: SingleChildScrollView(
-          padding:
-          const EdgeInsets.symmetric(horizontal: 28),
-
+          padding: const EdgeInsets.symmetric(horizontal: 28),
           child: Form(
             key: _formKey,
-
             child: Column(
               children: [
-
                 const SizedBox(height: 20),
 
+                // Header Row
                 Row(
-                  mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     IconButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      icon: const Icon(
-                          Icons.arrow_back_ios),
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.arrow_back_ios),
                     ),
-
                     Text(
                       "Sign up",
-                      style: TextStyle(
-                        color: Colors.grey.shade400,
-                        fontSize: 18,
-                      ),
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 18),
                     ),
                   ],
                 ),
 
                 const SizedBox(height: 20),
 
-                Image.asset(
-                  "assets/images/logo.png",
-                  height: 140,
-                ),
+                Image.asset("assets/images/logo.png", height: 140),
 
                 const SizedBox(height: 10),
 
@@ -117,14 +104,40 @@ class _SignupScreenState extends State<SignupScreen>
 
                 Text(
                   "Fresh from the farm to your home",
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                 ),
 
-                const SizedBox(height: 35),
+                const SizedBox(height: 25),
 
+                /// ROLE SELECTION DROPDOWN
+                DropdownButtonFormField<String>(
+                  value: selectedRole,
+                  decoration: InputDecoration(
+                    hintText: "Sign up as",
+                    prefixIcon: const Icon(Icons.badge_outlined),
+                    filled: true,
+                    fillColor: Colors.grey.shade100,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(5),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                  items: roles.map((String role) {
+                    return DropdownMenuItem<String>(
+                      value: role,
+                      child: Text(role),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      selectedRole = newValue!;
+                    });
+                  },
+                ),
+
+                const SizedBox(height: 18),
+
+                // Full Name
                 buildTextField(
                   controller: firstNameController,
                   hintText: "Full Name",
@@ -133,30 +146,75 @@ class _SignupScreenState extends State<SignupScreen>
 
                 const SizedBox(height: 18),
 
+                // --- FARMER-SPECIFIC FIELDS ---
+                if (selectedRole == 'Farmer') ...[
+                  // Farm Name
+                  TextFormField(
+                    controller: farmNameController,
+                    validator: (value) {
+                      if (selectedRole == 'Farmer' &&
+                          (value == null || value.trim().isEmpty)) {
+                        return "Please enter your farm name";
+                      }
+                      return null;
+                    },
+                    decoration: InputDecoration(
+                      hintText: "Farm Name",
+                      prefixIcon: const Icon(Icons.agriculture_outlined),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(5),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Farm Location
+                  TextFormField(
+                    controller: farmLocationController,
+                    validator: (value) {
+                      if (selectedRole == 'Farmer' &&
+                          (value == null || value.trim().isEmpty)) {
+                        return "Please enter your farm location";
+                      }
+                      return null;
+                    },
+                    decoration: InputDecoration(
+                      hintText: "Farm Location (e.g. Chitwan, Nepal)",
+                      prefixIcon: const Icon(Icons.location_on_outlined),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(5),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                ],
+
                 /// EMAIL
                 TextFormField(
                   controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
                   validator: (value) {
-                    if (value == null ||
-                        value.trim().isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return "Please enter email";
                     }
-
                     if (!isValidEmail(value)) {
                       return "Enter valid email";
                     }
-
                     return null;
                   },
                   decoration: InputDecoration(
                     hintText: "Email Address",
-                    prefixIcon:
-                    const Icon(Icons.email_outlined),
+                    prefixIcon: const Icon(Icons.email_outlined),
                     filled: true,
                     fillColor: Colors.grey.shade100,
                     border: OutlineInputBorder(
-                      borderRadius:
-                      BorderRadius.circular(5),
+                      borderRadius: BorderRadius.circular(5),
                       borderSide: BorderSide.none,
                     ),
                   ),
@@ -167,27 +225,23 @@ class _SignupScreenState extends State<SignupScreen>
                 /// PHONE
                 TextFormField(
                   controller: phoneController,
+                  keyboardType: TextInputType.phone,
                   validator: (value) {
-                    if (value == null ||
-                        value.trim().isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return "Please enter phone number";
                     }
-
                     if (!isValidNepaliPhone(value)) {
-                      return "Enter valid Nepali number";
+                      return "Enter valid Nepali number (98xxxxxxxx or 97xxxxxxxx)";
                     }
-
                     return null;
                   },
                   decoration: InputDecoration(
                     hintText: "Phone Number",
-                    prefixIcon:
-                    const Icon(Icons.phone_outlined),
+                    prefixIcon: const Icon(Icons.phone_outlined),
                     filled: true,
                     fillColor: Colors.grey.shade100,
                     border: OutlineInputBorder(
-                      borderRadius:
-                      BorderRadius.circular(5),
+                      borderRadius: BorderRadius.circular(5),
                       borderSide: BorderSide.none,
                     ),
                   ),
@@ -199,51 +253,29 @@ class _SignupScreenState extends State<SignupScreen>
                 TextFormField(
                   controller: passwordController,
                   obscureText: hidePassword,
-
                   onChanged: (_) {
-                    if (_confirmTouched) {
-                      setState(() {});
-                    }
+                    if (_confirmTouched) setState(() {});
                   },
-
                   validator: (value) {
-                    if (value == null ||
-                        value.trim().isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return "Please enter password";
                     }
-
                     if (!isValidPassword(value)) {
-                      return "Password must be 8+ chars with Upper"
-                          "\n, lower, number & symbol";
+                      return "Password must be 8+ chars with Upper,\nlower, number & symbol";
                     }
-
                     return null;
                   },
-
                   decoration: InputDecoration(
                     hintText: "Password",
-                    prefixIcon:
-                    const Icon(Icons.lock_outline),
-
+                    prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(() {
-                          hidePassword =
-                          !hidePassword;
-                        });
-                      },
-                      icon: Icon(
-                        hidePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
+                      onPressed: () => setState(() => hidePassword = !hidePassword),
+                      icon: Icon(hidePassword ? Icons.visibility_off : Icons.visibility),
                     ),
-
                     filled: true,
                     fillColor: Colors.grey.shade100,
                     border: OutlineInputBorder(
-                      borderRadius:
-                      BorderRadius.circular(5),
+                      borderRadius: BorderRadius.circular(5),
                       borderSide: BorderSide.none,
                     ),
                   ),
@@ -251,57 +283,33 @@ class _SignupScreenState extends State<SignupScreen>
 
                 const SizedBox(height: 18),
 
-                /// CONFIRM PASSWORD (FIXED UX)
+                /// CONFIRM PASSWORD
                 TextFormField(
-                  controller:
-                  confirmPasswordController,
+                  controller: confirmPasswordController,
                   obscureText: hideConfirmPassword,
-
-                  onChanged: (_) {
-                    setState(() {
-                      _confirmTouched = true;
-                    });
-                  },
-
+                  onChanged: (_) => setState(() => _confirmTouched = true),
                   validator: (value) {
-                    if (value == null ||
-                        value.isEmpty) {
+                    if (value == null || value.isEmpty) {
                       return "Please confirm password";
                     }
-
-                    if (_confirmTouched &&
-                        value !=
-                            passwordController.text) {
+                    if (_confirmTouched && value != passwordController.text) {
                       return "Passwords do not match";
                     }
-
                     return null;
                   },
-
                   decoration: InputDecoration(
                     hintText: "Confirm Password",
-                    prefixIcon:
-                    const Icon(Icons.lock_outline),
-
+                    prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      onPressed: () {
-                        setState(() {
-                          hideConfirmPassword =
-                          !hideConfirmPassword;
-                        });
-                      },
+                      onPressed: () =>
+                          setState(() => hideConfirmPassword = !hideConfirmPassword),
                       icon: Icon(
-                        hideConfirmPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
+                          hideConfirmPassword ? Icons.visibility_off : Icons.visibility),
                     ),
-
                     filled: true,
                     fillColor: Colors.grey.shade100,
                     border: OutlineInputBorder(
-                      borderRadius:
-                      BorderRadius.circular(5),
+                      borderRadius: BorderRadius.circular(5),
                       borderSide: BorderSide.none,
                     ),
                   ),
@@ -317,58 +325,71 @@ class _SignupScreenState extends State<SignupScreen>
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green,
                       shape: RoundedRectangleBorder(
-                        borderRadius:
-                        BorderRadius.circular(5),
+                        borderRadius: BorderRadius.circular(5),
                       ),
                     ),
-
                     onPressed: () async {
                       if (_formKey.currentState!.validate()) {
                         try {
-                          // Show loading indicator
                           showDialog(
                             context: context,
                             barrierDismissible: false,
-                            builder: (context) => const Center(child: CircularProgressIndicator()),
+                            builder: (context) =>
+                            const Center(child: CircularProgressIndicator()),
                           );
 
-                          UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                          UserCredential userCredential =
+                          await FirebaseAuth.instance.createUserWithEmailAndPassword(
                             email: emailController.text.trim(),
                             password: passwordController.text.trim(),
                           );
 
-                          // Save user details to Firestore
-                          await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+                          // Build Firestore document — includes farmer fields if applicable
+                          final Map<String, dynamic> userData = {
                             'uid': userCredential.user!.uid,
                             'fullName': firstNameController.text.trim(),
                             'email': emailController.text.trim(),
                             'phone': phoneController.text.trim(),
+                            'role': selectedRole,
                             'createdAt': FieldValue.serverTimestamp(),
-                          });
+                          };
 
-                          // Set display name if possible
-                          await userCredential.user?.updateDisplayName(firstNameController.text.trim());
+                          if (selectedRole == 'Farmer') {
+                            userData['farmName'] = farmNameController.text.trim();
+                            userData['farmLocation'] = farmLocationController.text.trim();
+                          }
+
+                          await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(userCredential.user!.uid)
+                              .set(userData);
+
+                          await userCredential.user
+                              ?.updateDisplayName(firstNameController.text.trim());
 
                           if (mounted) {
                             Navigator.pop(context); // Pop loading
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Account created successfully! Please login.")),
+                              const SnackBar(
+                                  content: Text(
+                                      "Account created successfully! Please login.")),
                             );
                             Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(builder: (context) => const LoginScreen()),
+                              MaterialPageRoute(
+                                  builder: (context) => const LoginScreen()),
                             );
                           }
                         } on FirebaseAuthException catch (e) {
                           if (mounted) {
-                            Navigator.pop(context); // Pop loading
+                            Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text(e.message ?? "Registration failed")),
                             );
                           }
                         } catch (e) {
                           if (mounted) {
-                            Navigator.pop(context); // Pop loading
+                            Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text("An error occurred: $e")),
                             );
@@ -376,13 +397,9 @@ class _SignupScreenState extends State<SignupScreen>
                         }
                       }
                     },
-
                     child: const Text(
                       "Sign up",
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                      ),
+                      style: TextStyle(color: Colors.white, fontSize: 16),
                     ),
                   ),
                 ),
@@ -404,10 +421,7 @@ class _SignupScreenState extends State<SignupScreen>
     return TextFormField(
       controller: controller,
       validator: (value) {
-        if (value == null ||
-            value.trim().isEmpty) {
-          return "Field cannot be empty";
-        }
+        if (value == null || value.trim().isEmpty) return "Field cannot be empty";
         return null;
       },
       decoration: InputDecoration(
@@ -416,8 +430,7 @@ class _SignupScreenState extends State<SignupScreen>
         filled: true,
         fillColor: Colors.grey.shade100,
         border: OutlineInputBorder(
-          borderRadius:
-          BorderRadius.circular(5),
+          borderRadius: BorderRadius.circular(5),
           borderSide: BorderSide.none,
         ),
       ),

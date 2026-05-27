@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Added Firestore import
 import '../cart_model.dart';
 import '../product.dart';
 
 class CategoriesScreen extends StatefulWidget {
-
   final String initialCategory;
   final List<Map<String, dynamic>> externalFavouriteProducts;
   final Function(Map<String, dynamic>) onExternalFavouriteToggle;
-
   final VoidCallback? onBackToHome;
 
   const CategoriesScreen({
@@ -17,6 +16,7 @@ class CategoriesScreen extends StatefulWidget {
     required this.onExternalFavouriteToggle,
     this.onBackToHome,
   });
+
   @override
   State<CategoriesScreen> createState() => _CategoriesScreenState();
 }
@@ -25,7 +25,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   int _selectedCategoryIndex = 0;
-  late final List<Map<String, dynamic>> _allProducts;
 
   final List<Map<String, dynamic>> _categories = [
     {'name': 'All', 'icon': Icons.apps_rounded},
@@ -36,84 +35,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     {'name': 'Herbs', 'icon': Icons.local_florist_rounded},
     {'name': 'Organic', 'icon': Icons.spa_rounded},
     {'name': 'Seasonal', 'icon': Icons.wb_sunny_rounded},
-
   ];
-
-
-  List<Map<String, dynamic>> get _filteredProducts {
-    final selectedCategory = _categories[_selectedCategoryIndex]['name'];
-    return _allProducts.where((product) {
-      final matchesCategory = selectedCategory == 'All' || product['category'] == selectedCategory;
-      final matchesSearch = _searchQuery.isEmpty ||
-          product['name'].toString().toLowerCase().contains(_searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    }).toList();
-  }
 
   @override
   void initState() {
     super.initState();
-    _allProducts = [
-      // ==================== VEGETABLES ====================
-      {'name': 'Fresh Tomato (गोलभेंडा)', 'price': 130, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Kavre Organic Farm', 'badge': '100% Organic', 'badgeColor': Colors.green, 'imagePath': 'tomato.png', 'discount': null},
-      {'name': 'Organic Potato (आलु)', 'price': 60, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Himalayan Farms', 'badge': 'Pesticide Free', 'badgeColor': Colors.blue, 'imagePath': 'potato.png', 'discount': null},
-      {'name': 'Green Cabbage (बन्दा गोभी)', 'price': 80, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Bhaktapur Fresh Farm', 'badge': 'Fresh Picked', 'badgeColor': Colors.orange, 'imagePath': 'green cabbage.png', 'discount': null},
-      {'name': 'Fresh Spinach (पालुङ्गो)', 'price': 45, 'unit': 'bunch', 'category': 'Vegetables', 'farm': 'Green Valley Organics', 'badge': '100% Organic', 'badgeColor': Colors.green, 'imagePath': 'spinach.png', 'discount': null},
-      {'name': 'Fresh Cucumber (काक्रो)', 'price': 40, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Terai Produce', 'badge': 'Fresh Harvest', 'badgeColor': Colors.teal, 'imagePath': 'cucumber.png', 'discount': 5},
-      {'name': 'Eggplant (भण्टा)', 'price': 65, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Dhading Growers', 'badge': 'Organic', 'badgeColor': Colors.purple, 'imagePath': 'eggplant.png', 'discount': null},
-      {'name': 'Bitter Gourd (करेला)', 'price': 55, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Hetauda Farms', 'badge': 'Pesticide-Free', 'badgeColor': Colors.blue, 'imagePath': 'bitter gourd.png', 'discount': null},
-      {'name': 'Fresh Radish (मुला)', 'price': 48, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Kavre Root Farm', 'badge': 'Organic', 'badgeColor': Colors.green, 'imagePath': 'Radish.png', 'discount': 10},
-      {'name': 'Okra (भिन्डी)', 'price': 70, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Sindhuli Farms', 'badge': 'Fresh', 'badgeColor': Colors.orange, 'imagePath': 'okra.png', 'discount': null},
-      {'name': 'French Beans (सेम)', 'price': 85, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Nuwakot Harvest', 'badge': 'Pesticide-Free', 'badgeColor': Colors.blue, 'imagePath': 'french beans.png', 'discount': 5},
-      {'name': 'Carrot (गाजर)', 'price': 95, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Chitwan Farm', 'badge': 'Fresh', 'badgeColor': Colors.deepOrange, 'imagePath': 'carrot.png', 'discount': null},
-      {'name': 'Cauliflower (फूलगोभी)', 'price': 75, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Kathmandu Valley', 'badge': 'Fresh', 'badgeColor': Colors.orange, 'imagePath': 'cauliflower.png', 'discount': null},
-      {'name': 'Pumpkin (फर्सी)', 'price': 50, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Lalitpur Farm', 'badge': 'Seasonal', 'badgeColor': Colors.amber, 'imagePath': 'pumpkin.png', 'discount': null},
-      {'name': 'Bottle Gourd (लौका)', 'price': 60, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Terai Organic', 'badge': 'Fresh', 'badgeColor': Colors.teal, 'imagePath': 'bottle gourd.png', 'discount': null},
-      {'name': 'Ladyfinger (भिन्डी)', 'price': 72, 'unit': 'kg', 'category': 'Vegetables', 'farm': 'Jhapa Farm', 'badge': 'Local', 'badgeColor': Colors.orange, 'imagePath': 'okra.png', 'discount': null},
-
-      // ==================== FRUITS ====================
-      {'name': 'Ripe Mango (आम)', 'price': 200, 'unit': 'kg', 'category': 'Fruits', 'farm': 'Terai Fruit Gardens', 'badge': 'Seasonal', 'badgeColor': Colors.amber, 'imagePath': 'mango.png', 'discount': null},
-      {'name': 'Banana (केरा)', 'price': 80, 'unit': 'kg', 'category': 'Fruits', 'farm': 'Chitwan Banana Farm', 'badge': 'Fresh', 'badgeColor': Colors.orange, 'imagePath': 'banana.png', 'discount': null},
-      {'name': 'Apple (स्याउ)', 'price': 160, 'unit': 'kg', 'category': 'Fruits', 'farm': 'Mustang Orchards', 'badge': 'Himalayan', 'badgeColor': Colors.red, 'imagePath': 'apple.png', 'discount': 10},
-      {'name': 'Papaya (मेवा)', 'price': 70, 'unit': 'kg', 'category': 'Fruits', 'farm': 'Narayangarh', 'badge': 'Local', 'badgeColor': Colors.amber, 'imagePath': 'papaya.png', 'discount': null},
-      {'name': 'Guava (अम्बा)', 'price': 90, 'unit': 'kg', 'category': 'Fruits', 'farm': 'Terai Organic', 'badge': 'Seasonal', 'badgeColor': Colors.green, 'imagePath': 'guava.png', 'discount': null},
-      {'name': 'Orange (सुन्तला)', 'price': 120, 'unit': 'kg', 'category': 'Fruits', 'farm': 'Pokhara Citrus', 'badge': 'Fresh', 'badgeColor': Colors.orange, 'imagePath': 'orange.png', 'discount': null},
-      {'name': 'Pomegranate (अनार)', 'price': 250, 'unit': 'kg', 'category': 'Fruits', 'farm': 'Himalayan Orchard', 'badge': 'Premium', 'badgeColor': Colors.red, 'imagePath': 'pomegranate.png', 'discount': null},
-      {'name': 'Pineapple (भुइँकटहर)', 'price': 110, 'unit': 'piece', 'category': 'Fruits', 'farm': 'Terai Farms', 'badge': 'Sweet', 'badgeColor': Colors.amber, 'imagePath': 'pineapple.png', 'discount': null},
-      {'name': 'Grapes (अंगुर)', 'price': 180, 'unit': 'kg', 'category': 'Fruits', 'farm': 'Kathmandu Valley', 'badge': 'Fresh', 'badgeColor': Colors.purple, 'imagePath': 'grapes.png', 'discount': null},
-
-      // ==================== DAIRY ====================
-      {'name': 'Farm Fresh Milk (दूध)', 'price': 90, 'unit': 'litre', 'category': 'Dairy', 'farm': 'Sunrise Dairy', 'badge': 'A2 Milk', 'badgeColor': Colors.teal, 'imagePath': 'milk.png', 'discount': 10},
-      {'name': 'Curd (दही)', 'price': 120, 'unit': 'kg', 'category': 'Dairy', 'farm': 'Sunrise Dairy', 'badge': 'Farm Fresh', 'badgeColor': Colors.teal, 'imagePath': 'curd.png', 'discount': null},
-      {'name': 'Fresh Yogurt (दही)', 'price': 135, 'unit': 'kg', 'category': 'Dairy', 'farm': 'Himalayan Co-op', 'badge': 'Probiotic', 'badgeColor': Colors.teal, 'imagePath': 'fresh yogurt.png', 'discount': 5},
-      {'name': 'Fresh Butter (मखन)', 'price': 420, 'unit': 'kg', 'category': 'Dairy', 'farm': 'Himalayan Dairy', 'badge': 'Desi', 'badgeColor': Colors.teal, 'imagePath': 'fresh butter.png', 'discount': null},
-      {'name': 'Fresh Ghee (घिउ)', 'price': 850, 'unit': 'kg', 'category': 'Dairy', 'farm': 'Himalayan Ghee', 'badge': 'Pure', 'badgeColor': Colors.teal, 'imagePath': 'fresh ghee.png', 'discount': null},
-      {'name': 'Paneer (पनीर)', 'price': 380, 'unit': 'kg', 'category': 'Dairy', 'farm': 'Mountain Dairy', 'badge': 'Fresh', 'badgeColor': Colors.teal, 'imagePath': 'paneer.png', 'discount': null},
-
-      // ==================== GRAINS ====================
-      {'name': 'Brown Rice (चामल)', 'price': 180, 'unit': 'kg', 'category': 'Grains', 'farm': 'Chitwan Agro', 'badge': 'Whole Grain', 'badgeColor': Colors.brown, 'imagePath': 'brown rice.png', 'discount': 5},
-      {'name': 'Millet (कोदो)', 'price': 190, 'unit': 'kg', 'category': 'Grains', 'farm': 'Himalayan Co-op', 'badge': 'Organic', 'badgeColor': Colors.brown, 'imagePath': 'millet.png', 'discount': null},
-      {'name': 'Wheat (गेहुँ)', 'price': 110, 'unit': 'kg', 'category': 'Grains', 'farm': 'Narayangarh', 'badge': 'Local', 'badgeColor': Colors.brown, 'imagePath': 'wheat.png', 'discount': null},
-      {'name': 'Maize (मकै)', 'price': 45, 'unit': 'kg', 'category': 'Grains', 'farm': 'Terai Maize', 'badge': 'Organic', 'badgeColor': Colors.brown, 'imagePath': 'maize.png', 'discount': null},
-      {'name': 'Quinoa (किनुआ)', 'price': 320, 'unit': 'kg', 'category': 'Grains', 'farm': 'Mustang Organic', 'badge': 'Superfood', 'badgeColor': Colors.brown, 'imagePath': 'quinoa.png', 'discount': null},
-
-      // ==================== HERBS ====================
-      {'name': 'Fresh Ginger (अदुवा)', 'price': 120, 'unit': 'kg', 'category': 'Herbs', 'farm': 'Gorkha Spice', 'badge': 'Organic', 'badgeColor': Colors.brown, 'imagePath': 'ginger.png', 'discount': null},
-      {'name': 'Fresh Turmeric (बेसार)', 'price': 210, 'unit': 'kg', 'category': 'Herbs', 'farm': 'Gorkha Spice', 'badge': 'Organic', 'badgeColor': Colors.brown, 'imagePath': 'fresh turmeric.png', 'discount': 5},
-      {'name': 'Garlic (लसुन)', 'price': 180, 'unit': 'kg', 'category': 'Herbs', 'farm': 'Dolakha', 'badge': 'Fresh', 'badgeColor': Colors.brown, 'imagePath': 'garlic.png', 'discount': null},
-      {'name': 'Green Chili (हरियो खुरानी)', 'price': 85, 'unit': 'kg', 'category': 'Herbs', 'farm': 'Kathmandu', 'badge': 'Spicy', 'badgeColor': Colors.red, 'imagePath': 'green chili.png', 'discount': null},
-      {'name': 'Coriander (धनिया)', 'price': 50, 'unit': 'bunch', 'category': 'Herbs', 'farm': 'Local Garden', 'badge': 'Fresh', 'badgeColor': Colors.green, 'imagePath': 'coriander.png', 'discount': null},
-
-      // ==================== ORGANIC & SEASONAL ====================
-      {'name': 'Himalayan Honey (शहद)', 'price': 850, 'unit': '500g', 'category': 'Organic', 'farm': 'Mountain Bee Farm', 'badge': 'Pure & Raw', 'badgeColor': Colors.amber, 'imagePath': 'himalayan honey.png', 'discount': null},
-      {'name': 'Amala (आँपल)', 'price': 150, 'unit': 'kg', 'category': 'Organic', 'farm': 'Himalayan Forest', 'badge': 'Vitamin C', 'badgeColor': Colors.green, 'imagePath': 'amala.png', 'discount': null},
-      {'name': 'Fresh Asparagus (सतावर)', 'price': 280, 'unit': 'bunch', 'category': 'Seasonal', 'farm': 'Pokhara Hills', 'badge': 'Seasonal', 'badgeColor': Colors.amber, 'imagePath': 'asparagus.png', 'discount': null},
-      {'name': 'Sweet Corn (मकै)', 'price': 90, 'unit': 'piece', 'category': 'Seasonal', 'farm': 'Terai Fresh', 'badge': 'Seasonal', 'badgeColor': Colors.amber, 'imagePath': 'sweet corn.png', 'discount': null},
-      {'name': 'Fresh Peas (केराउ)', 'price': 110, 'unit': 'kg', 'category': 'Seasonal', 'farm': 'Kathmandu Valley', 'badge': 'Seasonal', 'badgeColor': Colors.green, 'imagePath': 'peas.png', 'discount': null},
-    ];
     final categoryIndex = _categories.indexWhere(
-          (category) =>
-      category['name'] == widget.initialCategory,
+          (category) => category['name'] == widget.initialCategory,
     );
 
     if (categoryIndex != -1) {
@@ -127,13 +55,27 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     super.dispose();
   }
 
+  // ✅ Context-aware filtering method reading straight from the database stream
+  List<Map<String, dynamic>> _getFilteredProducts(List<Map<String, dynamic>> liveProducts) {
+    final selectedCategory = _categories[_selectedCategoryIndex]['name'];
+    return liveProducts.where((product) {
+      final matchesCategory = selectedCategory == 'All' || product['category'] == selectedCategory;
+      final matchesSearch = _searchQuery.isEmpty ||
+          product['name'].toString().toLowerCase().contains(_searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    }).toList();
+  }
+
   void _addToCart(Map<String, dynamic> product) {
     final newProduct = Product(
       title: product['name'].toString(),
       price: product['price'].toString(),
       unit: product['unit'].toString(),
-      image: 'assets/images/${product['imagePath']}',
-      description: product['name'].toString(),
+      // ✅ Supports network image URL if uploaded by farmer, drops back to asset otherwise
+      image: (product['imageUrl'] != null && product['imageUrl'].toString().isNotEmpty)
+          ? product['imageUrl'].toString()
+          : 'assets/images/${product['imagePath'] ?? "tomato.png"}',
+      description: product['description'] ?? product['name'].toString(),
       longDescription: "${product['name']} from ${product['farm']}. Fresh and high quality produce.",
     );
 
@@ -150,13 +92,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     widget.onExternalFavouriteToggle(product);
   }
 
-  void _openFavoritesPage() {
+  void _openFavoritesPage(List<Map<String, dynamic>> currentProducts) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => FavoritesPage(
           favoriteItems: widget.externalFavouriteProducts.map((p) => p['name'] as String).toSet(),
-          allProducts: _allProducts,
+          allProducts: currentProducts,
           onFavoriteToggle: _toggleFavorite,
         ),
       ),
@@ -164,12 +106,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==================== UI WIDGETS ====================
-  Widget _buildAppBar() {
+  Widget _buildAppBar(List<Map<String, dynamic>> currentProducts) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
       child: Row(
         children: [
-          // ✅ Hamburger icon removed here
           const CircleAvatar(
             radius: 18,
             backgroundColor: Color(0xFF2E7D32),
@@ -186,7 +127,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             ),
           ),
           IconButton(
-            onPressed: _openFavoritesPage,
+            onPressed: () => _openFavoritesPage(currentProducts),
             icon: const Icon(Icons.favorite_border, color: Colors.red),
             style: IconButton.styleFrom(
               backgroundColor: Colors.white,
@@ -281,6 +222,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   Widget _buildProductCard(Map<String, dynamic> product) {
     final name = product['name'].toString();
     final isFavorite = widget.externalFavouriteProducts.any((p) => p['name'] == name);
+    final String imageUrl = product['imageUrl'] ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -300,10 +242,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   color: Colors.grey[100],
                   child: ClipRRect(
                     borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
-                    child: Image.asset(
-                      'assets/images/${product['imagePath']}',
+                    // ✅ Dynamic Image Loader handles live network imagery alongside legacy assets
+                    child: imageUrl.isNotEmpty
+                        ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey)),
+                    )
+                        : Image.asset(
+                      'assets/images/${product['imagePath'] ?? "tomato.png"}',
                       fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.image_not_supported, size: 50, color: Colors.grey)),
+                      errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey)),
                     ),
                   ),
                 ),
@@ -313,10 +262,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
-                      color: (product['badgeColor'] as Color).withOpacity(0.15),
+                      color: (product['badgeColor'] as Color? ?? Colors.green).withOpacity(0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(product['badge'].toString(), style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: product['badgeColor'] as Color)),
+                    child: Text(
+                      product['badge']?.toString() ?? 'Fresh Picked',
+                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: product['badgeColor'] as Color? ?? Colors.green),
+                    ),
                   ),
                 ),
                 Positioned(
@@ -421,49 +373,79 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           widget.onBackToHome!();
         }
       },
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7F5),
-        // ✅ drawer: removed entirely here
-        body: SafeArea(
-          child: Column(
-            children: [
-              _buildAppBar(),
-              _buildSearchBar(),
-              const SizedBox(height: 8),
-              _buildCategoryRow(),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      _selectedCategoryIndex == 0 ? 'All Products' : _categories[_selectedCategoryIndex]['name'].toString(),
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
+      // ✅ StreamBuilder setup to pull real-time inventory uploaded from the farmer's side
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('products').snapshots(),
+        builder: (context, snapshot) {
+          List<Map<String, dynamic>> allLiveProducts = [];
+
+          if (snapshot.hasData) {
+            allLiveProducts = snapshot.data!.docs.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return {
+                'id': doc.id,
+                'name': data['name'] ?? '',
+                'price': data['price'] ?? 0,
+                'unit': data['unit'] ?? 'kg',
+                'category': data['category'] ?? 'Vegetables',
+                'farm': data['farmName'] ?? 'Local Farm',
+                'description': data['description'] ?? '',
+                'imageUrl': data['imageUrl'] ?? '',
+                'badge': data['badge'] ?? 'Fresh Picked',
+                'badgeColor': Colors.green,
+                'discount': data['discount']
+              };
+            }).toList();
+          }
+
+          final filteredProducts = _getFilteredProducts(allLiveProducts);
+
+          return Scaffold(
+            backgroundColor: const Color(0xFFF5F7F5),
+            body: SafeArea(
+              child: Column(
+                children: [
+                  _buildAppBar(allLiveProducts),
+                  _buildSearchBar(),
+                  const SizedBox(height: 8),
+                  _buildCategoryRow(),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _selectedCategoryIndex == 0 ? 'All Products' : _categories[_selectedCategoryIndex]['name'].toString(),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
+                        ),
+                        Text('${filteredProducts.length} items', style: const TextStyle(fontSize: 13, color: Color(0xFF757575))),
+                      ],
                     ),
-                    Text('${_filteredProducts.length} items', style: const TextStyle(fontSize: 13, color: Color(0xFF757575))),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 6),
-              Expanded(
-                child: _filteredProducts.isEmpty
-                    ? _buildEmptyState()
-                    : GridView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.55,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
                   ),
-                  itemCount: _filteredProducts.length,
-                  itemBuilder: (context, index) => _buildProductCard(_filteredProducts[index]),
-                ),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: snapshot.connectionState == ConnectionState.waiting
+                        ? const Center(child: CircularProgressIndicator(color: Color(0xFF2E7D32)))
+                        : filteredProducts.isEmpty
+                        ? _buildEmptyState()
+                        : GridView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        childAspectRatio: 0.55,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                      ),
+                      itemCount: filteredProducts.length,
+                      itemBuilder: (context, index) => _buildProductCard(filteredProducts[index]),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -482,7 +464,7 @@ class FavoritesPage extends StatelessWidget {
     final favoriteProducts = allProducts.where((p) => favoriteItems.contains(p['name'].toString())).toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Favorites'), backgroundColor: const Color(0xFF2E7D32)),
+      appBar: AppBar(title: const Text('My Favorites'), backgroundColor: const Color(0xFF2E7D32), foregroundColor: Colors.white),
       body: favoriteProducts.isEmpty
           ? const Center(child: Text('No favorite items yet', style: TextStyle(fontSize: 18)))
           : GridView.builder(
@@ -497,6 +479,7 @@ class FavoritesPage extends StatelessWidget {
   }
 
   Widget _buildFavoriteCard(Map<String, dynamic> product, BuildContext context) {
+    final String imageUrl = product['imageUrl'] ?? '';
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -508,7 +491,12 @@ class FavoritesPage extends StatelessWidget {
           Expanded(
             flex: 5,
             child: Center(
-              child: Image.asset('assets/images/${product['imagePath']}', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, size: 60)),
+              child: imageUrl.isNotEmpty
+                  ? ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, size: 60)),
+              )
+                  : Image.asset('assets/images/${product['imagePath'] ?? "tomato.png"}', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, size: 60)),
             ),
           ),
           Expanded(
