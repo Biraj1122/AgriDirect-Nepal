@@ -65,7 +65,6 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: const Color(0xffF7F8F3),
-
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
@@ -86,8 +85,8 @@ class HomeScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      SizedBox(height: 2),
-                      Text(
+                      const SizedBox(height: 2),
+                      const Text(
                         "Good morning",
                         style: TextStyle(color: Colors.grey),
                       ),
@@ -152,11 +151,9 @@ class HomeScreen extends StatelessWidget {
                   children: [
                     categoryItem(context, Icons.eco_outlined, "Vegetables"),
                     categoryItem(context, Icons.apple_outlined, "Fruits"),
-                    categoryItem(
-                        context, Icons.local_drink_outlined, "Dairy"),
+                    categoryItem(context, Icons.local_drink_outlined, "Dairy"),
                     categoryItem(context, Icons.grass, "Herbs"),
-                    categoryItem(
-                        context, Icons.energy_savings_leaf, "Organic"),
+                    categoryItem(context, Icons.energy_savings_leaf, "Organic"),
                   ],
                 ),
               ),
@@ -205,6 +202,7 @@ class HomeScreen extends StatelessWidget {
                     Image.asset(
                       "assets/images/tomatoes.png",
                       height: 110,
+                      fit: BoxFit.contain,
                     ),
                   ],
                 ),
@@ -251,7 +249,6 @@ class HomeScreen extends StatelessWidget {
                           'price': product.price,
                           'unit': product.unit,
                           'imagePath': product.image.split('/').last,
-                          // Add other fields if needed by MyFavouritesScreen
                         });
                       },
                     ),
@@ -324,7 +321,10 @@ class HomeScreen extends StatelessWidget {
             child: Stack(
               children: [
                 Center(
-                  child: Image.asset(image),
+                  child: Image.asset(
+                    image,
+                    fit: BoxFit.contain,
+                  ),
                 ),
                 Positioned(
                   top: 0,
