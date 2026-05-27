@@ -205,6 +205,7 @@ class HomeScreen extends StatelessWidget {
                     Image.asset(
                       "assets/images/tomatoes.png",
                       height: 110,
+                      fit: BoxFit.contain,
                     ),
                   ],
                 ),
@@ -324,7 +325,9 @@ class HomeScreen extends StatelessWidget {
             child: Stack(
               children: [
                 Center(
-                  child: Image.asset(image),
+                  child: Image.asset(image,
+                  fit: BoxFit.contain,
+                ),
                 ),
                 Positioned(
                   top: 0,
