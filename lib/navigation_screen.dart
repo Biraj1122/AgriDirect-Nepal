@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import 'screens/home_screen.dart';
 import 'screens/my_cart.dart';
 import 'screens/categories_screen.dart';
@@ -21,11 +20,63 @@ class NavigationScreen extends StatefulWidget {
 class _NavigationScreenState extends State<NavigationScreen> {
   int currentIndex = 0;
   String selectedCategory = "All";
+
   final List<Map<String, dynamic>> _favouriteProducts = [];
+  late final List<Widget> screens;
+
+  @override
+  void initState() {
+    super.initState();
+
+    screens = [
+      HomeScreen(
+        userName: widget.userName,
+        onCartTap: () => changeTab(2),
+        onFavoritesTap: () => changeTab(4),
+        onCategoryTap: (String category) {
+          setState(() {
+            selectedCategory = category.isEmpty ? "All" : category;
+            currentIndex = 1;
+          });
+        },
+        favouriteProducts: _favouriteProducts,
+        onFavouriteToggle: _toggleFavourite,
+      ),
+
+      CategoriesScreen(
+        key: ValueKey(selectedCategory),
+        initialCategory: selectedCategory,
+        externalFavouriteProducts: _favouriteProducts,
+        onExternalFavouriteToggle: _toggleFavourite,
+        onBackToHome: () => changeTab(0),
+      ),
+
+      CartScreen(
+        onBackTap: () => changeTab(0),
+      ),
+
+      OrdersScreen(
+        onBackToHome: () => changeTab(0),
+      ),
+
+      ProfileScreen(
+        userName: widget.userName,
+        onBackToHome: () => changeTab(0),
+        favouriteProducts: _favouriteProducts,
+        allProducts: const [],
+        favouriteNames:
+            _favouriteProducts.map((p) => p['name'] as String).toSet(),
+        onFavouriteToggle: _toggleFavourite,
+      ),
+    ];
+  }
 
   void _toggleFavourite(Map<String, dynamic> product) {
     setState(() {
-      final index = _favouriteProducts.indexWhere((p) => p['name'] == product['name']);
+      final index = _favouriteProducts.indexWhere(
+        (p) => p['name'] == product['name'],
+      );
+
       if (index >= 0) {
         _favouriteProducts.removeAt(index);
       } else {
@@ -42,77 +93,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screens = [
-      HomeScreen(
-        userName: widget.userName,
-        onCartTap: () {
-          setState(() {
-            currentIndex = 2;
-          });
-        },
-        onFavoritesTap: () {
-          setState(() {
-            currentIndex = 4; // Navigate to Profile tab
-          });
-        },
-        onCategoryTap: (String category) {
-          setState(() {
-            selectedCategory = category.isEmpty ? "All" : category;
-            currentIndex = 1;
-          });
-        },
-        favouriteProducts: _favouriteProducts,
-        onFavouriteToggle: _toggleFavourite,
-      ),
-
-      CategoriesScreen(
-        key: ValueKey(selectedCategory),
-        initialCategory: selectedCategory,
-        externalFavouriteProducts: _favouriteProducts,
-        onExternalFavouriteToggle: _toggleFavourite,
-        onBackToHome: () {
-          setState(() {
-            currentIndex = 0;
-          });
-        },
-      ),
-
-      MyCartScreen(
-        onBackToHome: () {
-          setState(() {
-            currentIndex = 0;
-          });
-        },
-      ),
-      OrderScreen(
-        onBackToHome: () {
-          setState(() {
-            currentIndex = 0;
-          });
-        },
-      ),
-
-      ProfileScreen(
-        userName: widget.userName,
-        onBackToHome: () {
-          setState(() {
-            currentIndex = 0;
-          });
-        },
-        favouriteProducts: _favouriteProducts,
-        allProducts: const [],
-        favouriteNames: _favouriteProducts.map((p) => p['name'] as String).toSet(),
-        onFavouriteToggle: _toggleFavourite,
-      ),
-    ];
-
     return Scaffold(
       body: IndexedStack(
         index: currentIndex,
         children: screens,
       ),
-
-      // ✅ MODERN BOTTOM NAV BAR
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(12),
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -127,16 +112,18 @@ class _NavigationScreenState extends State<NavigationScreen> {
             ),
           ],
         ),
-
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            navItem(Icons.home_rounded, "Home", 0),
-            navItem(Icons.grid_view_rounded, "Categories", 1),
-            navItem(Icons.shopping_cart_rounded, "Cart", 2),
-            navItem(Icons.receipt_long_rounded, "Orders", 3),
-            navItem(Icons.person_rounded, "Profile", 4),
-          ],
+        child: SafeArea(
+          top: false,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              navItem(Icons.home_rounded, "Home", 0),
+              navItem(Icons.grid_view_rounded, "Categories", 1),
+              navItem(Icons.shopping_cart_rounded, "Cart", 2),
+              navItem(Icons.receipt_long_rounded, "Orders", 3),
+              navItem(Icons.person_rounded, "Profile", 4),
+            ],
+          ),
         ),
       ),
     );
@@ -146,14 +133,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final bool isSelected = currentIndex == index;
 
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          currentIndex = index;
-        });
-      },
+      onTap: () => changeTab(index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 8,
+        ),
         decoration: BoxDecoration(
           color: isSelected
               ? Colors.green.withOpacity(0.12)
@@ -176,10 +162,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
             Text(
               label,
               style: TextStyle(
-                fontSize: 11,
-                fontWeight:
-                isSelected ? FontWeight.bold : FontWeight.w500,
+                fontSize: 12,
                 color: isSelected ? Colors.green : Colors.grey,
+                fontWeight:
+                    isSelected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
           ],
