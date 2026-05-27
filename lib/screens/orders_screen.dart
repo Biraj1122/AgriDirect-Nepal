@@ -111,7 +111,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         setState(() {
           riderPosition = LatLng(lat, lng);
           double remainingDist = _locationService.calculateDistance(
-            lat, lng, UserData.defaultLat!, UserData.defaultLng!
+            lat, lng, UserData.defaultLat!, UserData.defaultLng!,
           );
           distance = remainingDist;
           estimatedTime = (remainingDist * 2).round();
@@ -179,7 +179,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     } else {
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const NavigationScreen(userName: "User")),
-        (route) => false,
+            (route) => false,
       );
     }
   }
@@ -254,13 +254,13 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
           Expanded(
             flex: 2,
             child: Container(
-              padding: const EdgeInsets.all(25),
+              padding: const EdgeInsets.fromLTRB(25, 10, 25, 15), // ✅ reduced vertical padding
               child: Column(
                 children: [
                   _step(Icons.check_circle, "Order Received", "We have received your order", true),
                   _step(Icons.local_shipping, "On the way", "Rider is heading to you", status == "On the way" || status == "Arrived"),
                   _step(Icons.home, "Delivered", "Enjoy your fresh produce!", status == "Arrived", isLast: true),
-                  const Spacer(),
+                  const SizedBox(height: 8), // ✅ replaced Spacer()
                   SizedBox(
                     width: double.infinity,
                     height: 55,
@@ -289,10 +289,14 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
           ],
         ),
         const SizedBox(width: 15),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: TextStyle(fontWeight: done ? FontWeight.bold : FontWeight.normal)),
-          Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-        ]),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title, style: TextStyle(fontWeight: done ? FontWeight.bold : FontWeight.normal)),
+            Text(subtitle, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          ],
+        ),
       ],
     );
   }
