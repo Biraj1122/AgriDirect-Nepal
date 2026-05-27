@@ -169,17 +169,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
       child: Row(
         children: [
-          Builder(
-            builder: (context) => IconButton(
-              onPressed: () => Scaffold.of(context).openDrawer(),
-              icon: const Icon(Icons.menu_rounded),
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
+          // ✅ Hamburger icon removed here
           const CircleAvatar(
             radius: 18,
             backgroundColor: Color(0xFF2E7D32),
@@ -433,70 +423,48 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       },
       child: Scaffold(
         backgroundColor: const Color(0xFFF5F7F5),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(color: Color(0xFF2E7D32)),
-              child: Text('AgriDirect Nepal', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.favorite_rounded),
-              title: Text('Favorites (${widget.externalFavouriteProducts.length})'),
-              onTap: () { Navigator.pop(context); _openFavoritesPage(); },
-            ),
-            ListTile(
-              leading: const Icon(Icons.shopping_cart_rounded),
-              title: const Text('Cart'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        ),
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildAppBar(),
-            _buildSearchBar(),
-            const SizedBox(height: 8),
-            _buildCategoryRow(),
-            const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _selectedCategoryIndex == 0 ? 'All Products' : _categories[_selectedCategoryIndex]['name'].toString(),
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
-                  ),
-                  Text('${_filteredProducts.length} items', style: const TextStyle(fontSize: 13, color: Color(0xFF757575))),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            Expanded(
-              child: _filteredProducts.isEmpty
-                  ? _buildEmptyState()
-                  : GridView.builder(
+        // ✅ drawer: removed entirely here
+        body: SafeArea(
+          child: Column(
+            children: [
+              _buildAppBar(),
+              _buildSearchBar(),
+              const SizedBox(height: 8),
+              _buildCategoryRow(),
+              const SizedBox(height: 8),
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.55,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _selectedCategoryIndex == 0 ? 'All Products' : _categories[_selectedCategoryIndex]['name'].toString(),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
+                    ),
+                    Text('${_filteredProducts.length} items', style: const TextStyle(fontSize: 13, color: Color(0xFF757575))),
+                  ],
                 ),
-                itemCount: _filteredProducts.length,
-                itemBuilder: (context, index) => _buildProductCard(_filteredProducts[index]),
               ),
-            ),
-          ],
+              const SizedBox(height: 6),
+              Expanded(
+                child: _filteredProducts.isEmpty
+                    ? _buildEmptyState()
+                    : GridView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.55,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: _filteredProducts.length,
+                  itemBuilder: (context, index) => _buildProductCard(_filteredProducts[index]),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 }
