@@ -1,8 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_cart.dart';
 import 'screens/categories_screen.dart';
 import 'screens/orders_screen.dart';
+import 'screens/order_history_screen.dart';
 import 'screens/profile_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
@@ -22,13 +25,79 @@ class _NavigationScreenState extends State<NavigationScreen> {
   String selectedCategory = "All";
 
   final List<Map<String, dynamic>> _favouriteProducts = [];
-  late final List<Widget> screens;
+  bool _isLoadingFavorites = false;
 
   @override
   void initState() {
     super.initState();
+    _fetchFavorites();
+  }
 
-    screens = [
+  Future<void> _fetchFavorites() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() => _isLoadingFavorites = true);
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorites')
+          .get();
+
+      setState(() {
+        _favouriteProducts.clear();
+        for (var doc in snapshot.docs) {
+          _favouriteProducts.add(doc.data());
+        }
+        _isLoadingFavorites = false;
+      });
+    } catch (e) {
+      debugPrint("Error fetching favorites: $e");
+      setState(() => _isLoadingFavorites = false);
+    }
+  }
+
+  Future<void> _toggleFavourite(Map<String, dynamic> product) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final productName = product['name'] ?? product['title'];
+    final docId = productName.toString().replaceAll(' ', '_').toLowerCase();
+
+    setState(() {
+      final index = _favouriteProducts.indexWhere(
+        (p) => (p['name'] ?? p['title']) == productName,
+      );
+
+      if (index >= 0) {
+        _favouriteProducts.removeAt(index);
+      } else {
+        _favouriteProducts.add(product);
+      }
+    });
+
+    try {
+      final docRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('favorites')
+          .doc(docId);
+
+      final doc = await docRef.get();
+      if (doc.exists) {
+        await docRef.delete();
+      } else {
+        await docRef.set(product);
+      }
+    } catch (e) {
+      debugPrint("Error toggling favorite in Firestore: $e");
+    }
+  }
+
+  List<Widget> _buildScreens() {
+    return [
       HomeScreen(
         userName: widget.userName,
         onCartTap: () => changeTab(2),
@@ -55,34 +124,19 @@ class _NavigationScreenState extends State<NavigationScreen> {
         onBackTap: () => changeTab(0),
       ),
 
-      OrdersScreen(
-        onBackToHome: () => changeTab(0),
-      ),
+      const OrderHistoryScreen(),
 
       ProfileScreen(
         userName: widget.userName,
         onBackToHome: () => changeTab(0),
         favouriteProducts: _favouriteProducts,
         allProducts: const [],
-        favouriteNames:
-            _favouriteProducts.map((p) => p['name'] as String).toSet(),
+        favouriteNames: _favouriteProducts
+            .map((p) => (p['name'] ?? p['title'] ?? 'No Name').toString())
+            .toSet(),
         onFavouriteToggle: _toggleFavourite,
       ),
     ];
-  }
-
-  void _toggleFavourite(Map<String, dynamic> product) {
-    setState(() {
-      final index = _favouriteProducts.indexWhere(
-        (p) => p['name'] == product['name'],
-      );
-
-      if (index >= 0) {
-        _favouriteProducts.removeAt(index);
-      } else {
-        _favouriteProducts.add(product);
-      }
-    });
   }
 
   void changeTab(int index) {
@@ -96,7 +150,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
     return Scaffold(
       body: IndexedStack(
         index: currentIndex,
-        children: screens,
+        children: _buildScreens(),
       ),
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(12),

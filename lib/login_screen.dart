@@ -40,8 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// PASSWORD VALIDATION (At least 6 characters)
   bool isValidPassword(String password) {
-    // Standard Firebase requires 6, but we check length and allow admin password
-    return password.length >= 6 || password == "Farmadmin@1";
+    return password.length >= 6;
   }
 
   @override
@@ -155,33 +154,32 @@ class _LoginScreenState extends State<LoginScreen> {
                             builder: (context) => const Center(child: CircularProgressIndicator()),
                           );
 
-                          // Check for Admin Login
-                          if (email == "farmadmin@gmail.com" && password == "Farmadmin@1") {
-                            if (mounted) {
-                              Navigator.pop(context); // Pop loading
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(builder: (context) => const AdminPage()),
-                              );
-                            }
-                            return;
-                          }
-
                           final UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
                             email: email,
                             password: password,
                           );
 
                           if (mounted) {
-                            Navigator.pop(context); // Pop loading
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => NavigationScreen(
-                                  userName: userCredential.user?.displayName ?? userCredential.user?.email ?? "User",
+                            Navigator.pop(context); // Pop loading indicator
+
+                            // Standardize: Admin email check triggers Admin Dashboard
+                            // Ensure farmadmin@gmail.com is registered in Firebase Auth console
+                            if (email.toLowerCase() == "farmadmin@gmail.com") {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (context) => const AdminPage()),
+                              );
+                            } else {
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => NavigationScreen(
+                                    userName: userCredential.user?.displayName ?? 
+                                             userCredential.user?.email?.split('@')[0] ?? "User",
+                                  ),
                                 ),
-                              ),
-                            );
+                              );
+                            }
                           }
                         } on FirebaseAuthException catch (e) {
                           if (mounted) {

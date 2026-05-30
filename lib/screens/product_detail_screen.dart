@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../product.dart';
 import '../cart_model.dart';
@@ -27,7 +28,7 @@ class ProductDetailScreen extends StatelessWidget {
           children: [
 
             Center(
-              child: Image.asset(product.image, height: 220),
+              child: _buildProductImage(product.image),
             ),
 
             const SizedBox(height: 20),
@@ -122,5 +123,43 @@ class ProductDetailScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildProductImage(String imagePath) {
+    if (imagePath.startsWith('http')) {
+      return Image.network(
+        imagePath,
+        height: 220,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 80, color: Colors.grey),
+        ),
+      );
+    } else if (imagePath.startsWith('data:image')) {
+      try {
+        final base64String = imagePath.split(',').last;
+        return Image.memory(
+          base64Decode(base64String),
+          height: 220,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Center(
+            child: Icon(Icons.image_not_supported, size: 80, color: Colors.grey),
+          ),
+        );
+      } catch (e) {
+        return const Center(
+          child: Icon(Icons.image_not_supported, size: 80, color: Colors.grey),
+        );
+      }
+    } else {
+      return Image.asset(
+        imagePath,
+        height: 220,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 80, color: Colors.grey),
+        ),
+      );
+    }
   }
 }

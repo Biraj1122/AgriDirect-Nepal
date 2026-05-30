@@ -10,6 +10,7 @@ import 'my_addresses_screen.dart';
 import 'order_history_screen.dart';
 import '../notifications_screen.dart';
 import '../payment_methods_screen.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userName;
@@ -98,8 +99,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       top: 50,
                       right: 20,
                       child: IconButton(
-                        icon: const Icon(Icons.settings_outlined),
-                        onPressed: () {},
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EditProfileScreen(
+                                currentName: fullName ?? widget.userName,
+                                currentPhone: phone ?? "+977 98XXXXXXXX",
+                              ),
+                            ),
+                          );
+                          if (result == true) {
+                            _fetchUserData();
+                          }
+                        },
                       ),
                     ),
                     Positioned(
