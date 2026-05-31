@@ -1,11 +1,8 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_cart.dart';
 import 'screens/categories_screen.dart';
 import 'screens/orders_screen.dart';
-import 'screens/order_history_screen.dart';
 import 'screens/profile_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
@@ -25,50 +22,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
   String selectedCategory = "All";
 
   final List<Map<String, dynamic>> _favouriteProducts = [];
-  bool _isLoadingFavorites = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _fetchFavorites();
-  }
-
-  Future<void> _fetchFavorites() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    setState(() => _isLoadingFavorites = true);
-
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('favorites')
-          .get();
-
-      setState(() {
-        _favouriteProducts.clear();
-        for (var doc in snapshot.docs) {
-          _favouriteProducts.add(doc.data());
-        }
-        _isLoadingFavorites = false;
-      });
-    } catch (e) {
-      debugPrint("Error fetching favorites: $e");
-      setState(() => _isLoadingFavorites = false);
-    }
-  }
-
-  Future<void> _toggleFavourite(Map<String, dynamic> product) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final productName = product['name'] ?? product['title'];
-    final docId = productName.toString().replaceAll(' ', '_').toLowerCase();
-
+  void _toggleFavourite(Map<String, dynamic> product) {
     setState(() {
       final index = _favouriteProducts.indexWhere(
-        (p) => (p['name'] ?? p['title']) == productName,
+            (p) => p['name'] == product['name'],
       );
 
       if (index >= 0) {
@@ -77,27 +35,17 @@ class _NavigationScreenState extends State<NavigationScreen> {
         _favouriteProducts.add(product);
       }
     });
-
-    try {
-      final docRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('favorites')
-          .doc(docId);
-
-      final doc = await docRef.get();
-      if (doc.exists) {
-        await docRef.delete();
-      } else {
-        await docRef.set(product);
-      }
-    } catch (e) {
-      debugPrint("Error toggling favorite in Firestore: $e");
-    }
   }
 
-  List<Widget> _buildScreens() {
-    return [
+  void changeTab(int index) {
+    setState(() {
+      currentIndex = index;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> screens = [
       HomeScreen(
         userName: widget.userName,
         onCartTap: () => changeTab(2),
@@ -124,34 +72,27 @@ class _NavigationScreenState extends State<NavigationScreen> {
         onBackTap: () => changeTab(0),
       ),
 
-      const OrderHistoryScreen(),
+      OrderScreen(
+        onBackToHome: () => changeTab(0),
+      ),
 
       ProfileScreen(
         userName: widget.userName,
         onBackToHome: () => changeTab(0),
         favouriteProducts: _favouriteProducts,
         allProducts: const [],
-        favouriteNames: _favouriteProducts
-            .map((p) => (p['name'] ?? p['title'] ?? 'No Name').toString())
-            .toSet(),
+        favouriteNames:
+        _favouriteProducts.map((p) => p['name'] as String).toSet(),
         onFavouriteToggle: _toggleFavourite,
       ),
     ];
-  }
 
-  void changeTab(int index) {
-    setState(() {
-      currentIndex = index;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
         index: currentIndex,
-        children: _buildScreens(),
+        children: screens,
       ),
+
       bottomNavigationBar: Container(
         margin: const EdgeInsets.all(12),
         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -190,10 +131,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
       onTap: () => changeTab(index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 8,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
               ? Colors.green.withOpacity(0.12)
@@ -219,7 +157,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 fontSize: 12,
                 color: isSelected ? Colors.green : Colors.grey,
                 fontWeight:
-                    isSelected ? FontWeight.bold : FontWeight.w500,
+                isSelected ? FontWeight.bold : FontWeight.w500,
               ),
             ),
           ],

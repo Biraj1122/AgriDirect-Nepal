@@ -1,8 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ Added Firestore import
 import '../cart_model.dart';
 import '../product.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CategoriesScreen extends StatefulWidget {
   final String initialCategory;
@@ -42,8 +41,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   void initState() {
     super.initState();
     final categoryIndex = _categories.indexWhere(
-      (category) => category['name'] == widget.initialCategory,
+          (category) => category['name'] == widget.initialCategory,
     );
+
     if (categoryIndex != -1) {
       _selectedCategoryIndex = categoryIndex;
     }
@@ -55,22 +55,34 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     super.dispose();
   }
 
+  // ✅ Context-aware filtering method reading straight from the database stream
+  List<Map<String, dynamic>> _getFilteredProducts(List<Map<String, dynamic>> liveProducts) {
+    final selectedCategory = _categories[_selectedCategoryIndex]['name'];
+    return liveProducts.where((product) {
+      final matchesCategory = selectedCategory == 'All' || product['category'] == selectedCategory;
+      final matchesSearch = _searchQuery.isEmpty ||
+          product['name'].toString().toLowerCase().contains(_searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    }).toList();
+  }
+
   void _addToCart(Map<String, dynamic> product) {
-    final image = product['imagePath'] ?? product['image'] ?? 'assets/images/logo.png';
-    final name = (product['name'] ?? product['title'] ?? 'No Name').toString();
     final newProduct = Product(
-      title: name,
-      price: product['price']?.toString() ?? '0',
-      unit: product['unit']?.toString() ?? '',
-      image: image,
-      description: name,
-      longDescription: product['description'] ?? "$name from local farm. Fresh and high quality produce.",
+      title: product['name'].toString(),
+      price: product['price'].toString(),
+      unit: product['unit'].toString(),
+      // ✅ Supports network image URL if uploaded by farmer, drops back to asset otherwise
+      image: (product['imageUrl'] != null && product['imageUrl'].toString().isNotEmpty)
+          ? product['imageUrl'].toString()
+          : 'assets/images/${product['imagePath'] ?? "tomato.png"}',
+      description: product['description'] ?? product['name'].toString(),
+      longDescription: "${product['name']} from ${product['farm']}. Fresh and high quality produce.",
     );
 
     cartModel.add(newProduct);
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('$name added to cart'),
+      content: Text('${product['name']} added to cart'),
       backgroundColor: const Color(0xFF2E7D32),
       duration: const Duration(seconds: 1),
     ));
@@ -80,44 +92,25 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     widget.onExternalFavouriteToggle(product);
   }
 
-  Widget _loadProductImage(String? path) {
-    if (path == null || path.isEmpty) return const Icon(Icons.image, size: 50);
-    if (path.startsWith('http')) {
-      return Image.network(path,
-          fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 50));
-    } else if (path.startsWith('data:image')) {
-      try {
-        final base64String = path.split(',').last;
-        return Image.memory(base64Decode(base64String),
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 50));
-      } catch (e) {
-        return const Icon(Icons.broken_image, size: 50);
-      }
-    }
-    final fullPath = path.startsWith('assets/') ? path : 'assets/images/$path';
-    return Image.asset(fullPath, fit: BoxFit.contain, errorBuilder: (_, __, ___) {
-      return Image.asset(path, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 50));
-    });
+  void _openFavoritesPage(List<Map<String, dynamic>> currentProducts) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FavoritesPage(
+          favoriteItems: widget.externalFavouriteProducts.map((p) => p['name'] as String).toSet(),
+          allProducts: currentProducts,
+          onFavoriteToggle: _toggleFavorite,
+        ),
+      ),
+    );
   }
 
-  Widget _buildAppBar() {
+  // ==================== UI WIDGETS ====================
+  Widget _buildAppBar(List<Map<String, dynamic>> currentProducts) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
       child: Row(
         children: [
-          Builder(
-            builder: (context) => IconButton(
-              onPressed: () => Scaffold.of(context).openDrawer(),
-              icon: const Icon(Icons.menu_rounded),
-              style: IconButton.styleFrom(
-                backgroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
           const CircleAvatar(
             radius: 18,
             backgroundColor: Color(0xFF2E7D32),
@@ -131,6 +124,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 Text('Categories', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A))),
                 Text('Fresh from local farms', style: TextStyle(fontSize: 12, color: Colors.grey)),
               ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => _openFavoritesPage(currentProducts),
+            icon: const Icon(Icons.favorite_border, color: Colors.red),
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ],
@@ -157,12 +158,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF9E9E9E), size: 22),
             suffixIcon: _searchQuery.isNotEmpty
                 ? IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Color(0xFF9E9E9E), size: 20),
-                    onPressed: () {
-                      _searchController.clear();
-                      setState(() => _searchQuery = '');
-                    },
-                  )
+              icon: const Icon(Icons.close_rounded, color: Color(0xFF9E9E9E), size: 20),
+              onPressed: () {
+                _searchController.clear();
+                setState(() => _searchQuery = '');
+              },
+            )
                 : null,
             border: InputBorder.none,
             contentPadding: const EdgeInsets.symmetric(vertical: 14),
@@ -219,9 +220,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   Widget _buildProductCard(Map<String, dynamic> product) {
-    final name = (product['name'] ?? product['title'] ?? 'No Name').toString();
-    final isFavorite = widget.externalFavouriteProducts.any((p) => (p['name'] ?? p['title']) == name);
-    final image = product['imagePath'] ?? product['image'];
+    final name = product['name'].toString();
+    final isFavorite = widget.externalFavouriteProducts.any((p) => p['name'] == name);
+    final String imageUrl = product['imageUrl'] ?? '';
 
     return Container(
       decoration: BoxDecoration(
@@ -241,23 +242,34 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   color: Colors.grey[100],
                   child: ClipRRect(
                     borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
-                    child: _loadProductImage(image),
+                    // ✅ Dynamic Image Loader handles live network imagery alongside legacy assets
+                    child: imageUrl.isNotEmpty
+                        ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey)),
+                    )
+                        : Image.asset(
+                      'assets/images/${product['imagePath'] ?? "tomato.png"}',
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey)),
+                    ),
                   ),
                 ),
                 Positioned(
                   top: 8,
                   left: 8,
-                  child: product['badge'] != null ? Container(
+                  child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2E7D32).withOpacity(0.15),
+                      color: (product['badgeColor'] as Color? ?? Colors.green).withOpacity(0.15),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      product['badge'].toString(),
-                      style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                      product['badge']?.toString() ?? 'Fresh Picked',
+                      style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: product['badgeColor'] as Color? ?? Colors.green),
                     ),
-                  ) : const SizedBox.shrink(),
+                  ),
                 ),
                 Positioned(
                   top: 6,
@@ -280,16 +292,30 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     ),
                   ),
                 ),
+                if (product['discount'] != null)
+                  Positioned(
+                    bottom: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(8)),
+                      child: Text('${product['discount']}% OFF', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white)),
+                    ),
+                  ),
               ],
             ),
           ),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  Flexible(
+                    child: Text(name, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(product['farm'].toString(), style: const TextStyle(fontSize: 9.5, color: Color(0xFF757575)), maxLines: 1, overflow: TextOverflow.ellipsis),
                   const Spacer(),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -297,16 +323,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Rs.${product['price']}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green)),
-                          Text('/${product['unit']}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                          FittedBox(child: Text('Rs.${product['price']}', style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)))),
+                          Text('/${product['unit']}', style: const TextStyle(fontSize: 9.5, color: Color(0xFF757575))),
                         ],
                       ),
                       GestureDetector(
                         onTap: () => _addToCart(product),
                         child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
-                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                          height: 30,
+                          width: 30,
+                          decoration: BoxDecoration(color: const Color(0xFF2E7D32), borderRadius: BorderRadius.circular(9)),
+                          child: const Icon(Icons.add_rounded, color: Colors.white, size: 18),
                         ),
                       ),
                     ],
@@ -320,119 +347,179 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
+  Widget _buildEmptyState() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.search_off_rounded, size: 64, color: Color(0xFFB0BEC5)),
+          SizedBox(height: 12),
+          Text('No products found', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          Text('Try a different category or search term', style: TextStyle(fontSize: 13, color: Color(0xFF78909C))),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        if (widget.onBackToHome != null) widget.onBackToHome!();
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        } else if (widget.onBackToHome != null) {
+          widget.onBackToHome!();
+        }
       },
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF5F7F5),
-        drawer: Drawer(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              const DrawerHeader(
-                decoration: BoxDecoration(color: Color(0xFF2E7D32)),
-                child: Text('AgriDirect Nepal', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-              ),
-              ListTile(
-                leading: const Icon(Icons.home_rounded),
-                title: const Text('Home'),
-                onTap: () {
-                  Navigator.pop(context);
-                  widget.onBackToHome?.call();
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.favorite_rounded, color: Colors.red),
-                title: Text('My Favorites (${widget.externalFavouriteProducts.length})'),
-                onTap: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        ),
-        body: SafeArea(
-          child: Column(
-            children: [
-              _buildAppBar(),
-              _buildSearchBar(),
-              const SizedBox(height: 8),
-              _buildCategoryRow(),
-              Expanded(
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('products').snapshots(),
-                  builder: (context, snapshot) {
-                    final selectedCategory = _categories[_selectedCategoryIndex]['name'];
-                    List<Map<String, dynamic>> products = [];
+      // ✅ StreamBuilder setup to pull real-time inventory uploaded from the farmer's side
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('products').snapshots(),
+        builder: (context, snapshot) {
+          List<Map<String, dynamic>> allLiveProducts = [];
 
-                    if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                      products = snapshot.data!.docs.map((doc) {
-                        final data = doc.data() as Map<String, dynamic>;
-                        data['id'] = doc.id;
-                        return data;
-                      }).toList();
-                    }
+          if (snapshot.hasData) {
+            allLiveProducts = snapshot.data!.docs.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return {
+                'id': doc.id,
+                'name': data['name'] ?? '',
+                'price': data['price'] ?? 0,
+                'unit': data['unit'] ?? 'kg',
+                'category': data['category'] ?? 'Vegetables',
+                'farm': data['farmName'] ?? 'Local Farm',
+                'description': data['description'] ?? '',
+                'imageUrl': data['imageUrl'] ?? '',
+                'badge': data['badge'] ?? 'Fresh Picked',
+                'badgeColor': Colors.green,
+                'discount': data['discount']
+              };
+            }).toList();
+          }
 
-                    // Products are now fetched exclusively from Firestore.
-                    // Local fallbacks have been retired to ensure a dynamic inventory.
-                    if (products.isEmpty && snapshot.connectionState != ConnectionState.waiting) {
-                      return const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.inventory_2_outlined, size: 48, color: Colors.grey),
-                            SizedBox(height: 16),
-                            Text("No products found in this category.", style: TextStyle(color: Colors.grey)),
-                          ],
-                        ),
-                      );
-                    }
+          final filteredProducts = _getFilteredProducts(allLiveProducts);
 
-                    final filteredProducts = products.where((product) {
-                      final matchesCategory = selectedCategory == 'All' || product['category'] == selectedCategory;
-                      final name = (product['name'] ?? product['title'] ?? '').toString().toLowerCase();
-                      final matchesSearch = _searchQuery.isEmpty || name.contains(_searchQuery.toLowerCase());
-                      return matchesCategory && matchesSearch;
-                    }).toList();
-
-                    return Column(
+          return Scaffold(
+            backgroundColor: const Color(0xFFF5F7F5),
+            body: SafeArea(
+              child: Column(
+                children: [
+                  _buildAppBar(allLiveProducts),
+                  _buildSearchBar(),
+                  const SizedBox(height: 8),
+                  _buildCategoryRow(),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(selectedCategory, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                              Text('${filteredProducts.length} items', style: const TextStyle(color: Colors.grey)),
-                            ],
-                          ),
+                        Text(
+                          _selectedCategoryIndex == 0 ? 'All Products' : _categories[_selectedCategoryIndex]['name'].toString(),
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A1A)),
                         ),
-                        Expanded(
-                          child: filteredProducts.isEmpty
-                              ? const Center(child: Text("No products found"))
-                              : GridView.builder(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    childAspectRatio: 0.72,
-                                    crossAxisSpacing: 12,
-                                    mainAxisSpacing: 12,
-                                  ),
-                                  itemCount: filteredProducts.length,
-                                  itemBuilder: (context, index) => _buildProductCard(filteredProducts[index]),
-                                ),
-                        ),
+                        Text('${filteredProducts.length} items', style: const TextStyle(fontSize: 13, color: Color(0xFF757575))),
                       ],
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: snapshot.connectionState == ConnectionState.waiting
+                        ? const Center(child: CircularProgressIndicator(color: Color(0xFF2E7D32)))
+                        : filteredProducts.isEmpty
+                        ? _buildEmptyState()
+                        : GridView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        childAspectRatio: 0.55,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                      ),
+                      itemCount: filteredProducts.length,
+                      itemBuilder: (context, index) => _buildProductCard(filteredProducts[index]),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// FavoritesPage
+class FavoritesPage extends StatelessWidget {
+  final Set<String> favoriteItems;
+  final List<Map<String, dynamic>> allProducts;
+  final Function(Map<String, dynamic>) onFavoriteToggle;
+
+  const FavoritesPage({super.key, required this.favoriteItems, required this.allProducts, required this.onFavoriteToggle});
+
+  @override
+  Widget build(BuildContext context) {
+    final favoriteProducts = allProducts.where((p) => favoriteItems.contains(p['name'].toString())).toList();
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('My Favorites'), backgroundColor: const Color(0xFF2E7D32), foregroundColor: Colors.white),
+      body: favoriteProducts.isEmpty
+          ? const Center(child: Text('No favorite items yet', style: TextStyle(fontSize: 18)))
+          : GridView.builder(
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2, childAspectRatio: 0.65, crossAxisSpacing: 12, mainAxisSpacing: 12,
         ),
+        itemCount: favoriteProducts.length,
+        itemBuilder: (context, index) => _buildFavoriteCard(favoriteProducts[index], context),
+      ),
+    );
+  }
+
+  Widget _buildFavoriteCard(Map<String, dynamic> product, BuildContext context) {
+    final String imageUrl = product['imageUrl'] ?? '';
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 10)],
+      ),
+      child: Column(
+        children: [
+          Expanded(
+            flex: 5,
+            child: Center(
+              child: imageUrl.isNotEmpty
+                  ? ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, size: 60)),
+              )
+                  : Image.asset('assets/images/${product['imagePath'] ?? "tomato.png"}', fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported, size: 60)),
+            ),
+          ),
+          Expanded(
+            flex: 4,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(product['name'].toString(), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Rs.${product['price']}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                      IconButton(icon: const Icon(Icons.favorite_rounded, color: Colors.red), onPressed: () => onFavoriteToggle(product)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

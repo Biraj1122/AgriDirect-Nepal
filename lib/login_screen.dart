@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 import 'navigation_screen.dart';
 import 'screens/admin_page.dart';
+import 'farmer_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,7 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// PASSWORD VALIDATION (At least 6 characters)
   bool isValidPassword(String password) {
-    return password.length >= 6;
+    return password.length >= 6 || password == "Farmadmin@1";
   }
 
   @override
@@ -154,30 +156,56 @@ class _LoginScreenState extends State<LoginScreen> {
                             builder: (context) => const Center(child: CircularProgressIndicator()),
                           );
 
+                          // Check for Admin Login
+                          if (email == "farmadmin@gmail.com" && password == "Farmadmin@1") {
+                            if (mounted) {
+                              Navigator.pop(context); // Pop loading
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (context) => const AdminPage()),
+                              );
+                            }
+                            return;
+                          }
+
+                          // 1. Authenticate user with Firebase Auth
                           final UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
                             email: email,
                             password: password,
                           );
 
-                          if (mounted) {
-                            Navigator.pop(context); // Pop loading indicator
+                          // 2. Fetch user's profile document from Firestore
+                          DocumentSnapshot userDoc = await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(userCredential.user!.uid)
+                              .get();
 
-                            // Standardize: Admin email check triggers Admin Dashboard
-                            // Ensure farmadmin@gmail.com is registered in Firebase Auth console
-                            if (email.toLowerCase() == "farmadmin@gmail.com") {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(builder: (context) => const AdminPage()),
-                              );
-                            } else {
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => NavigationScreen(
-                                    userName: userCredential.user?.displayName ?? 
-                                             userCredential.user?.email?.split('@')[0] ?? "User",
+                          if (mounted) {
+                            Navigator.pop(context); // Pop loading
+
+                            if (userDoc.exists) {
+                              String role = userDoc.get('role') ?? 'Customer';
+
+                              // 3. Conditional routing based on explicit role
+                              if (role == 'Farmer') {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const FarmerScreen()),
+                                );
+                              } else {
+                                // Default target for Customers or unassigned roles
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => NavigationScreen(
+                                      userName: userCredential.user?.displayName ?? userCredential.user?.email ?? "User",
+                                    ),
                                   ),
-                                ),
+                                );
+                              }
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("User data not found in database.")),
                               );
                             }
                           }
