@@ -26,14 +26,22 @@ class _FarmerScreenState extends State<FarmerScreen> {
   }
 
   Future<void> _loadFarmerData() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    if (mounted) {
-      setState(() {
-        _farmerData = doc.data();
-        _loading = false;
-      });
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (mounted) {
+        setState(() {
+          _farmerData = doc.data();
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading farmer data: $e");
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -49,7 +57,11 @@ class _FarmerScreenState extends State<FarmerScreen> {
     final String farmerName = _farmerData?['fullName'] ?? 'Farmer';
     final String farmName = _farmerData?['farmName'] ?? 'My Farm';
     final String farmLocation = _farmerData?['farmLocation'] ?? '';
-    final String uid = FirebaseAuth.instance.currentUser!.uid;
+    final String? uid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null) {
+      return const Scaffold(body: Center(child: Text("User not authenticated")));
+    }
 
     final List<Widget> _pages = [
       _DashboardTab(
@@ -207,10 +219,11 @@ class _DashboardTab extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('orders')
                   .where('farmerUid', isEqualTo: uid)
-                  .orderBy('createdAt', descending: true)
-                  .limit(5)
                   .snapshots(),
               builder: (context, snap) {
+                if (snap.hasError) {
+                  return Text("Error: ${snap.error}");
+                }
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
                 final docs = snap.data!.docs;
                 if (docs.isEmpty) return const _EmptyState(icon: Icons.receipt_long, message: "No orders yet");
@@ -431,9 +444,9 @@ class _ProductsTab extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('products')
                   .where('farmerUid', isEqualTo: uid)
-                  .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snap) {
+                if (snap.hasError) return Center(child: Text("Error: ${snap.error}"));
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
                 final docs = snap.data!.docs;
                 if (docs.isEmpty) {
@@ -548,9 +561,10 @@ class _DeliveryTabState extends State<_DeliveryTab> {
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _filter == 'All'
-                  ? FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).orderBy('createdAt', descending: true).snapshots()
-                  : FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).where('status', isEqualTo: _filter).orderBy('createdAt', descending: true).snapshots(),
+                  ? FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).snapshots()
+                  : FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).where('status', isEqualTo: _filter).snapshots(),
               builder: (context, snap) {
+                if (snap.hasError) return Center(child: Text("Error: ${snap.error}"));
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
                 final docs = snap.data!.docs;
                 if (docs.isEmpty) return const _EmptyState(icon: Icons.local_shipping_outlined, message: "No orders found\nfor this status.");
@@ -656,8 +670,9 @@ class _StockTab extends StatelessWidget {
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).orderBy('stock', descending: false).snapshots(),
+              stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).snapshots(),
               builder: (context, snap) {
+                if (snap.hasError) return Center(child: Text("Error: ${snap.error}"));
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
                 final docs = snap.data!.docs;
                 if (docs.isEmpty) return const _EmptyState(icon: Icons.inventory_2_outlined, message: "No products to track.\nAdd products first.");
