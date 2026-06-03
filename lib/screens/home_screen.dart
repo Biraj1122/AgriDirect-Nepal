@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../product.dart';
 import 'product_detail_screen.dart';
 import '../notifications_screen.dart';
-import 'orders_screen.dart';           // ← Added
+import 'orders_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -36,7 +36,7 @@ class HomeScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /// HEADER (Slightly Modified - Added Active Order Notification)
+              /// HEADER
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -51,7 +51,6 @@ class HomeScreen extends StatelessWidget {
                       const Text("Good morning", style: TextStyle(color: Colors.grey)),
                     ],
                   ),
-                  /// NOTIFICATION & FAVOURITE BUTTONS
                   Row(
                     children: [
                       IconButton(
@@ -69,33 +68,31 @@ class HomeScreen extends StatelessWidget {
                             },
                             icon: const Icon(Icons.notifications_none),
                           ),
-                          // Small red dot if active order exists
-                          StreamBuilder<QuerySnapshot>(
-                            stream: user != null
-                                ? FirebaseFirestore.instance
-                                .collection('orders')
-                                .where('userId', isEqualTo: user.uid)
-                                .where('status', whereIn: ['Picked Up', 'On the way', 'Arrived'])
-                                .snapshots()
-                                : null,
-                            builder: (context, snapshot) {
-                              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                                return Positioned(
-                                  right: 8,
-                                  top: 8,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.red,
-                                      shape: BoxShape.circle,
+                          if (user != null)
+                            StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('orders')
+                                  .where('userId', isEqualTo: user.uid)
+                                  .where('status', whereIn: ['Picked Up', 'On the way', 'Arrived'])
+                                  .snapshots(),
+                              builder: (context, snapshot) {
+                                if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                                  return Positioned(
+                                    right: 8,
+                                    top: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Text(" ", style: TextStyle(fontSize: 10)),
                                     ),
-                                    child: const Text(" ", style: TextStyle(fontSize: 10)),
-                                  ),
-                                );
-                              }
-                              return const SizedBox();
-                            },
-                          ),
+                                  );
+                                }
+                                return const SizedBox();
+                              },
+                            ),
                         ],
                       ),
                     ],
@@ -105,7 +102,7 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 15),
 
-              /// ✅ NEW: Active Order Status Card (Minimal & Clean)
+              /// Active Order Status Card
               if (user != null)
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
@@ -116,6 +113,10 @@ class HomeScreen extends StatelessWidget {
                       .limit(1)
                       .snapshots(),
                   builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      debugPrint("Firestore Error: ${snapshot.error}");
+                      return const SizedBox();
+                    }
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                       return const SizedBox();
                     }
@@ -169,8 +170,7 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              // ... Rest of your original code (Categories, Banner, Products) remains 100% same
-              /// CATEGORY TITLE
+              /// CATEGORIES
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -181,8 +181,6 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ],
               ),
-
-              // ... (All your category list, banner, product grid code stays exactly same)
               const SizedBox(height: 10),
               SizedBox(
                 height: 90,
@@ -200,10 +198,159 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              // Banner and Product Grid (unchanged)
-              // ... paste your original banner and GridView here ...
+              /// BANNER
+              Container(
+                width: double.infinity,
+                height: 150,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  image: const DecorationImage(
+                    image: AssetImage("assets/images/vegetables.png"),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: LinearGradient(
+                      colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+                      begin: Alignment.bottomLeft,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text("30% OFF", style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                      Text("On your first order", style: TextStyle(color: Colors.white, fontSize: 16)),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
+              /// PRODUCT GRID
+              const Text("Fresh Products", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+              const SizedBox(height: 15),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('products').snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(child: Text("No products available"));
+                  }
+
+                  final products = snapshot.data!.docs;
+
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: products.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.75,
+                      crossAxisSpacing: 15,
+                      mainAxisSpacing: 15,
+                    ),
+                    itemBuilder: (context, index) {
+                      final doc = products[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      
+                      final product = Product(
+                        image: data['image'] ?? "assets/images/logo.png",
+                        title: data['title'] ?? "Product",
+                        price: data['price']?.toString() ?? "0",
+                        unit: data['unit'] ?? "1kg",
+                        description: data['description'] ?? "",
+                        longDescription: data['description'] ?? "",
+                      );
+
+                      return _buildProductCard(context, product);
+                    },
+                  );
+                },
+              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductCard(BuildContext context, Product product) {
+    bool isFavourite = favouriteProducts.any((p) => p['name'] == product.title);
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  child: product.image.startsWith('assets/')
+                      ? Image.asset(product.image, height: 120, width: double.infinity, fit: BoxFit.contain)
+                      : Image.network(product.image, height: 120, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.image_not_supported)),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: GestureDetector(
+                    onTap: () => onFavouriteToggle({
+                      'name': product.title,
+                      'image': product.image,
+                      'price': product.price,
+                      'unit': product.unit,
+                      'badge': 'Fresh',
+                      'badgeColor': Colors.green,
+                      'farm': 'Local Farm',
+                      'rating': 4.5,
+                    }),
+                    child: Icon(
+                      isFavourite ? Icons.favorite : Icons.favorite_border,
+                      color: Colors.red,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(product.title, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(product.unit, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  const SizedBox(height: 5),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Rs. ${product.price}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                      const Icon(Icons.add_circle, color: Colors.green),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -221,7 +368,7 @@ class HomeScreen extends StatelessWidget {
         return "Order in progress";
     }
   }
-  // Add this method inside HomeScreen class
+
   Widget categoryItem(BuildContext context, IconData icon, String title) {
     return GestureDetector(
       onTap: () => onCategoryTap(title),
@@ -236,23 +383,13 @@ class HomeScreen extends StatelessWidget {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
+                  BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2)),
                 ],
               ),
               child: Icon(icon, color: Colors.green, size: 28),
             ),
             const SizedBox(height: 6),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
           ],
         ),
       ),

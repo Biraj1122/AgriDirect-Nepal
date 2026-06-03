@@ -31,7 +31,7 @@ class CartModel extends ChangeNotifier {
   double get subtotal {
     return _items.fold(
       0,
-      (sum, item) => sum + double.parse(item.price),
+      (sum, item) => sum + (double.tryParse(item.price) ?? 0),
     );
   }
 
