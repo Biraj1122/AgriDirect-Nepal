@@ -36,7 +36,7 @@ class LocationService {
       }).timeout(const Duration(seconds: 4));
       
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+         final data = json.decode(response.body);
         if (data['display_name'] != null) {
           return data['display_name'];
         }

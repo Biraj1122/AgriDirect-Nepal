@@ -1,9 +1,10 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../product.dart';
 import 'product_detail_screen.dart';
 import '../notifications_screen.dart';
+import 'orders_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class HomeScreen extends StatelessWidget {
   final String userName;
@@ -25,265 +26,329 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       backgroundColor: const Color(0xffF7F8F3),
       body: SafeArea(
-        child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('products').snapshots(),
-          builder: (context, snapshot) {
-            List<Product> products = [];
-            
-            if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-              products = snapshot.data!.docs.map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                return Product(
-                  image: data['image'] ?? data['imagePath'] ?? 'assets/images/logo.png',
-                  title: data['title'] ?? data['name'] ?? 'No Title',
-                  price: data['price']?.toString() ?? '0',
-                  unit: data['unit'] ?? '',
-                  description: data['description'] ?? '',
-                  longDescription: data['longDescription'] ?? data['description'] ?? '',
-                );
-              }).toList();
-            }
-
-            // Products are now fetched exclusively from Firestore. 
-            // Local fallbacks have been retired.
-            if (products.isEmpty && snapshot.connectionState != ConnectionState.waiting) {
-              return const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(40.0),
-                  child: Text("No products available in the cloud. Please seed data from the Admin Dashboard."),
-                ),
-              );
-            }
-
-            return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              /// HEADER
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  /// HEADER
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            "Hello, $userName",
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            "Good morning",
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ],
+                      Text(
+                        "Hello, $userName",
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                       ),
-                      Row(
+                      const SizedBox(height: 2),
+                      const Text("Good morning", style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      IconButton(
+                        onPressed: onFavoritesTap,
+                        icon: const Icon(Icons.favorite_border, color: Colors.red),
+                      ),
+                      Stack(
                         children: [
-                          IconButton(
-                            onPressed: onFavoritesTap,
-                            icon: const Icon(Icons.favorite_border, color: Colors.red),
-                          ),
                           IconButton(
                             onPressed: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) => const NotificationsScreen(),
-                                ),
+                                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
                               );
                             },
                             icon: const Icon(Icons.notifications_none),
                           ),
+                          if (user != null)
+                            StreamBuilder<QuerySnapshot>(
+                              stream: FirebaseFirestore.instance
+                                  .collection('orders')
+                                  .where('userId', isEqualTo: user.uid)
+                                  .where('status', whereIn: ['Picked Up', 'On the way', 'Arrived'])
+                                  .snapshots(),
+                              builder: (context, snapshot) {
+                                if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                                  return Positioned(
+                                    right: 8,
+                                    top: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Text(" ", style: TextStyle(fontSize: 10)),
+                                    ),
+                                  );
+                                }
+                                return const SizedBox();
+                              },
+                            ),
                         ],
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 25),
-
-                  /// CATEGORY TITLE
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        "Categories",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 17,
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          onCategoryTap("");
-                        },
-                        child: const Text(
-                          "See all",
-                          style: TextStyle(color: Colors.green),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  /// CATEGORY LIST
-                  SizedBox(
-                    height: 90,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        categoryItem(context, Icons.eco_outlined, "Vegetables"),
-                        categoryItem(context, Icons.apple_outlined, "Fruits"),
-                        categoryItem(context, Icons.local_drink_outlined, "Dairy"),
-                        categoryItem(context, Icons.grass, "Herbs"),
-                        categoryItem(context, Icons.energy_savings_leaf, "Organic"),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 25),
-
-                  /// BANNER
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(22),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xff7CB342), Color(0xff4CAF50)],
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text(
-                                "Fresh Organic\nVegetables",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              SizedBox(height: 10),
-                              Text(
-                                "20% OFF",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Image.asset(
-                          "assets/images/tomatoes.png",
-                          height: 110,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 25),
-
-                  /// PRODUCT GRID
-                  snapshot.connectionState == ConnectionState.waiting && products.length <= 1
-                      ? const Center(child: CircularProgressIndicator())
-                      : GridView.builder(
-                          itemCount: products.length,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 14,
-                            mainAxisSpacing: 14,
-                            childAspectRatio: 0.75,
-                          ),
-                          itemBuilder: (context, index) {
-                            final product = products[index];
-                            final isFavorite = favouriteProducts.any((p) => p['name'] == product.title);
-
-                            return GestureDetector(
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ProductDetailScreen(
-                                      product: product,
-                                    ),
-                                  ),
-                                );
-                              },
-                              child: productCard(
-                                image: product.image,
-                                title: product.title,
-                                price: product.price,
-                                unit: product.unit,
-                                isFavorite: isFavorite,
-                                onFavoriteToggle: () {
-                                  onFavouriteToggle({
-                                    'name': product.title,
-                                    'price': product.price,
-                                    'unit': product.unit,
-                                    'imagePath': product.image,
-                                    'description': product.description,
-                                    'longDescription': product.longDescription,
-                                  });
-                                },
-                              ),
-                            );
-                          },
-                        ),
                 ],
               ),
-            );
-          },
+
+              const SizedBox(height: 15),
+
+              /// Active Order Status Card
+              if (user != null)
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('orders')
+                      .where('userId', isEqualTo: user.uid)
+                      .where('status', whereIn: ['Picked Up', 'On the way', 'Arrived'])
+                      .orderBy('createdAt', descending: true)
+                      .limit(1)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      debugPrint("Firestore Error: ${snapshot.error}");
+                      return const SizedBox();
+                    }
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const SizedBox();
+                    }
+
+                    final order = snapshot.data!.docs.first.data() as Map<String, dynamic>;
+                    final status = order['status'] ?? 'Pending';
+                    final orderId = snapshot.data!.docs.first.id;
+
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => OrderScreen(
+                              orderId: orderId,
+                              onBackToHome: () {},
+                            ),
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.green.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.local_shipping, color: Colors.green, size: 28),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text("Your Order is Moving!", style: TextStyle(fontWeight: FontWeight.bold)),
+                                  Text(
+                                    _getStatusMessage(status),
+                                    style: const TextStyle(color: Colors.grey, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.green),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+
+              const SizedBox(height: 25),
+
+              /// CATEGORIES
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Categories", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                  TextButton(
+                    onPressed: () => onCategoryTap(""),
+                    child: const Text("See all", style: TextStyle(color: Colors.green)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 90,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    categoryItem(context, Icons.eco_outlined, "Vegetables"),
+                    categoryItem(context, Icons.apple_outlined, "Fruits"),
+                    categoryItem(context, Icons.local_drink_outlined, "Dairy"),
+                    categoryItem(context, Icons.grass, "Herbs"),
+                    categoryItem(context, Icons.energy_savings_leaf, "Organic"),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
+              /// BANNER
+              Container(
+                width: double.infinity,
+                height: 150,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  image: const DecorationImage(
+                    image: AssetImage("assets/images/vegetables.png"),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: LinearGradient(
+                      colors: [Colors.black.withOpacity(0.6), Colors.transparent],
+                      begin: Alignment.bottomLeft,
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Text("30% OFF", style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                      Text("On your first order", style: TextStyle(color: Colors.white, fontSize: 16)),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
+              /// PRODUCT GRID
+              const Text("Fresh Products", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+              const SizedBox(height: 15),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('products').snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(child: Text("No products available"));
+                  }
+
+                  final products = snapshot.data!.docs;
+
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: products.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.75,
+                      crossAxisSpacing: 15,
+                      mainAxisSpacing: 15,
+                    ),
+                    itemBuilder: (context, index) {
+                      final doc = products[index];
+                      final data = doc.data() as Map<String, dynamic>;
+                      
+                      final product = Product(
+                        image: data['image'] ?? "assets/images/logo.png",
+                        title: data['title'] ?? "Product",
+                        price: data['price']?.toString() ?? "0",
+                        unit: data['unit'] ?? "1kg",
+                        description: data['description'] ?? "",
+                        longDescription: data['description'] ?? "",
+                      );
+
+                      return _buildProductCard(context, product);
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget categoryItem(
-      BuildContext context,
-      IconData icon,
-      String title,
-      ) {
+  Widget _buildProductCard(BuildContext context, Product product) {
+    bool isFavourite = favouriteProducts.any((p) => p['name'] == product.title);
+
     return GestureDetector(
       onTap: () {
-        onCategoryTap(title);
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
+        );
       },
       child: Container(
-        width: 80,
-        margin: const EdgeInsets.only(right: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5)),
+          ],
+        ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              height: 60,
-              width: 60,
-              decoration: BoxDecoration(
-                color: const Color(0xffEEF5E8),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Icon(
-                icon,
-                color: Colors.green,
-                size: 28,
-              ),
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  child: product.image.startsWith('assets/')
+                      ? Image.asset(product.image, height: 120, width: double.infinity, fit: BoxFit.contain)
+                      : Image.network(product.image, height: 120, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.image_not_supported)),
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: GestureDetector(
+                    onTap: () => onFavouriteToggle({
+                      'name': product.title,
+                      'image': product.image,
+                      'price': product.price,
+                      'unit': product.unit,
+                      'badge': 'Fresh',
+                      'badgeColor': Colors.green,
+                      'farm': 'Local Farm',
+                      'rating': 4.5,
+                    }),
+                    child: Icon(
+                      isFavourite ? Icons.favorite : Icons.favorite_border,
+                      color: Colors.red,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              title,
-              style: const TextStyle(fontSize: 12),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(product.title, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(product.unit, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  const SizedBox(height: 5),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Rs. ${product.price}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                      const Icon(Icons.add_circle, color: Colors.green),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -291,88 +356,43 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget productCard({
-    required String image,
-    required String title,
-    required String price,
-    required String unit,
-    required bool isFavorite,
-    required VoidCallback onFavoriteToggle,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                Center(
-                  child: _buildProductImage(image),
-                ),
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: GestureDetector(
-                    onTap: onFavoriteToggle,
-                    child: Icon(
-                      isFavorite ? Icons.favorite : Icons.favorite_border,
-                      color: isFavorite ? Colors.red : Colors.grey,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            unit,
-            style: TextStyle(color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            "Rs. $price",
-            style: const TextStyle(
-              color: Colors.green,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ],
-      ),
-    );
+  String _getStatusMessage(String status) {
+    switch (status) {
+      case 'Picked Up':
+        return "Rider picked up from farmer";
+      case 'On the way':
+        return "Rider is on the way to you";
+      case 'Arrived':
+        return "Order almost delivered!";
+      default:
+        return "Order in progress";
+    }
   }
 
-  Widget _buildProductImage(String imagePath) {
-    if (imagePath.startsWith('http')) {
-      return Image.network(imagePath, fit: BoxFit.contain, 
-          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 50));
-    } else if (imagePath.startsWith('data:image')) {
-      try {
-        final base64String = imagePath.split(',').last;
-        return Image.memory(base64Decode(base64String), fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 50));
-      } catch (e) {
-        return const Icon(Icons.broken_image, size: 50);
-      }
-    } else {
-      String assetPath = imagePath;
-      if (!assetPath.startsWith('assets/')) {
-        assetPath = 'assets/images/$imagePath';
-      }
-      return Image.asset(assetPath, fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 50));
-    }
+  Widget categoryItem(BuildContext context, IconData icon, String title) {
+    return GestureDetector(
+      onTap: () => onCategoryTap(title),
+      child: Container(
+        margin: const EdgeInsets.only(right: 12),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2)),
+                ],
+              ),
+              child: Icon(icon, color: Colors.green, size: 28),
+            ),
+            const SizedBox(height: 6),
+            Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+          ],
+        ),
+      ),
+    );
   }
 }
