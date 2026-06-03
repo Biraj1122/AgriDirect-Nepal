@@ -12,7 +12,11 @@ class CartModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
 
   CartModel() {
-    // Listen for auth changes to load/clear cart
+    // We will initialize the listener in a separate method to avoid 
+    // calling Firebase before it's ready during global variable initialization.
+  }
+
+  void initialize() {
     FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user != null) {
         fetchCartFromFirestore();
@@ -122,7 +126,7 @@ class CartModel extends ChangeNotifier {
   double get subtotal {
     return _items.fold(
       0,
-      (sum, item) => sum + double.parse(item.price),
+      (previousValue, item) => previousValue + (double.tryParse(item.price.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0),
     );
   }
 

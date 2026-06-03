@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../product.dart';
 import '../cart_model.dart';
@@ -30,7 +31,7 @@ class ProductDetailScreen extends StatelessWidget {
                 children: [
 
                   Center(
-                    child: Image.asset(product.image, height: 220, fit: BoxFit.contain),
+                    child: _buildProductImage(product.image),
                   ),
 
                   const SizedBox(height: 20),
@@ -126,5 +127,27 @@ class ProductDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildProductImage(String imagePath) {
+    if (imagePath.startsWith('http')) {
+      return Image.network(imagePath, height: 220, fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100));
+    } else if (imagePath.startsWith('data:image')) {
+      try {
+        final base64String = imagePath.split(',').last;
+        return Image.memory(base64Decode(base64String), height: 220, fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100));
+      } catch (e) {
+        return const Icon(Icons.broken_image, size: 100);
+      }
+    } else {
+      String assetPath = imagePath;
+      if (!assetPath.startsWith('assets/')) {
+        assetPath = 'assets/images/$imagePath';
+      }
+      return Image.asset(assetPath, height: 220, fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100));
+    }
   }
 }

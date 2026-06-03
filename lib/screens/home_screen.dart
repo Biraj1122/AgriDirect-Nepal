@@ -367,7 +367,12 @@ class HomeScreen extends StatelessWidget {
         return const Icon(Icons.broken_image, size: 50);
       }
     } else {
-      return Image.asset(imagePath);
+      String assetPath = imagePath;
+      if (!assetPath.startsWith('assets/')) {
+        assetPath = 'assets/images/$imagePath';
+      }
+      return Image.asset(assetPath, fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 50));
     }
   }
 }

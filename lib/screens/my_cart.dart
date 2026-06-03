@@ -138,7 +138,7 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Container(
+                                  SizedBox(
                                     height: 70,
                                     width: 70,
                                     child: _buildProductImage(product.image),

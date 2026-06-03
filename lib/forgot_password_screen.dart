@@ -151,7 +151,7 @@ class _ForgotPasswordScreenState
                               email: emailController.text.trim(),
                             );
 
-                            if (mounted) {
+                            if (context.mounted) {
                               Navigator.pop(context); // Pop loading
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text("Password reset link sent to your email")),
@@ -159,14 +159,14 @@ class _ForgotPasswordScreenState
                               Navigator.pop(context); // Go back to login
                             }
                           } on FirebaseAuthException catch (e) {
-                            if (mounted) {
+                            if (context.mounted) {
                               Navigator.pop(context); // Pop loading
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text(e.message ?? "Error sending reset link")),
                               );
                             }
                           } catch (e) {
-                            if (mounted) {
+                            if (context.mounted) {
                               Navigator.pop(context); // Pop loading
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(content: Text("An error occurred: $e")),

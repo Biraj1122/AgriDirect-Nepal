@@ -37,8 +37,10 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> {
 
     try {
       Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 5),
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 5),
+        ),
       );
       // Only update if we got a valid non-zero position
       if (position.latitude != 0 && position.longitude != 0) {
@@ -138,7 +140,7 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> {
               child: Icon(
                 Icons.location_on,
                 size: 45,
-                color: isMoving ? Colors.green.withOpacity(0.7) : Colors.green,
+                color: isMoving ? Colors.green.withValues(alpha: 0.7) : Colors.green,
               ),
             ),
           ),

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -12,10 +13,14 @@ class UserData {
 
   /// ✅ Initialize from storage
   static Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    defaultAddress = prefs.getString('defaultAddress');
-    defaultLat = prefs.getDouble('defaultLat');
-    defaultLng = prefs.getDouble('defaultLng');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      defaultAddress = prefs.getString('defaultAddress');
+      defaultLat = prefs.getDouble('defaultLat');
+      defaultLng = prefs.getDouble('defaultLng');
+    } catch (e) {
+      debugPrint("UserData Init Error: $e");
+    }
   }
 
   /// ✅ Calculate distance to HQ

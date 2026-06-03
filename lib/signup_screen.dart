@@ -111,7 +111,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 /// ROLE SELECTION DROPDOWN
                 DropdownButtonFormField<String>(
-                  value: selectedRole,
+                  initialValue: selectedRole,
                   decoration: InputDecoration(
                     hintText: "Sign up as",
                     prefixIcon: const Icon(Icons.badge_outlined),
@@ -330,6 +330,9 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     onPressed: () async {
                       if (_formKey.currentState!.validate()) {
+                        final messenger = ScaffoldMessenger.of(context);
+                        final navigator = Navigator.of(context);
+                        
                         try {
                           showDialog(
                             context: context,
@@ -367,33 +370,30 @@ class _SignupScreenState extends State<SignupScreen> {
                           await userCredential.user
                               ?.updateDisplayName(firstNameController.text.trim());
 
-                          if (mounted) {
-                            Navigator.pop(context); // Pop loading
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text(
-                                      "Account created successfully! Please login.")),
-                            );
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => const LoginScreen()),
-                            );
-                          }
+                          if (!mounted) return;
+                          
+                          navigator.pop(); // Pop loading
+                          messenger.showSnackBar(
+                            const SnackBar(
+                                content: Text(
+                                    "Account created successfully! Please login.")),
+                          );
+                          navigator.pushReplacement(
+                            MaterialPageRoute(
+                                builder: (context) => const LoginScreen()),
+                          );
                         } on FirebaseAuthException catch (e) {
-                          if (mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(e.message ?? "Registration failed")),
-                            );
-                          }
+                          if (!mounted) return;
+                          navigator.pop(); // Pop loading
+                          messenger.showSnackBar(
+                            SnackBar(content: Text(e.message ?? "Registration failed")),
+                          );
                         } catch (e) {
-                          if (mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("An error occurred: $e")),
-                            );
-                          }
+                          if (!mounted) return;
+                          navigator.pop(); // Pop loading
+                          messenger.showSnackBar(
+                            SnackBar(content: Text("An error occurred: $e")),
+                          );
                         }
                       }
                     },

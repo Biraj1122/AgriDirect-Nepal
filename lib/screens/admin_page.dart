@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import '../login_screen.dart';
 
@@ -79,7 +77,7 @@ class _AdminPageState extends State<AdminPage> {
         children: [
           Container(
             padding: const EdgeInsets.all(20),
-            color: Colors.green.withOpacity(0.1),
+            color: Colors.green.withValues(alpha: 0.1),
             child: Row(
               children: [
                 const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.admin_panel_settings, color: Colors.white)),
@@ -129,7 +127,7 @@ class _AdminPageState extends State<AdminPage> {
     bool selected = _currentIndex == index;
     return ListTile(
       selected: selected,
-      selectedTileColor: Colors.green.withOpacity(0.1),
+      selectedTileColor: Colors.green.withValues(alpha: 0.1),
       leading: Icon(icon, color: selected ? Colors.green : Colors.grey),
       title: Text(label, style: TextStyle(color: selected ? Colors.green : Colors.black, fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
       onTap: () => setState(() => _currentIndex = index),
@@ -264,7 +262,7 @@ class _AdminPageState extends State<AdminPage> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       margin: const EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+                      decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
                       child: Row(
                         children: [
                           const Icon(Icons.cloud_off, color: Colors.orange),
@@ -321,7 +319,7 @@ class _AdminPageState extends State<AdminPage> {
                         margin: const EdgeInsets.only(bottom: 8),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: _getStatusColor(status).withOpacity(0.2),
+                            backgroundColor: _getStatusColor(status).withValues(alpha: 0.2),
                             child: Icon(_getStatusIcon(status), color: _getStatusColor(status), size: 20),
                           ),
                           title: Text("Order from ${data['userName'] ?? 'User'}"),
@@ -329,7 +327,7 @@ class _AdminPageState extends State<AdminPage> {
                           onTap: () => _showOrderDetails(context, doc.id, data),
                         ),
                       );
-                    }).toList(),
+                    }),
                 ],
               ),
             );
@@ -354,7 +352,7 @@ class _AdminPageState extends State<AdminPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -494,25 +492,8 @@ class _AdminPageState extends State<AdminPage> {
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: color)),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: color)),
         child: Text(status, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
-      ),
-    );
-  }
-
-  Widget _statusButton(BuildContext context, String id, String status, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: color),
-          onPressed: () {
-            FirebaseFirestore.instance.collection('orders').doc(id).update({'status': status});
-            Navigator.pop(context);
-          },
-          child: Text("Set as $status", style: const TextStyle(color: Colors.white)),
-        ),
       ),
     );
   }
@@ -702,7 +683,7 @@ class _AdminPageState extends State<AdminPage> {
                     decoration: BoxDecoration(
                       color: Colors.grey[100],
                       borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: Colors.green.withOpacity(0.3)),
+                      border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                     ),
                     child: base64Image != null
                         ? ClipRRect(
@@ -765,7 +746,7 @@ class _AdminPageState extends State<AdminPage> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  value: selectedCategory,
+                  initialValue: selectedCategory,
                   decoration: const InputDecoration(labelText: "Category", border: OutlineInputBorder()),
                   items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                   onChanged: (val) => setDialogState(() => selectedCategory = val!),
@@ -790,17 +771,17 @@ class _AdminPageState extends State<AdminPage> {
                     if (finalImageUrl.isEmpty) finalImageUrl = "assets/images/logo.png";
 
                     await FirebaseFirestore.instance.collection('products').add({
-                      'title': titleController.text,
-                      'name': titleController.text,
-                      'price': priceController.text,
-                      'unit': unitController.text,
+                      'title': titleController.text.trim(),
+                      'name': titleController.text.trim(),
+                      'price': double.tryParse(priceController.text) ?? 0.0,
+                      'unit': unitController.text.trim(),
                       'category': selectedCategory,
-                      'description': descController.text,
-                      'longDescription': descController.text,
+                      'description': descController.text.trim(),
+                      'longDescription': descController.text.trim(),
                       'image': finalImageUrl,
                       'imagePath': finalImageUrl,
                       'badge': 'Fresh',
-                      'badgeColor': Colors.green.value,
+                      'badgeColor': const Color(0xFF4CAF50).toARGB32(),
                       'createdAt': FieldValue.serverTimestamp(),
                     });
 

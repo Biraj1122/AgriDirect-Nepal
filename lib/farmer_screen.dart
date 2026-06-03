@@ -51,7 +51,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
     final String farmLocation = _farmerData?['farmLocation'] ?? '';
     final String uid = FirebaseAuth.instance.currentUser!.uid;
 
-    final List<Widget> _pages = [
+    final List<Widget> pages = [
       _DashboardTab(
           farmerName: farmerName,
           farmName: farmName,
@@ -64,7 +64,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F5),
-      body: _pages[_currentIndex],
+      body: pages[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (i) => setState(() => _currentIndex = i),
@@ -309,7 +309,7 @@ class _ProductsTab extends StatelessWidget {
                 ]),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedCategory,
+                  initialValue: selectedCategory,
                   decoration: InputDecoration(
                     labelText: "Category",
                     prefixIcon: const Icon(Icons.category_outlined),
@@ -322,7 +322,7 @@ class _ProductsTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedUnit,
+                  initialValue: selectedUnit,
                   decoration: InputDecoration(
                     labelText: "Unit",
                     prefixIcon: const Icon(Icons.straighten),
@@ -389,8 +389,10 @@ class _ProductsTab extends StatelessWidget {
                           Navigator.pop(ctx);
                         }
                       } catch (e) {
-                        if (context.mounted) Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to save product: $e")));
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to save product: $e")));
+                        }
                       }
                     },
                     child: Text(doc == null ? "Add Product" : "Update Product", style: const TextStyle(color: Colors.white, fontSize: 16)),
@@ -463,11 +465,11 @@ class _ProductsTab extends StatelessWidget {
                         );
                         if (confirm == true) {
                           await FirebaseFirestore.instance.collection('products').doc(doc.id).delete();
-                          if (data['imageUrl'] != null && (data['imageUrl'] as String).isNotEmpty) {
-                            try {
-                              await FirebaseStorage.instance.refFromURL(data['imageUrl']).delete();
-                            } catch (_) {}
-                          }
+                          if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty) {
+                          try {
+                            await FirebaseStorage.instance.refFromURL(data['imageUrl'].toString()).delete();
+                          } catch (_) {}
+                        }
                         }
                       },
                     );

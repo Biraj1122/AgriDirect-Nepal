@@ -180,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               .doc(userCredential.user!.uid)
                               .get();
 
-                          if (mounted) {
+                          if (context.mounted) {
                             Navigator.pop(context); // Pop loading
 
                             if (userDoc.exists) {
@@ -210,14 +210,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             }
                           }
                         } on FirebaseAuthException catch (e) {
-                          if (mounted) {
+                          if (context.mounted) {
                             Navigator.pop(context); // Pop loading
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text(e.message ?? "Login failed")),
                             );
                           }
                         } catch (e) {
-                          if (mounted) {
+                          if (context.mounted) {
                             Navigator.pop(context); // Pop loading
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text("An error occurred: $e")),
@@ -275,7 +275,11 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(image, height: 24),
+          Image.asset(
+            image, 
+            height: 24,
+            errorBuilder: (context, error, stackTrace) => const Icon(Icons.public, size: 24),
+          ),
           const SizedBox(width: 10),
           Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
         ],
