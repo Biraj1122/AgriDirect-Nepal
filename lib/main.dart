@@ -1,41 +1,67 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'user_data.dart';
 import 'firebase_options.dart';
 import 'splash_screen.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize UserData (SharedPreferences)
-  await UserData.init();
-
-  try {
-    // Adding a timeout to prevent the app from hanging indefinitely if Firebase fails
+void main() {
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
+    
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
-    ).timeout(const Duration(seconds: 10));
-    print("Firebase initialized successfully");
-  } catch (e) {
-    print("Firebase initialization failed: $e");
-    // You can still choose to run the app even if Firebase fails, 
-    // or show a specific error screen.
-  }
+    );
 
-  runApp(const MyApp());
+    // Global Error Handling
+    FlutterError.onError = (FlutterErrorDetails details) {
+      FlutterError.presentError(details);
+      debugPrint("Flutter Error: ${details.exception}");
+    };
+
+    runApp(const AgriDirectApp());
+  }, (error, stackTrace) {
+    debugPrint("Uncaught Error: $error");
+    debugPrint("Stacktrace: $stackTrace");
+  });
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class AgriDirectApp extends StatelessWidget {
+  const AgriDirectApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      title: 'AgriDirect Nepal',
       theme: ThemeData(
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         scaffoldBackgroundColor: Colors.white,
-        primarySwatch: Colors.green,
       ),
+      builder: (context, child) {
+        // Custom Error Screen for the entire app
+        ErrorWidget.builder = (FlutterErrorDetails details) {
+          return Scaffold(
+            body: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.red, size: 50),
+                    const SizedBox(height: 20),
+                    const Text("Something went wrong!", 
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    Text(details.exception.toString(), textAlign: TextAlign.center),
+                  ],
+                ),
+              ),
+            ),
+          );
+        };
+        return child!;
+      },
       home: const SplashScreen(),
     );
   }

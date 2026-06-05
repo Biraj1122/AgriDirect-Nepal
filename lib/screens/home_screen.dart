@@ -71,9 +71,9 @@ class HomeScreen extends StatelessWidget {
                           if (user != null)
                             StreamBuilder<QuerySnapshot>(
                               stream: FirebaseFirestore.instance
-                                  .collection('orders')
-                                  .where('userId', isEqualTo: user.uid)
-                                  .where('status', whereIn: ['Picked Up', 'On the way', 'Arrived'])
+                                  .collection('users')
+                                  .doc(user.uid)
+                                  .collection('notifications')
                                   .snapshots(),
                               builder: (context, snapshot) {
                                 if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
@@ -81,12 +81,15 @@ class HomeScreen extends StatelessWidget {
                                     right: 8,
                                     top: 8,
                                     child: Container(
-                                      padding: const EdgeInsets.all(4),
+                                      padding: const EdgeInsets.all(5),
                                       decoration: const BoxDecoration(
                                         color: Colors.red,
                                         shape: BoxShape.circle,
                                       ),
-                                      child: const Text(" ", style: TextStyle(fontSize: 10)),
+                                      child: Text(
+                                        "${snapshot.data!.docs.length}",
+                                        style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
                                   );
                                 }
@@ -132,7 +135,7 @@ class HomeScreen extends StatelessWidget {
                           MaterialPageRoute(
                             builder: (_) => OrderScreen(
                               orderId: orderId,
-                              onBackToHome: () {},
+                              onBackToHome: () => Navigator.pop(context),
                             ),
                           ),
                         );
@@ -142,7 +145,7 @@ class HomeScreen extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Colors.green.withOpacity(0.3)),
+                          border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
                         ),
                         child: Row(
                           children: [
@@ -198,35 +201,48 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              /// BANNER
-              Container(
-                width: double.infinity,
-                height: 150,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
-                  image: const DecorationImage(
-                    image: AssetImage("assets/images/vegetables.png"),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: LinearGradient(
-                      colors: [Colors.black.withOpacity(0.6), Colors.transparent],
-                      begin: Alignment.bottomLeft,
+              /// DYNAMIC BANNER (ADMIN ANNOUNCEMENT)
+              StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance.collection('settings').doc('announcement').snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData || !snapshot.data!.exists) {
+                    return const SizedBox();
+                  }
+                  final data = snapshot.data!.data() as Map<String, dynamic>;
+                  final title = data['title'] ?? 'Special Offer';
+                  final content = data['content'] ?? 'Check out our latest fresh arrivals!';
+
+                  return Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      image: const DecorationImage(
+                        image: AssetImage("assets/images/vegetables.png"),
+                        fit: BoxFit.cover,
+                      ),
                     ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                      Text("30% OFF", style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
-                      Text("On your first order", style: TextStyle(color: Colors.white, fontSize: 16)),
-                    ],
-                  ),
-                ),
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        gradient: LinearGradient(
+                          colors: [Colors.black.withValues(alpha: 0.7), Colors.transparent],
+                          begin: Alignment.bottomLeft,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 5),
+                          Text(content, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
 
               const SizedBox(height: 25),
@@ -237,11 +253,19 @@ class HomeScreen extends StatelessWidget {
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance.collection('products').snapshots(),
                 builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.red, fontSize: 12)));
+                  }
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
                   if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(child: Text("No products available"));
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Text("No products available", style: TextStyle(color: Colors.grey)),
+                      ),
+                    );
                   }
 
                   final products = snapshot.data!.docs;
@@ -296,7 +320,7 @@ class HomeScreen extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5)),
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 5)),
           ],
         ),
         child: Column(
@@ -308,7 +332,7 @@ class HomeScreen extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   child: product.image.startsWith('assets/')
                       ? Image.asset(product.image, height: 120, width: double.infinity, fit: BoxFit.contain)
-                      : Image.network(product.image, height: 120, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.image_not_supported)),
+                      : Image.network(product.image, height: 120, width: double.infinity, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported)),
                 ),
                 Positioned(
                   top: 10,
@@ -383,7 +407,7 @@ class HomeScreen extends StatelessWidget {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
-                  BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 2)),
+                  BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, 2)),
                 ],
               ),
               child: Icon(icon, color: Colors.green, size: 28),

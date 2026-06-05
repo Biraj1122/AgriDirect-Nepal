@@ -180,7 +180,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               .doc(userCredential.user!.uid)
                               .get();
 
-                          if (mounted) {
+                          if (context.mounted) {
                             Navigator.pop(context); // Pop loading
 
                             if (userDoc.exists) {
@@ -211,14 +211,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             }
                           }
                         } on FirebaseAuthException catch (e) {
-                          if (mounted) {
+                          if (context.mounted) {
                             Navigator.pop(context); // Pop loading
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text(e.message ?? "Login failed")),
                             );
                           }
                         } catch (e) {
-                          if (mounted) {
+                          if (context.mounted) {
                             Navigator.pop(context); // Pop loading
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(content: Text("An error occurred: $e")),
@@ -233,12 +233,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 35),
                 Row(
                   children: [
-                    Expanded(child: Divider(color: Colors.black.withOpacity(0.3))),
+                    Expanded(child: Divider(color: Colors.black.withValues(alpha: 0.3))),
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 8),
                       child: Text("or continue with", style: TextStyle(fontSize: 12)),
                     ),
-                    Expanded(child: Divider(color: Colors.black.withOpacity(0.3))),
+                    Expanded(child: Divider(color: Colors.black.withValues(alpha: 0.3))),
                   ],
                 ),
                 const SizedBox(height: 30),
@@ -276,7 +276,11 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Image.asset(image, height: 24),
+          Image.asset(
+            image, 
+            height: 24,
+            errorBuilder: (context, error, stackTrace) => const Icon(Icons.public, size: 24),
+          ),
           const SizedBox(width: 10),
           Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
         ],

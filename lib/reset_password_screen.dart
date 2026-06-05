@@ -347,7 +347,7 @@ class _SuccessView extends StatelessWidget {
               borderRadius: BorderRadius.circular(32),
               boxShadow: [
                 BoxShadow(
-                  color: teal.withOpacity(0.3),
+                  color: teal.withValues(alpha: 0.3),
                   blurRadius: 24,
                   offset: const Offset(0, 10),
                 ),
@@ -388,7 +388,7 @@ class _SuccessView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: teal.withOpacity(0.3),
+                    color: teal.withValues(alpha: 0.3),
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),

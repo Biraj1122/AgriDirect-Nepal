@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'screens/home_screen.dart';
 import 'screens/my_cart.dart';
 import 'screens/categories_screen.dart';
 import 'screens/orders_screen.dart';
 import 'screens/profile_screen.dart';
+import 'my_favourites.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String userName;
@@ -21,20 +25,68 @@ class _NavigationScreenState extends State<NavigationScreen> {
   int currentIndex = 0;
   String selectedCategory = "All";
 
-  final List<Map<String, dynamic>> _favouriteProducts = [];
+  List<Map<String, dynamic>> _favouriteProducts = [];
+  StreamSubscription? _favSubscription;
 
-  void _toggleFavourite(Map<String, dynamic> product) {
-    setState(() {
-      final index = _favouriteProducts.indexWhere(
-            (p) => p['name'] == product['name'],
-      );
+  @override
+  void initState() {
+    super.initState();
+    _listenToFavorites();
+  }
 
-      if (index >= 0) {
-        _favouriteProducts.removeAt(index);
-      } else {
-        _favouriteProducts.add(product);
+  void _listenToFavorites() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _favSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('favorites')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() {
+          _favouriteProducts = snapshot.docs.map((doc) => doc.data()).toList();
+        });
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _favSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _toggleFavourite(Map<String, dynamic> product) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Use injected docId if available, fallback to name/title
+    final String favId = (product['docId'] ?? product['name'] ?? product['title'] ?? '').toString().trim();
+    if (favId.isEmpty) return;
+
+    final favRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('favorites')
+        .doc(favId);
+
+    try {
+      final doc = await favRef.get();
+      if (doc.exists) {
+        await favRef.delete();
+      } else {
+        // Convert to Firestore-friendly map (Colors -> int)
+        final Map<String, dynamic> favData = Map.from(product);
+        if (favData['badgeColor'] is Color) {
+          favData['badgeColor'] = (favData['badgeColor'] as Color).value;
+        }
+        await favRef.set(favData);
+      }
+    } catch (e) {
+      debugPrint("Error toggling favorite: $e");
+    }
   }
 
   void changeTab(int index) {
@@ -49,7 +101,16 @@ class _NavigationScreenState extends State<NavigationScreen> {
       HomeScreen(
         userName: widget.userName,
         onCartTap: () => changeTab(2),
-        onFavoritesTap: () => changeTab(4),
+        onFavoritesTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MyFavouritesScreen(
+                onFavouriteToggle: _toggleFavourite,
+              ),
+            ),
+          );
+        },
         onCategoryTap: (String category) {
           setState(() {
             selectedCategory = category.isEmpty ? "All" : category;
@@ -82,7 +143,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         favouriteProducts: _favouriteProducts,
         allProducts: const [],
         favouriteNames:
-        _favouriteProducts.map((p) => p['name'] as String).toSet(),
+        _favouriteProducts.map((p) => (p['name'] ?? p['title'] ?? '').toString()).toSet(),
         onFavouriteToggle: _toggleFavourite,
       ),
     ];
@@ -101,7 +162,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
           borderRadius: BorderRadius.circular(25),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: Colors.black.withValues(alpha: 0.08),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -134,7 +195,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? Colors.green.withOpacity(0.12)
+              ? Colors.green.withValues(alpha: 0.12)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(15),
         ),

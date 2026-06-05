@@ -16,7 +16,6 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
 
   double? _lat;
   double? _lng;
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -33,7 +32,6 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
           _savedAddress = doc.data()?['address'];
           _lat = doc.data()?['lat'];
           _lng = doc.data()?['lng'];
-          _isLoading = false;
         });
         // Sync to local SharedPreferences as fallback
         UserData.setAddress(address: _savedAddress, latitude: _lat!, longitude: _lng!);
@@ -49,7 +47,6 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
         _lng = UserData.defaultLng;
       });
     }
-    setState(() => _isLoading = false);
   }
 
   Future<void> _pickAddress() async {
@@ -148,7 +145,7 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
               Container(
                 padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
+                  color: Colors.red.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(15),
                 ),
                 child: InkWell(

@@ -1,11 +1,14 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'login_screen.dart';
+import 'notifications_screen.dart';
 
 class FarmerScreen extends StatefulWidget {
   const FarmerScreen({super.key});
@@ -63,7 +66,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
       return const Scaffold(body: Center(child: Text("User not authenticated")));
     }
 
-    final List<Widget> _pages = [
+    final List<Widget> pages = [
       _DashboardTab(
           farmerName: farmerName,
           farmName: farmName,
@@ -76,7 +79,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F5),
-      body: _pages[_currentIndex],
+      body: pages[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (i) => setState(() => _currentIndex = i),
@@ -148,19 +151,64 @@ class _DashboardTab extends StatelessWidget {
                       ),
                   ],
                 ),
-                GestureDetector(
-                  onTap: () async {
-                    await FirebaseAuth.instance.signOut();
-                    if (context.mounted) {
-                      Navigator.pushAndRemoveUntil(
-                          context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.logout, color: Colors.red, size: 22),
-                  ),
+                Row(
+                  children: [
+                    Stack(
+                      children: [
+                        IconButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                            );
+                          },
+                          icon: const Icon(Icons.notifications_none, color: Color(0xFF1A2E1A)),
+                        ),
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(uid)
+                              .collection('notifications')
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                              return Positioned(
+                                right: 8,
+                                top: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    "${snapshot.data!.docs.length}",
+                                    style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              );
+                            }
+                            return const SizedBox();
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () async {
+                        await FirebaseAuth.instance.signOut();
+                        if (context.mounted) {
+                          Navigator.pushAndRemoveUntil(
+                              context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
+                        child: const Icon(Icons.logout, color: Colors.red, size: 22),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -212,6 +260,52 @@ class _DashboardTab extends StatelessWidget {
                 );
               },
             ),
+            const SizedBox(height: 25),
+
+            /// DYNAMIC BANNER (ADMIN ANNOUNCEMENT)
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance.collection('settings').doc('announcement').snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return const SizedBox();
+                }
+                final data = snapshot.data!.data() as Map<String, dynamic>;
+                final title = data['title'] ?? 'Special Announcement';
+                final content = data['content'] ?? 'Important updates from the admin team.';
+
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    image: const DecorationImage(
+                      image: AssetImage("assets/images/vegetables.png"),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: LinearGradient(
+                        colors: [Colors.black.withAlpha(180), Colors.transparent],
+                        begin: Alignment.bottomLeft,
+                        end: Alignment.topRight,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 5),
+                        Text(content, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 24),
             const Text("Recent Orders", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
             const SizedBox(height: 12),
@@ -260,7 +354,8 @@ class _ProductsTab extends StatelessWidget {
     String selectedCategory = doc != null ? (doc['category'] ?? 'Vegetables') : 'Vegetables';
     final categories = ['Vegetables', 'Fruits', 'Grains', 'Dairy', 'Spices'];
 
-    File? pickedImageFile;
+    XFile? pickedXFile;
+    Uint8List? webImage; // Store bytes for Web preview
     String existingImageUrl = doc != null ? (doc['imageUrl'] ?? '') : '';
 
     showModalBottomSheet(
@@ -283,9 +378,17 @@ class _ProductsTab extends StatelessWidget {
                     final ImagePicker picker = ImagePicker();
                     final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
                     if (image != null) {
-                      setS(() {
-                        pickedImageFile = File(image.path);
-                      });
+                      if (kIsWeb) {
+                        final bytes = await image.readAsBytes();
+                        setS(() {
+                          pickedXFile = image;
+                          webImage = bytes;
+                        });
+                      } else {
+                        setS(() {
+                          pickedXFile = image;
+                        });
+                      }
                     }
                   },
                   child: Container(
@@ -296,18 +399,23 @@ class _ProductsTab extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
                     ),
-                    child: pickedImageFile != null
-                        ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(pickedImageFile!, fit: BoxFit.cover))
+                    child: pickedXFile != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: kIsWeb
+                                ? (webImage != null ? Image.memory(webImage!, fit: BoxFit.cover) : const SizedBox())
+                                : Image.file(File(pickedXFile!.path), fit: BoxFit.cover),
+                          )
                         : existingImageUrl.isNotEmpty
-                        ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(existingImageUrl, fit: BoxFit.cover))
-                        : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_a_photo_outlined, color: Colors.grey.shade600, size: 32),
-                        const SizedBox(height: 8),
-                        Text("Tap to add product image", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                      ],
-                    ),
+                            ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(existingImageUrl, fit: BoxFit.cover))
+                            : Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_a_photo_outlined, color: Colors.grey.shade600, size: 32),
+                                  const SizedBox(height: 8),
+                                  Text("Tap to add product image", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                                ],
+                              ),
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -368,13 +476,23 @@ class _ProductsTab extends StatelessWidget {
 
                         String finalImageUrl = existingImageUrl;
 
-                        if (pickedImageFile != null) {
-                          String fileName = '${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+                        if (pickedXFile != null) {
+                          String fileName = 'prod_${DateTime.now().millisecondsSinceEpoch}.jpg';
                           Reference storageRef = FirebaseStorage.instance.ref().child('product_images').child(fileName);
 
-                          UploadTask uploadTask = storageRef.putFile(pickedImageFile!);
-                          TaskSnapshot snapshot = await uploadTask;
-                          finalImageUrl = await snapshot.ref.getDownloadURL();
+                          final metadata = SettableMetadata(contentType: 'image/jpeg');
+
+                          if (kIsWeb) {
+                            // On Web, use the bytes we already read or read them now
+                            final bytes = webImage ?? await pickedXFile!.readAsBytes();
+                            UploadTask uploadTask = storageRef.putData(bytes, metadata);
+                            TaskSnapshot snapshot = await uploadTask;
+                            finalImageUrl = await snapshot.ref.getDownloadURL();
+                          } else {
+                            UploadTask uploadTask = storageRef.putFile(File(pickedXFile!.path), metadata);
+                            TaskSnapshot snapshot = await uploadTask;
+                            finalImageUrl = await snapshot.ref.getDownloadURL();
+                          }
                         }
 
                         final data = {
@@ -383,7 +501,7 @@ class _ProductsTab extends StatelessWidget {
                           'name': nameCtrl.text.trim(),
                           'description': descCtrl.text.trim(),
                           'category': selectedCategory,
-                          'price': double.tryParse(priceCtrl.text) ?? 0,
+                          'price': double.tryParse(priceCtrl.text) ?? 0.0,
                           'stock': int.tryParse(stockCtrl.text) ?? 0,
                           'unit': selectedUnit,
                           'imageUrl': finalImageUrl,
@@ -398,12 +516,25 @@ class _ProductsTab extends StatelessWidget {
                         }
 
                         if (context.mounted) {
-                          Navigator.pop(context);
-                          Navigator.pop(ctx);
+                          // Use a small delay to ensure Firestore has processed before closing
+                          Future.delayed(const Duration(milliseconds: 500), () {
+                            if (context.mounted) {
+                              Navigator.of(context, rootNavigator: true).pop(); // Dismiss loading
+                              Navigator.pop(ctx); // Dismiss bottom sheet
+                            }
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(doc == null ? "Product added successfully!" : "Product updated!")),
+                          );
                         }
                       } catch (e) {
-                        if (context.mounted) Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to save product: $e")));
+                        debugPrint("Error saving product: $e");
+                        if (context.mounted) {
+                          Navigator.of(context, rootNavigator: true).pop(); // Ensure dialog is dismissed
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Failed to save product: ${e.toString()}")),
+                          );
+                        }
                       }
                     },
                     child: Text(doc == null ? "Add Product" : "Update Product", style: const TextStyle(color: Colors.white, fontSize: 16)),
@@ -476,11 +607,11 @@ class _ProductsTab extends StatelessWidget {
                         );
                         if (confirm == true) {
                           await FirebaseFirestore.instance.collection('products').doc(doc.id).delete();
-                          if (data['imageUrl'] != null && (data['imageUrl'] as String).isNotEmpty) {
-                            try {
-                              await FirebaseStorage.instance.refFromURL(data['imageUrl']).delete();
-                            } catch (_) {}
-                          }
+                          if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty) {
+                          try {
+                            await FirebaseStorage.instance.refFromURL(data['imageUrl'].toString()).delete();
+                          } catch (_) {}
+                        }
                         }
                       },
                     );
@@ -582,6 +713,19 @@ class _DeliveryTabState extends State<_DeliveryTab> {
                           'status': newStatus,
                           'updatedAt': FieldValue.serverTimestamp(),
                         });
+                        
+                        // Notify the Customer
+                        final userId = data['userId'];
+                        if (userId != null) {
+                          await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
+                            'title': 'Order Status: $newStatus',
+                            'body': 'Farmer updated your order #${doc.id.substring(0, 6)} to $newStatus.',
+                            'time': DateTime.now().toString(),
+                            'createdAt': FieldValue.serverTimestamp(),
+                            'type': 'delivery',
+                          });
+                        }
+
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Order status updated to $newStatus")));
                         }

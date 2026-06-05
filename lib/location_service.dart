@@ -5,8 +5,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class LocationService {
-  final String _apiKey = "AIzaSyCiJof1JmzJHhIUSF5SD6iywrY6IFcVQr8";
-
   Future<bool> requestPermission() async {
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {

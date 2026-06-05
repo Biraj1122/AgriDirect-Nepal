@@ -10,6 +10,7 @@ import 'my_addresses_screen.dart';
 import 'order_history_screen.dart';
 import '../notifications_screen.dart';
 import '../payment_methods_screen.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userName;
@@ -98,8 +99,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       top: 50,
                       right: 20,
                       child: IconButton(
-                        icon: const Icon(Icons.settings_outlined),
-                        onPressed: () {},
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EditProfileScreen(
+                                currentName: fullName ?? widget.userName,
+                                currentPhone: phone ?? "+977 98XXXXXXXX",
+                              ),
+                            ),
+                          );
+                          if (result == true) {
+                            _fetchUserData();
+                          }
+                        },
                       ),
                     ),
                     Positioned(
@@ -190,7 +204,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => MyFavouritesScreen(
-                              favouriteProducts: widget.favouriteProducts,
                               onFavouriteToggle:
                               widget.onFavouriteToggle ?? (item) {},
                             ),
@@ -203,7 +216,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     menuItem(
                       Icons.notifications,
                       "Notifications",
-                      badgeText: "3",
+                      badgeStream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(FirebaseAuth.instance.currentUser?.uid)
+                          .collection('notifications')
+                          .snapshots(),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -285,7 +302,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       String title, {
         VoidCallback? onTap,
         bool isLast = false,
-        String? badgeText,
+        Stream<QuerySnapshot>? badgeStream,
       }) {
 
     return Column(
@@ -296,17 +313,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (badgeText != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xffE8F5E9),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(badgeText),
+              if (badgeStream != null)
+                StreamBuilder<QuerySnapshot>(
+                  stream: badgeStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withAlpha(50),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          "${snapshot.data!.docs.length}",
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox();
+                  },
                 ),
               const Icon(Icons.arrow_forward_ios, size: 14),
             ],

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -34,7 +35,18 @@ class OrderHistoryScreen extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
+            // If you see an error here about a missing index, 
+            // click the link provided in the debug console to create it.
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Text(
+                  "Error loading history. Make sure you have a Firestore index for 'userId' and 'createdAt'.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.red[700]),
+                ),
+              ),
+            );
           }
 
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -62,8 +74,8 @@ class OrderHistoryScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final order = orders[index].data() as Map<String, dynamic>;
               final date = (order['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-              final status = order['status'] ?? 'Pending';
-              final total = order['total'] ?? 0.0;
+              final status = order['status']?.toString() ?? 'Pending';
+              final total = (order['total'] as num?)?.toDouble() ?? 0.0;
               final items = order['items'] as List<dynamic>? ?? [];
 
               return Card(
@@ -84,7 +96,7 @@ class OrderHistoryScreen extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
-                              color: _getStatusColor(status).withOpacity(0.1),
+                              color: _getStatusColor(status).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
@@ -99,19 +111,53 @@ class OrderHistoryScreen extends StatelessWidget {
                         ],
                       ),
                       const Divider(height: 25),
-                      ...items.take(2).map((item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 5),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.circle, size: 8, color: Colors.green),
-                            const SizedBox(width: 10),
-                            Expanded(child: Text(item['title'] ?? 'Product')),
-                            Text("Rs. ${item['price']}"),
-                          ],
+                    ...items.take(3).map((item) {
+                        final itemData = item as Map<String, dynamic>;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            children: [
+                              Container(
+                                height: 45,
+                                width: 45,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xffF7F8F3),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: _buildProductImage(itemData['image']?.toString() ?? ''),
+                                ),
+                              ),
+                              const SizedBox(width: 15),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      itemData['title']?.toString() ?? 'Product',
+                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                    ),
+                                    Text(
+                                      itemData['unit']?.toString() ?? '',
+                                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                "Rs. ${itemData['price']}",
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                      if (items.length > 3)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, bottom: 8),
+                          child: Text("+${items.length - 3} more items", style: const TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
                         ),
-                      )),
-                      if (items.length > 2)
-                        Text("+${items.length - 2} more items", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                       const Divider(height: 25),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -166,6 +212,45 @@ class OrderHistoryScreen extends StatelessWidget {
       case 'Delivered': return Colors.green;
       case 'Cancelled': return Colors.red;
       default: return Colors.grey;
+    }
+  }
+
+  Widget _buildProductImage(String imagePath) {
+    if (imagePath.startsWith('http')) {
+      return Image.network(
+        imagePath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
+        ),
+      );
+    } else if (imagePath.startsWith('data:image')) {
+      try {
+        final base64String = imagePath.split(',').last;
+        return Image.memory(
+          base64Decode(base64String),
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Center(
+            child: Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
+          ),
+        );
+      } catch (e) {
+        return const Center(
+          child: Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
+        );
+      }
+    } else {
+      String assetPath = imagePath;
+      if (assetPath.isNotEmpty && !assetPath.startsWith('assets/')) {
+        assetPath = 'assets/images/$imagePath';
+      }
+      return Image.asset(
+        assetPath.isEmpty ? 'assets/images/logo.png' : assetPath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
+        ),
+      );
     }
   }
 }
