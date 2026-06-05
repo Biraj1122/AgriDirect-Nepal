@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
-import 'package:image_picker/image_picker.dart';
 import '../login_screen.dart';
 
 class AdminPage extends StatefulWidget {
@@ -77,7 +75,7 @@ class _AdminPageState extends State<AdminPage> {
         children: [
           Container(
             padding: const EdgeInsets.all(20),
-            color: Colors.green.withValues(alpha: 0.1),
+            color: Colors.green.withOpacity(0.1),
             child: Row(
               children: [
                 const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.admin_panel_settings, color: Colors.white)),
@@ -127,7 +125,7 @@ class _AdminPageState extends State<AdminPage> {
     bool selected = _currentIndex == index;
     return ListTile(
       selected: selected,
-      selectedTileColor: Colors.green.withValues(alpha: 0.1),
+      selectedTileColor: Colors.green.withOpacity(0.1),
       leading: Icon(icon, color: selected ? Colors.green : Colors.grey),
       title: Text(label, style: TextStyle(color: selected ? Colors.green : Colors.black, fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
       onTap: () => setState(() => _currentIndex = index),
@@ -225,125 +223,63 @@ class _AdminPageState extends State<AdminPage> {
   Widget _buildDashboard() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('orders').snapshots(),
-      builder: (context, orderSnapshot) {
-        return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('products').snapshots(),
-          builder: (context, productSnapshot) {
-            int totalOrders = 0;
-            double totalRevenue = 0;
-            int pendingDeliveries = 0;
-            int totalProducts = productSnapshot.hasData ? productSnapshot.data!.docs.length : 0;
-            List<DocumentSnapshot> recentOrders = [];
+      builder: (context, snapshot) {
+        int totalOrders = snapshot.data?.docs.length ?? 0;
+        double totalRevenue = 0;
+        if (snapshot.hasData) {
+          for (var doc in snapshot.data!.docs) {
+            totalRevenue += (doc.data() as Map<String, dynamic>)['total'] ?? 0;
+          }
+        }
 
-            if (orderSnapshot.hasData) {
-              final docs = orderSnapshot.data!.docs;
-              totalOrders = docs.length;
-              recentOrders = docs.toList()..sort((a, b) {
-                final aTime = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-                final bTime = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
-                return (bTime ?? Timestamp.now()).compareTo(aTime ?? Timestamp.now());
-              });
-
-              for (var doc in docs) {
-                final data = doc.data() as Map<String, dynamic>;
-                totalRevenue += (data['total'] ?? 0);
-                if (data['status'] == 'Pending' || data['status'] == 'On the way') {
-                  pendingDeliveries++;
-                }
-              }
-            }
-
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Overview", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              Row(
                 children: [
-                  if (orderSnapshot.hasError || productSnapshot.hasError)
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      margin: const EdgeInsets.only(bottom: 20),
-                      decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.cloud_off, color: Colors.orange),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              "Error connecting to Firebase: ${orderSnapshot.error ?? productSnapshot.error}",
-                              style: const TextStyle(fontSize: 12, color: Colors.orange),
-                            ),
-                          ),
-                        ],
-                      ),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => setState(() => _currentIndex = 1),
+                      child: _statCard("Total Orders", totalOrders.toString(), Icons.shopping_cart, Colors.blue),
                     ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => setState(() => _currentIndex = 1),
-                          child: _statCard("Total Orders", totalOrders.toString(), Icons.shopping_cart, Colors.blue),
-                        ),
-                      ),
-                      const SizedBox(width: 15),
-                      Expanded(child: _statCard("Revenue", "Rs. ${totalRevenue.toStringAsFixed(0)}", Icons.monetization_on, Colors.green)),
-                    ],
                   ),
-                  const SizedBox(height: 15),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => setState(() => _currentIndex = 2),
-                          child: _statCard("Total Products", totalProducts.toString(), Icons.inventory_2, Colors.purple),
-                        ),
-                      ),
-                      const SizedBox(width: 15),
-                      Expanded(child: _statCard("Pending Deliveries", pendingDeliveries.toString(), Icons.delivery_dining, Colors.orange)),
-                    ],
-                  ),
-                  const SizedBox(height: 30),
-                  const Text("Recent Activity", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  if (recentOrders.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 20),
-                      child: Center(child: Text("No recent activity", style: TextStyle(color: Colors.grey))),
-                    )
-                  else
-                    ...recentOrders.take(5).map((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final date = (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-                      final status = data['status'] ?? 'Pending';
-                      
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: _getStatusColor(status).withValues(alpha: 0.2),
-                            child: Icon(_getStatusIcon(status), color: _getStatusColor(status), size: 20),
-                          ),
-                          title: Text("Order from ${data['userName'] ?? 'User'}"),
-                          subtitle: Text("${DateFormat('MMM d, h:mm a').format(date)} • $status"),
-                          onTap: () => _showOrderDetails(context, doc.id, data),
-                        ),
-                      );
-                    }),
+                  const SizedBox(width: 15),
+                  Expanded(child: _statCard("Revenue", "Rs. ${totalRevenue.toStringAsFixed(0)}", Icons.monetization_on, Colors.green)),
                 ],
               ),
-            );
-          },
+              const SizedBox(height: 15),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => setState(() => _currentIndex = 2),
+                      child: _statCard("Total Products", "4", Icons.inventory_2, Colors.purple),
+                    ),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(child: _statCard("Pending Deliveries", "5", Icons.delivery_dining, Colors.orange)),
+                ],
+              ),
+              const SizedBox(height: 30),
+              const Text("Recent Activity", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              // Could add a chart or list of recent orders here
+              const Card(
+                child: ListTile(
+                  leading: CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.check, color: Colors.white)),
+                  title: Text("New order from Kathmandu"),
+                  subtitle: Text("2 minutes ago"),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
-  }
-
-  IconData _getStatusIcon(String status) {
-    switch (status) {
-      case 'Delivered': return Icons.check_circle;
-      case 'On the way': return Icons.local_shipping;
-      case 'Cancelled': return Icons.cancel;
-      default: return Icons.pending_actions;
-    }
   }
 
   Widget _statCard(String title, String value, IconData icon, Color color) {
@@ -352,7 +288,7 @@ class _AdminPageState extends State<AdminPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,7 +307,6 @@ class _AdminPageState extends State<AdminPage> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('orders').orderBy('createdAt', descending: true).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.red)));
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final docs = snapshot.data!.docs;
 
@@ -444,10 +379,7 @@ class _AdminPageState extends State<AdminPage> {
                           color: Colors.grey[100],
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: _buildProductImage(item['image']),
-                        ),
+                        child: Image.asset(item['image'] ?? 'assets/images/logo.png'),
                       ),
                       title: Text(item['title'] ?? 'Product'),
                       subtitle: Text("${item['unit']} • Rs. ${item['price']}"),
@@ -492,33 +424,27 @@ class _AdminPageState extends State<AdminPage> {
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: color)),
+        decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: color)),
         child: Text(status, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Widget _buildProductImage(dynamic imagePath) {
-    if (imagePath == null || imagePath.toString().isEmpty) {
-      return const Icon(Icons.image, color: Colors.grey);
-    }
-    String path = imagePath.toString();
-    if (path.startsWith('http')) {
-      return Image.network(path, fit: BoxFit.cover, 
-        errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.red));
-    } else if (path.startsWith('data:image')) {
-      try {
-        final base64String = path.split(',').last;
-        return Image.memory(base64Decode(base64String), fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.red));
-      } catch (e) {
-        return const Icon(Icons.broken_image, color: Colors.red);
-      }
-    } else if (path.startsWith('assets/')) {
-      return Image.asset(path, fit: BoxFit.cover);
-    } else {
-      return const Icon(Icons.image, color: Colors.grey);
-    }
+  Widget _statusButton(BuildContext context, String id, String status, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(backgroundColor: color),
+          onPressed: () {
+            FirebaseFirestore.instance.collection('orders').doc(id).update({'status': status});
+            Navigator.pop(context);
+          },
+          child: Text("Set as $status", style: const TextStyle(color: Colors.white)),
+        ),
+      ),
+    );
   }
 
   Widget _buildProductsList() {
@@ -532,22 +458,19 @@ class _AdminPageState extends State<AdminPage> {
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('products').snapshots(),
         builder: (context, snapshot) {
-          List<DocumentSnapshot> docs = [];
-          if (snapshot.hasData) docs = snapshot.data!.docs;
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          final docs = snapshot.data!.docs;
 
-          if (docs.isEmpty && snapshot.connectionState != ConnectionState.waiting) {
+          if (docs.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.inventory_2_outlined, size: 60, color: Colors.grey),
-                  const SizedBox(height: 10),
-                  const Text("No products found in cloud."),
-                  if (snapshot.hasError) const Text("(Firebase Access Denied)", style: TextStyle(color: Colors.red, fontSize: 10)),
+                  const Text("No products in database."),
                   const SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: _seedInitialProducts,
-                    child: const Text("Seed Sample Products"),
+                    child: const Text("Seed Initial Products"),
                   )
                 ],
               ),
@@ -565,10 +488,9 @@ class _AdminPageState extends State<AdminPage> {
                     width: 50,
                     height: 50,
                     decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: _buildProductImage(product['image']),
-                    ),
+                    child: product['image'].startsWith('assets/')
+                        ? Image.asset(product['image'])
+                        : const Icon(Icons.image),
                   ),
                   title: Text(product['title'] ?? 'No Title'),
                   subtitle: Text("${product['unit']} • Rs. ${product['price']}"),
@@ -593,8 +515,6 @@ class _AdminPageState extends State<AdminPage> {
         'price': "120",
         'unit': "1kg",
         'description': "Fresh organic tomatoes directly from local farms.",
-        'longDescription': "These fresh organic tomatoes are hand-picked from the local farms of Nepal. They are rich in vitamins and minerals, perfect for your daily salads and cooking needs. No pesticides used.",
-        'category': 'Vegetables',
       },
       {
         'image': "assets/images/potato png.png",
@@ -602,8 +522,6 @@ class _AdminPageState extends State<AdminPage> {
         'price': "80",
         'unit': "1kg",
         'description': "Naturally grown potatoes rich in nutrients.",
-        'longDescription': "Our organic potatoes are grown in the fertile soil of the Himalayan foothills. They are firm, flavorful, and perfect for roasting, boiling, or making traditional Nepali dishes.",
-        'category': 'Vegetables',
       },
       {
         'image': "assets/images/green cabbage.png",
@@ -611,17 +529,13 @@ class _AdminPageState extends State<AdminPage> {
         'price': "60",
         'unit': "1kg",
         'description': "Healthy green cabbage freshly harvested.",
-        'longDescription': "Freshly harvested green cabbage, packed with fiber and nutrients. It has a crisp texture and a sweet, mild flavor that enhances any meal.",
-        'category': 'Vegetables',
       },
       {
         'image': "assets/images/milk png.png",
         'title': "Farm Fresh Milk",
         'price': "110",
         'unit': "1L",
-        'description': "Pure farm fresh milk from healthy cows.",
-        'longDescription': "High-quality, pure farm fresh milk collected daily from healthy, grass-fed cows. It is pasteurized for safety while maintaining its natural creaminess and nutritional value.",
-        'category': 'Dairy',
+        'description': "Pure farm fresh milk from healthy cows.",// image path fixed
       },
     ];
 
@@ -634,176 +548,37 @@ class _AdminPageState extends State<AdminPage> {
     final titleController = TextEditingController();
     final priceController = TextEditingController();
     final unitController = TextEditingController();
-    final descController = TextEditingController();
-    final urlController = TextEditingController();
-    String selectedCategory = 'Vegetables';
-    String? base64Image;
-    bool isUploading = false;
-
-    final List<String> categories = [
-      'Vegetables', 'Fruits', 'Dairy', 'Grains', 'Herbs', 'Organic', 'Seasonal'
-    ];
 
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("Add New Product"),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text("Upload image or use a URL", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                const SizedBox(height: 15),
-                
-                // Image Preview
-                GestureDetector(
-                  onTap: () async {
-                    final ImagePicker picker = ImagePicker();
-                    final XFile? image = await picker.pickImage(
-                      source: ImageSource.gallery,
-                      maxWidth: 400, // Limit size to keep Base64 string manageable
-                      maxHeight: 400,
-                      imageQuality: 70,
-                    );
-                    
-                    if (image != null) {
-                      final bytes = await image.readAsBytes();
-                      final base64 = base64Encode(bytes);
-                      setDialogState(() {
-                        base64Image = 'data:image/png;base64,$base64';
-                        urlController.clear(); // Clear URL if image is picked
-                      });
-                    }
-                  },
-                  child: Container(
-                    height: 120,
-                    width: 120,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[100],
-                      borderRadius: BorderRadius.circular(15),
-                      border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                    ),
-                    child: base64Image != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(15),
-                            child: Image.memory(
-                              base64Decode(base64Image!.split(',').last),
-                              fit: BoxFit.cover,
-                            ),
-                          )
-                        : ValueListenableBuilder<TextEditingValue>(
-                            valueListenable: urlController,
-                            builder: (context, value, _) {
-                              if (value.text.isNotEmpty) {
-                                return ClipRRect(
-                                  borderRadius: BorderRadius.circular(15),
-                                  child: Image.network(
-                                    value.text,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (c, e, s) => const Icon(Icons.broken_image, color: Colors.red),
-                                  ),
-                                );
-                              }
-                              return const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.add_a_photo, color: Colors.green, size: 30),
-                                  Text("Pick Image", style: TextStyle(fontSize: 10, color: Colors.green)),
-                                ],
-                              );
-                            },
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                
-                TextField(
-                  controller: urlController, 
-                  onChanged: (val) {
-                    if (val.isNotEmpty && base64Image != null) {
-                      setDialogState(() => base64Image = null);
-                    }
-                  },
-                  decoration: const InputDecoration(
-                    labelText: "Or Direct Image Link (URL)", 
-                    hintText: "https://example.com/photo.jpg",
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.link, size: 20),
-                  ),
-                ),
-                
-                const SizedBox(height: 15),
-                TextField(controller: titleController, decoration: const InputDecoration(labelText: "Product Name", border: OutlineInputBorder())),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(child: TextField(controller: priceController, decoration: const InputDecoration(labelText: "Price (Rs.)", border: OutlineInputBorder()), keyboardType: TextInputType.number)),
-                    const SizedBox(width: 10),
-                    Expanded(child: TextField(controller: unitController, decoration: const InputDecoration(labelText: "Unit (e.g. 1kg)", border: OutlineInputBorder()))),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedCategory,
-                  decoration: const InputDecoration(labelText: "Category", border: OutlineInputBorder()),
-                  items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                  onChanged: (val) => setDialogState(() => selectedCategory = val!),
-                ),
-                const SizedBox(height: 10),
-                TextField(controller: descController, decoration: const InputDecoration(labelText: "Description", border: OutlineInputBorder()), maxLines: 2),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: isUploading ? null : () => Navigator.pop(context), child: const Text("Cancel")),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              onPressed: isUploading ? null : () async {
-                if (titleController.text.isNotEmpty && priceController.text.isNotEmpty) {
-                  setDialogState(() => isUploading = true);
-                  try {
-                    String finalImageUrl = base64Image ?? urlController.text.trim();
-                    if (finalImageUrl.isEmpty) finalImageUrl = "assets/images/logo.png";
-
-                    await FirebaseFirestore.instance.collection('products').add({
-                      'title': titleController.text.trim(),
-                      'name': titleController.text.trim(),
-                      'price': double.tryParse(priceController.text) ?? 0.0,
-                      'unit': unitController.text.trim(),
-                      'category': selectedCategory,
-                      'description': descController.text.trim(),
-                      'longDescription': descController.text.trim(),
-                      'image': finalImageUrl,
-                      'imagePath': finalImageUrl,
-                      'badge': 'Fresh',
-                      'badgeColor': const Color(0xFF4CAF50).toARGB32(),
-                      'createdAt': FieldValue.serverTimestamp(),
-                    });
-
-                    if (context.mounted) {
-                      Navigator.pop(context); // Close dialog
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product added successfully!")));
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
-                    }
-                  } finally {
-                    setDialogState(() => isUploading = false);
-                  }
-                }
-              },
-              child: isUploading 
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text("Add Product", style: TextStyle(color: Colors.white)),
-            ),
+      builder: (context) => AlertDialog(
+        title: const Text("Add New Product"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: titleController, decoration: const InputDecoration(labelText: "Product Name")),
+            TextField(controller: priceController, decoration: const InputDecoration(labelText: "Price (Rs.)"), keyboardType: TextInputType.number),
+            TextField(controller: unitController, decoration: const InputDecoration(labelText: "Unit (e.g. 1kg)")),
           ],
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () {
+              if (titleController.text.isNotEmpty) {
+                FirebaseFirestore.instance.collection('products').add({
+                  'title': titleController.text,
+                  'price': priceController.text,
+                  'unit': unitController.text,
+                  'image': "assets/images/logo.png", // Default placeholder
+                  'createdAt': FieldValue.serverTimestamp(),
+                });
+                Navigator.pop(context);
+              }
+            },
+            child: const Text("Add"),
+          ),
+        ],
       ),
     );
   }
@@ -812,7 +587,6 @@ class _AdminPageState extends State<AdminPage> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('users').snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.red)));
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final docs = snapshot.data!.docs;
 
