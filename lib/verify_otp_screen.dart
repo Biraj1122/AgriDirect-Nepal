@@ -53,9 +53,15 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
 
   @override
   void dispose() {
-    for (final c in _controllers) c.dispose();
-    for (final f in _focusNodes) f.dispose();
-    for (final f in _keyboardFocusNodes) f.dispose();
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    for (final f in _focusNodes) {
+      f.dispose();
+    }
+    for (final f in _keyboardFocusNodes) {
+      f.dispose();
+    }
     _timer?.cancel();
     _animController.dispose();
     super.dispose();
@@ -64,11 +70,15 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
   void _startResendTimer() {
     _resendCountdown = 60;
     _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_resendCountdown == 0) {
-        t.cancel();
+        timer.cancel();
       } else {
-        if (mounted) setState(() => _resendCountdown--);
+        if (mounted) {
+          setState(() {
+            _resendCountdown--;
+          });
+        }
       }
     });
   }
@@ -102,15 +112,15 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
       Navigator.push(
         context,
         PageRouteBuilder(
-          pageBuilder: (_, a, __) =>
+          pageBuilder: (_, animation, secondaryAnimation) =>
               ResetPasswordScreen(email: widget.email),
-          transitionsBuilder: (_, a, __, child) => FadeTransition(
-            opacity: a,
+          transitionsBuilder: (_, animation, secondaryAnimation, child) => FadeTransition(
+            opacity: animation,
             child: SlideTransition(
               position: Tween<Offset>(
                 begin: const Offset(0.05, 0),
                 end: Offset.zero,
-              ).animate(a),
+              ).animate(animation),
               child: child,
             ),
           ),
@@ -122,7 +132,9 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
         _isVerifying = false;
         _errorText = 'Invalid code. Please try again.';
       });
-      for (final c in _controllers) c.clear();
+      for (final controller in _controllers) {
+        controller.clear();
+      }
       _focusNodes[0].requestFocus();
     }
   }
@@ -145,7 +157,9 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
         _isResending = false;
         _errorText = null;
       });
-      for (final c in _controllers) c.clear();
+      for (final controller in _controllers) {
+        controller.clear();
+      }
       _focusNodes[0].requestFocus();
       _startResendTimer();
 
@@ -168,7 +182,9 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
     if (value.length == 1 && index < 5) {
       _focusNodes[index + 1].requestFocus();
     }
-    if (_otp.length == 6) _verifyOtp();
+    if (_otp.length == 6) {
+      _verifyOtp();
+    }
   }
 
   void _onKeyEvent(KeyEvent event, int index) {
@@ -231,7 +247,9 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
                         height: 56,
                         child: KeyboardListener(
                           focusNode: _keyboardFocusNodes[i],
-                          onKeyEvent: (e) => _onKeyEvent(e, i),
+                          onKeyEvent: (e) {
+                            _onKeyEvent(e, i);
+                          },
                           child: TextFormField(
                             controller: _controllers[i],
                             focusNode: _focusNodes[i],
@@ -246,7 +264,9 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
                               fontWeight: FontWeight.w700,
                               color: _ink,
                             ),
-                            onChanged: (v) => _onDigitChanged(v, i),
+                            onChanged: (v) {
+                              _onDigitChanged(v, i);
+                            },
                             decoration: InputDecoration(
                               counterText: '',
                               filled: true,

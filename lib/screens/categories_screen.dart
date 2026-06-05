@@ -98,7 +98,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => MyFavouritesScreen(
-          favouriteProducts: widget.externalFavouriteProducts,
           onFavouriteToggle: widget.onExternalFavouriteToggle,
         ),
       ),

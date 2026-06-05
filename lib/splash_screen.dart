@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'user_data.dart';
-import 'cart_model.dart';
 import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -66,17 +65,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       debugPrint("Firebase Initialized.");
 
       // 2. Initialize App Data
-      debugPrint("Initializing UserData...");
+      debugPrint("Initializing App Data...");
       await UserData.init();
       
-      debugPrint("Initializing CartModel...");
-      try {
-        cartModel.initialize();
-      } catch (e) {
-        debugPrint("CartModel Init Warning: $e");
-      }
-
-      // 3. Small delay for animation smoothness
+      // Small delay for animation smoothness
       await Future.delayed(const Duration(milliseconds: 500));
       
       debugPrint("Navigating to Login...");

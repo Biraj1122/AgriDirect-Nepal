@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import '../login_screen.dart';
 
@@ -46,6 +45,7 @@ class _AdminPageState extends State<AdminPage> {
                 _buildOrdersList(),
                 _buildProductsList(),
                 _buildUsersList(),
+                _buildAnnouncementManager(),
               ],
             ),
           ),
@@ -75,7 +75,7 @@ class _AdminPageState extends State<AdminPage> {
         children: [
           Container(
             padding: const EdgeInsets.all(20),
-            color: Colors.green.withOpacity(0.1),
+            color: Colors.green.withValues(alpha: 0.1),
             child: Row(
               children: [
                 const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.admin_panel_settings, color: Colors.white)),
@@ -125,7 +125,7 @@ class _AdminPageState extends State<AdminPage> {
     bool selected = _currentIndex == index;
     return ListTile(
       selected: selected,
-      selectedTileColor: Colors.green.withOpacity(0.1),
+      selectedTileColor: Colors.green.withValues(alpha: 0.1),
       leading: Icon(icon, color: selected ? Colors.green : Colors.grey),
       title: Text(label, style: TextStyle(color: selected ? Colors.green : Colors.black, fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
       onTap: () => setState(() => _currentIndex = index),
@@ -183,10 +183,10 @@ class _AdminPageState extends State<AdminPage> {
             child: Text("STORE SETTINGS", style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold)),
           ),
           ListTile(
-            leading: const Icon(Icons.image),
-            title: const Text("Update Banners"),
+            leading: const Icon(Icons.image, color: Colors.green),
+            title: const Text("Manage Announcements"),
             onTap: () {
-              // Placeholder for banner management
+              setState(() => _currentIndex = 4);
               Navigator.pop(context);
             },
           ),
@@ -282,13 +282,64 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
+  Widget _buildAnnouncementManager() {
+    final titleController = TextEditingController();
+    final contentController = TextEditingController();
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('settings').doc('announcement').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data!.exists) {
+          final data = snapshot.data!.data() as Map<String, dynamic>;
+          titleController.text = data['title'] ?? '';
+          contentController.text = data['content'] ?? '';
+        }
+
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("Global Announcement", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const Text("This will be visible to both Farmers and Customers.", style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 20),
+              TextField(
+                controller: titleController,
+                decoration: const InputDecoration(labelText: "Banner Title", border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: contentController,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: "Banner Content", border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15)),
+                onPressed: () async {
+                  await FirebaseFirestore.instance.collection('settings').doc('announcement').set({
+                    'title': titleController.text,
+                    'content': contentController.text,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Announcement Updated!")));
+                },
+                child: const Text("Update Announcement", style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _statCard(String title, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -418,34 +469,47 @@ class _AdminPageState extends State<AdminPage> {
 
   Widget _statusAction(BuildContext context, String id, String status, Color color) {
     return InkWell(
-      onTap: () {
-        FirebaseFirestore.instance.collection('orders').doc(id).update({'status': status});
-        Navigator.pop(context);
+      onTap: () async {
+        await FirebaseFirestore.instance.collection('orders').doc(id).update({'status': status});
+        
+        // Add notification for the user
+        final orderDoc = await FirebaseFirestore.instance.collection('orders').doc(id).get();
+        if (orderDoc.exists) {
+          final data = orderDoc.data()!;
+          final userId = data['userId'];
+          final farmerId = data['farmerUid'];
+          
+          if (userId != null) {
+            await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
+              'title': 'Order Update: $status',
+              'body': 'Your order #${id.substring(0, 8)} is now $status.',
+              'time': DateTime.now().toString(),
+              'createdAt': FieldValue.serverTimestamp(),
+              'type': status == 'Delivered' ? 'delivery' : 'promo',
+            });
+          }
+
+          if (farmerId != null) {
+             await FirebaseFirestore.instance.collection('users').doc(farmerId).collection('notifications').add({
+              'title': 'Order Status Changed: $status',
+              'body': 'The status of order #${id.substring(0, 8)} has been updated to $status.',
+              'time': DateTime.now().toString(),
+              'createdAt': FieldValue.serverTimestamp(),
+              'type': 'delivery',
+            });
+          }
+        }
+        
+        if (context.mounted) Navigator.pop(context);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: color)),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: color)),
         child: Text(status, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Widget _statusButton(BuildContext context, String id, String status, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: color),
-          onPressed: () {
-            FirebaseFirestore.instance.collection('orders').doc(id).update({'status': status});
-            Navigator.pop(context);
-          },
-          child: Text("Set as $status", style: const TextStyle(color: Colors.white)),
-        ),
-      ),
-    );
-  }
 
   Widget _buildProductsList() {
     return Scaffold(

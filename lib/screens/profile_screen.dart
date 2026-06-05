@@ -204,7 +204,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => MyFavouritesScreen(
-                              favouriteProducts: widget.favouriteProducts,
                               onFavouriteToggle:
                               widget.onFavouriteToggle ?? (item) {},
                             ),
@@ -217,7 +216,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     menuItem(
                       Icons.notifications,
                       "Notifications",
-                      badgeText: "3",
+                      badgeStream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(FirebaseAuth.instance.currentUser?.uid)
+                          .collection('notifications')
+                          .snapshots(),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -299,7 +302,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       String title, {
         VoidCallback? onTap,
         bool isLast = false,
-        String? badgeText,
+        Stream<QuerySnapshot>? badgeStream,
       }) {
 
     return Column(
@@ -310,17 +313,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (badgeText != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xffE8F5E9),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(badgeText),
+              if (badgeStream != null)
+                StreamBuilder<QuerySnapshot>(
+                  stream: badgeStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withAlpha(50),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          "${snapshot.data!.docs.length}",
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox();
+                  },
                 ),
               const Icon(Icons.arrow_forward_ios, size: 14),
             ],

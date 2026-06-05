@@ -1,20 +1,22 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'cart_model.dart';
 import 'product.dart';
 
 class MyFavouritesScreen extends StatelessWidget {
-  final List<Map<String, dynamic>> favouriteProducts;
   final Function(Map<String, dynamic>) onFavouriteToggle;
 
   const MyFavouritesScreen({
     super.key,
-    required this.favouriteProducts,
     required this.onFavouriteToggle,
   });
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       backgroundColor: const Color(0xffF7F8F3),
       appBar: AppBar(
@@ -34,32 +36,35 @@ class MyFavouritesScreen extends StatelessWidget {
           ),
         ),
         centerTitle: false,
-        actions: [
-          if (favouriteProducts.isNotEmpty)
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(right: 16),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xffE8F5E9),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${favouriteProducts.length} items',
-                  style: const TextStyle(
-                    color: Color(0xFF2E7D32),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ),
-        ],
       ),
-      body: favouriteProducts.isEmpty
-          ? _buildEmptyState(context)
-          : _buildFavouritesList(context),
+      body: user == null
+          ? const Center(child: Text("Please login to see favourites"))
+          : StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user.uid)
+                  .collection('favorites')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Center(child: Text("Something went wrong"));
+                }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final favouriteProducts = snapshot.data?.docs.map((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  return {...data, 'docId': doc.id};
+                }).toList() ?? [];
+
+                if (favouriteProducts.isEmpty) {
+                  return _buildEmptyState(context);
+                }
+
+                return _buildFavouritesList(context, favouriteProducts);
+              },
+            ),
     );
   }
 
@@ -114,7 +119,7 @@ class MyFavouritesScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFavouritesList(BuildContext context) {
+  Widget _buildFavouritesList(BuildContext context, List<Map<String, dynamic>> favouriteProducts) {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -132,7 +137,6 @@ class MyFavouritesScreen extends StatelessWidget {
 
   Widget _buildFavouriteCard(
       BuildContext context, Map<String, dynamic> product) {
-    // Safety check for badgeColor which might be stored as an int or null in Firestore
     Color badgeColor = Colors.green;
     if (product['badgeColor'] != null) {
       if (product['badgeColor'] is int) {
@@ -369,8 +373,12 @@ class MyFavouritesScreen extends StatelessWidget {
         );
       }
     } else {
+      String assetPath = imagePath;
+      if (!assetPath.startsWith('assets/')) {
+        assetPath = 'assets/images/$imagePath';
+      }
       return Image.asset(
-        imagePath,
+        assetPath,
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) => const Center(
           child: Icon(Icons.image_not_supported, size: 50, color: Colors.grey),

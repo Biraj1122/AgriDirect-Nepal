@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 class IconBadge extends StatelessWidget {
   final Color teal, blue;
   final IconData icon;
-  const IconBadge({required this.teal, required this.blue, required this.icon});
+  const IconBadge({super.key, required this.teal, required this.blue, required this.icon});
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +21,7 @@ class IconBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: teal.withOpacity(0.25),
+              color: teal.withValues(alpha: 0.25),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -35,7 +35,7 @@ class IconBadge extends StatelessWidget {
 
 class Heading extends StatelessWidget {
   final String title, subtitle;
-  const Heading({required this.title, required this.subtitle});
+  const Heading({super.key, required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +75,7 @@ class StepIndicator extends StatelessWidget {
   static const _teal = Color(0xFF1D9E75);
   static const _border = Color(0xFFE8ECF0);
 
-  const StepIndicator({required this.currentStep});
+  const StepIndicator({super.key, required this.currentStep});
 
   @override
   Widget build(BuildContext context) {
@@ -104,7 +104,7 @@ class StepIndicator extends StatelessWidget {
                 color: isDone
                     ? _teal
                     : isActive
-                    ? _teal.withOpacity(0.12)
+                    ? _teal.withValues(alpha: 0.12)
                     : const Color(0xFFF4F6F8),
                 border: Border.all(
                   color: isActive || isDone ? _teal : _border,
@@ -143,7 +143,7 @@ class StepIndicator extends StatelessWidget {
 
 class FieldLabel extends StatelessWidget {
   final String label;
-  const FieldLabel({required this.label});
+  const FieldLabel({super.key, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -167,6 +167,7 @@ class GradientButton extends StatelessWidget {
   final VoidCallback onTap;
 
   const GradientButton({
+    super.key,
     required this.label,
     required this.icon,
     required this.isLoading,
@@ -190,7 +191,7 @@ class GradientButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: teal.withOpacity(0.3),
+              color: teal.withValues(alpha: 0.3),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
