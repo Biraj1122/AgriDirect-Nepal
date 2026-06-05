@@ -535,7 +535,7 @@ class _AdminPageState extends State<AdminPage> {
         'title': "Farm Fresh Milk",
         'price': "110",
         'unit': "1L",
-        'description': "Pure farm fresh milk from healthy cows.",
+        'description': "Pure farm fresh milk from healthy cows.",// image path fixed
       },
     ];
 
