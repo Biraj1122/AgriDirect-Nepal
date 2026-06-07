@@ -156,9 +156,23 @@ class _LoginScreenState extends State<LoginScreen> {
                             builder: (context) => const Center(child: CircularProgressIndicator()),
                           );
 
-                          // Check for Admin Login
+                          // 1. Authenticate user with Firebase Auth
+                          final UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+                            email: email,
+                            password: password,
+                          );
+
+                          // 2. Check for hardcoded Admin Login first (after successful Auth)
                           if (email == "farmadmin@gmail.com" && password == "Farmadmin@1") {
-                            if (mounted) {
+                            // Ensure Admin document exists in Firestore for security rules to pass
+                            await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+                              'email': email,
+                              'role': 'Admin',
+                              'fullName': 'Super Admin',
+                              'lastLogin': FieldValue.serverTimestamp(),
+                            }, SetOptions(merge: true));
+
+                            if (context.mounted) {
                               Navigator.pop(context); // Pop loading
                               Navigator.pushReplacement(
                                 context,
@@ -168,13 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             return;
                           }
 
-                          // 1. Authenticate user with Firebase Auth
-                          final UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-                            email: email,
-                            password: password,
-                          );
-
-                          // 2. Fetch user's profile document from Firestore
+                          // 3. Fetch user's profile document from Firestore for other roles
                           DocumentSnapshot userDoc = await FirebaseFirestore.instance
                               .collection('users')
                               .doc(userCredential.user!.uid)

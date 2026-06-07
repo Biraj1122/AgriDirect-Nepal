@@ -347,15 +347,14 @@ class _ProductsTab extends StatelessWidget {
     final priceCtrl = TextEditingController(text: doc != null ? doc['price'].toString() : '');
     final descCtrl = TextEditingController(text: doc != null ? doc['description'] : '');
     final stockCtrl = TextEditingController(text: doc != null ? doc['stock'].toString() : '');
+    final urlCtrl = TextEditingController(text: doc != null ? (doc['imageUrl'] ?? '') : '');
 
     String selectedUnit = doc != null ? (doc['unit'] ?? 'kg') : 'kg';
     final units = ['kg', 'g', 'pcs', 'dozen', 'litre', 'bunch'];
-
     String selectedCategory = doc != null ? (doc['category'] ?? 'Vegetables') : 'Vegetables';
-    final categories = ['Vegetables', 'Fruits', 'Grains', 'Dairy', 'Spices'];
 
     XFile? pickedXFile;
-    Uint8List? webImage; // Store bytes for Web preview
+    Uint8List? webImage;
     String existingImageUrl = doc != null ? (doc['imageUrl'] ?? '') : '';
 
     showModalBottomSheet(
@@ -373,52 +372,57 @@ class _ProductsTab extends StatelessWidget {
               children: [
                 Text(doc == null ? "Add Product" : "Edit Product", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 20),
-                GestureDetector(
-                  onTap: () async {
-                    final ImagePicker picker = ImagePicker();
-                    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-                    if (image != null) {
-                      if (kIsWeb) {
-                        final bytes = await image.readAsBytes();
-                        setS(() {
-                          pickedXFile = image;
-                          webImage = bytes;
-                        });
-                      } else {
-                        setS(() {
-                          pickedXFile = image;
-                        });
+                
+                // --- IMAGE PREVIEW AREA ---
+                Container(
+                  height: 140,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: urlCtrl.text.startsWith('http')
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(urlCtrl.text.trim(), fit: BoxFit.cover, 
+                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.red)))
+                      : pickedXFile != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: kIsWeb ? Image.memory(webImage!, fit: BoxFit.cover) : Image.file(File(pickedXFile!.path), fit: BoxFit.cover))
+                          : const Icon(Icons.add_a_photo_outlined, size: 32, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                
+                _buildInput(urlCtrl, "Direct Image URL (e.g. .jpg, .png)", Icons.link, 
+                  onChanged: (v) => setS(() {}),
+                  suffix: urlCtrl.text.isNotEmpty 
+                    ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setS(() => urlCtrl.clear())) 
+                    : null
+                ),
+                const Text("Tip: Right-click Google Image and 'Copy image address'", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                const SizedBox(height: 10),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final ImagePicker picker = ImagePicker();
+                      final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                      if (image != null) {
+                        if (kIsWeb) {
+                          final bytes = await image.readAsBytes();
+                          setS(() { pickedXFile = image; webImage = bytes; urlCtrl.clear(); });
+                        } else {
+                          setS(() { pickedXFile = image; urlCtrl.clear(); });
+                        }
                       }
-                    }
-                  },
-                  child: Container(
-                    height: 140,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
-                    ),
-                    child: pickedXFile != null
-                        ? ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: kIsWeb
-                                ? (webImage != null ? Image.memory(webImage!, fit: BoxFit.cover) : const SizedBox())
-                                : Image.file(File(pickedXFile!.path), fit: BoxFit.cover),
-                          )
-                        : existingImageUrl.isNotEmpty
-                            ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(existingImageUrl, fit: BoxFit.cover))
-                            : Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.add_a_photo_outlined, color: Colors.grey.shade600, size: 32),
-                                  const SizedBox(height: 8),
-                                  Text("Tap to add product image", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                                ],
-                              ),
+                    },
+                    icon: const Icon(Icons.photo_library, size: 18),
+                    label: const Text("Select Local Photo"),
                   ),
                 ),
-                const SizedBox(height: 18),
+                
+                const Divider(height: 30),
                 _buildInput(nameCtrl, "Product Name", Icons.eco_outlined),
                 const SizedBox(height: 12),
                 _buildInput(descCtrl, "Description", Icons.description_outlined, maxLines: 2),
@@ -429,21 +433,37 @@ class _ProductsTab extends StatelessWidget {
                   Expanded(child: _buildInput(stockCtrl, "Stock Qty", Icons.inventory_2_outlined, type: TextInputType.number)),
                 ]),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: selectedCategory,
-                  decoration: InputDecoration(
-                    labelText: "Category",
-                    prefixIcon: const Icon(Icons.category_outlined),
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                  ),
-                  items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                  onChanged: (v) => setS(() => selectedCategory = v!),
+                // ... (rest of the dropdowns remain the same)
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('categories').snapshots(),
+                  builder: (context, snapshot) {
+                    List<String> categories = ['Vegetables', 'Fruits', 'Grains', 'Dairy', 'Spices'];
+                    if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                      categories = snapshot.data!.docs.map((d) => (d.data() as Map<String, dynamic>)['name'] as String).toList();
+                    }
+                    
+                    // Ensure selectedCategory is in the list or default to the first one
+                    if (!categories.contains(selectedCategory)) {
+                      selectedCategory = categories.isNotEmpty ? categories.first : 'Vegetables';
+                    }
+
+                    return DropdownButtonFormField<String>(
+                      initialValue: selectedCategory,
+                      decoration: InputDecoration(
+                        labelText: "Category",
+                        prefixIcon: const Icon(Icons.category_outlined),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                      ),
+                      items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                      onChanged: (v) => setS(() => selectedCategory = v!),
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedUnit,
+                  initialValue: selectedUnit,
                   decoration: InputDecoration(
                     labelText: "Unit",
                     prefixIcon: const Icon(Icons.straighten),
@@ -481,9 +501,7 @@ class _ProductsTab extends StatelessWidget {
                           Reference storageRef = FirebaseStorage.instance.ref().child('product_images').child(fileName);
 
                           final metadata = SettableMetadata(contentType: 'image/jpeg');
-
                           if (kIsWeb) {
-                            // On Web, use the bytes we already read or read them now
                             final bytes = webImage ?? await pickedXFile!.readAsBytes();
                             UploadTask uploadTask = storageRef.putData(bytes, metadata);
                             TaskSnapshot snapshot = await uploadTask;
@@ -493,18 +511,22 @@ class _ProductsTab extends StatelessWidget {
                             TaskSnapshot snapshot = await uploadTask;
                             finalImageUrl = await snapshot.ref.getDownloadURL();
                           }
+                        } else if (urlCtrl.text.isNotEmpty) {
+                          finalImageUrl = urlCtrl.text.trim();
                         }
 
                         final data = {
                           'farmerUid': uid,
                           'farmName': farmName,
                           'name': nameCtrl.text.trim(),
+                          'title': nameCtrl.text.trim(), // Standardize with Admin
                           'description': descCtrl.text.trim(),
                           'category': selectedCategory,
                           'price': double.tryParse(priceCtrl.text) ?? 0.0,
                           'stock': int.tryParse(stockCtrl.text) ?? 0,
                           'unit': selectedUnit,
                           'imageUrl': finalImageUrl,
+                          'image': finalImageUrl, // Standardize with Admin
                           'updatedAt': FieldValue.serverTimestamp(),
                         };
 
@@ -625,14 +647,16 @@ class _ProductsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildInput(TextEditingController ctrl, String hint, IconData icon, {int maxLines = 1, TextInputType type = TextInputType.text}) {
+  Widget _buildInput(TextEditingController ctrl, String hint, IconData icon, {int maxLines = 1, TextInputType type = TextInputType.text, ValueChanged<String>? onChanged, Widget? suffix}) {
     return TextFormField(
       controller: ctrl,
       maxLines: maxLines,
       keyboardType: type,
+      onChanged: onChanged,
       decoration: InputDecoration(
         hintText: hint,
         prefixIcon: Icon(icon),
+        suffixIcon: suffix,
         filled: true,
         fillColor: Colors.grey.shade100,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),

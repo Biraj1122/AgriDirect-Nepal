@@ -187,15 +187,39 @@ class HomeScreen extends StatelessWidget {
               const SizedBox(height: 10),
               SizedBox(
                 height: 90,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    categoryItem(context, Icons.eco_outlined, "Vegetables"),
-                    categoryItem(context, Icons.apple_outlined, "Fruits"),
-                    categoryItem(context, Icons.local_drink_outlined, "Dairy"),
-                    categoryItem(context, Icons.grass, "Herbs"),
-                    categoryItem(context, Icons.energy_savings_leaf, "Organic"),
-                  ],
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('categories').snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) return const SizedBox();
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      // Fallback to defaults if collection is empty
+                      return ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          categoryItem(context, Icons.local_drink_outlined, "Dairy"),
+                          categoryItem(context, Icons.apple_outlined, "Fruits"),
+                          categoryItem(context, Icons.grain, "Grains"),
+                          categoryItem(context, Icons.eco_outlined, "Vegetables"),
+                        ],
+                      );
+                    }
+
+                    return ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: snapshot.data!.docs.length,
+                      itemBuilder: (context, index) {
+                        final cat = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+                        final name = cat['name'] ?? 'Category';
+                        final iconCode = cat['iconCode'] as int?;
+                        
+                        return categoryItem(
+                          context, 
+                          iconCode != null ? IconData(iconCode, fontFamily: 'MaterialIcons') : Icons.category, 
+                          name
+                        );
+                      },
+                    );
+                  },
                 ),
               ),
 
@@ -284,14 +308,7 @@ class HomeScreen extends StatelessWidget {
                       final doc = products[index];
                       final data = doc.data() as Map<String, dynamic>;
                       
-                      final product = Product(
-                        image: data['image'] ?? "assets/images/logo.png",
-                        title: data['title'] ?? "Product",
-                        price: data['price']?.toString() ?? "0",
-                        unit: data['unit'] ?? "1kg",
-                        description: data['description'] ?? "",
-                        longDescription: data['description'] ?? "",
-                      );
+                      final product = Product.fromMap(data, docId: doc.id);
 
                       return _buildProductCard(context, product);
                     },
@@ -306,13 +323,22 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildProductCard(BuildContext context, Product product) {
-    bool isFavourite = favouriteProducts.any((p) => p['name'] == product.title);
+    bool isFavourite = favouriteProducts.any((p) => 
+      (p['name'] == product.title || p['title'] == product.title) || 
+      (product.id != null && (p['docId'] == product.id || p['id'] == product.id))
+    );
 
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => ProductDetailScreen(product: product)),
+          MaterialPageRoute(
+            builder: (_) => ProductDetailScreen(
+              product: product,
+              isFavourite: isFavourite,
+              onToggleFavourite: onFavouriteToggle,
+            ),
+          ),
         );
       },
       child: Container(
@@ -338,16 +364,14 @@ class HomeScreen extends StatelessWidget {
                   top: 10,
                   right: 10,
                   child: GestureDetector(
-                    onTap: () => onFavouriteToggle({
-                      'name': product.title,
-                      'image': product.image,
-                      'price': product.price,
-                      'unit': product.unit,
-                      'badge': 'Fresh',
-                      'badgeColor': Colors.green,
-                      'farm': 'Local Farm',
-                      'rating': 4.5,
-                    }),
+                    onTap: () {
+                      final productMap = product.toMap();
+                      productMap['badge'] = 'Fresh';
+                      productMap['badgeColor'] = Colors.green.toARGB32();
+                      productMap['farm'] = product.farmName ?? 'Local Farm';
+                      productMap['rating'] = 4.5;
+                      onFavouriteToggle(productMap);
+                    },
                     child: Icon(
                       isFavourite ? Icons.favorite : Icons.favorite_border,
                       color: Colors.red,
@@ -362,7 +386,21 @@ class HomeScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(product.title, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Text(product.unit, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(product.unit, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                      if (product.season != null)
+                        Text(
+                          product.season!,
+                          style: TextStyle(
+                            color: product.season == 'All Year' ? Colors.blue : Colors.orange,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                    ],
+                  ),
                   const SizedBox(height: 5),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

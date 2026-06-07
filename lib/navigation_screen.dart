@@ -46,7 +46,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
         .listen((snapshot) {
       if (mounted) {
         setState(() {
-          _favouriteProducts = snapshot.docs.map((doc) => doc.data()).toList();
+          _favouriteProducts = snapshot.docs.map((doc) {
+            final data = doc.data();
+            return {...data, 'docId': doc.id};
+          }).toList();
         });
       }
     });
@@ -62,9 +65,20 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Use injected docId if available, fallback to name/title
-    final String favId = (product['docId'] ?? product['name'] ?? product['title'] ?? '').toString().trim();
-    if (favId.isEmpty) return;
+    // 1. Identify the product name/title for consistent matching
+    final String name = (product['name'] ?? product['title'] ?? '').toString().trim();
+    if (name.isEmpty) return;
+
+    // 2. Determine the Document ID. Check if it already exists in our local list first
+    // This handles cases where a product might be favorited by Name but we have its Firestore ID too.
+    final existing = _favouriteProducts.firstWhere(
+      (p) => (p['name'] == name || p['title'] == name) || 
+             (product['docId'] != null && p['docId'] == product['docId']) ||
+             (product['id'] != null && p['docId'] == product['id']),
+      orElse: () => {},
+    );
+
+    final String favId = (existing['docId'] ?? product['docId'] ?? product['id'] ?? name).toString().trim();
 
     final favRef = FirebaseFirestore.instance
         .collection('users')
@@ -77,11 +91,26 @@ class _NavigationScreenState extends State<NavigationScreen> {
       if (doc.exists) {
         await favRef.delete();
       } else {
-        // Convert to Firestore-friendly map (Colors -> int)
+        // Convert to Firestore-friendly map
         final Map<String, dynamic> favData = Map.from(product);
+        
+        // Ensure standardized fields for cross-role compatibility
+        favData['name'] = name;
+        favData['title'] = name;
+        
+        final String img = (favData['image'] ?? favData['imageUrl'] ?? '').toString();
+        favData['image'] = img;
+        favData['imageUrl'] = img;
+
+        // Fix potential color object crash
         if (favData['badgeColor'] is Color) {
-          favData['badgeColor'] = (favData['badgeColor'] as Color).value;
+          favData['badgeColor'] = (favData['badgeColor'] as Color).toARGB32();
         }
+
+        favData['docId'] = favId;
+        favData['isFavourite'] = true;
+        favData['addedAt'] = FieldValue.serverTimestamp();
+
         await favRef.set(favData);
       }
     } catch (e) {
