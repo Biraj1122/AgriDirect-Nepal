@@ -5,10 +5,14 @@ import '../cart_model.dart';
 
 class ProductDetailScreen extends StatelessWidget {
   final Product product;
+  final bool isFavourite;
+  final Function(Map<String, dynamic>) onToggleFavourite;
 
   const ProductDetailScreen({
     super.key,
     required this.product,
+    required this.isFavourite,
+    required this.onToggleFavourite,
   });
 
   @override
@@ -19,6 +23,23 @@ class ProductDetailScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: () {
+              final map = product.toMap();
+              map['badge'] = 'Fresh';
+              map['badgeColor'] = Colors.green.toARGB32();
+              map['farm'] = product.farmName ?? 'Local Farm';
+              map['rating'] = 4.5;
+              onToggleFavourite(map);
+            },
+            icon: Icon(
+              isFavourite ? Icons.favorite : Icons.favorite_border,
+              color: Colors.red,
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
       ),
 
       body: Column(                                      // ✅ wrap in Column

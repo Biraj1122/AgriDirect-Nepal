@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'product_detail_screen.dart';
 import '../cart_model.dart';
 import '../product.dart';
 import '../my_favourites.dart';
@@ -26,27 +27,71 @@ class CategoriesScreen extends StatefulWidget {
 class _CategoriesScreenState extends State<CategoriesScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  List<Map<String, dynamic>> _categories = [];
+  bool _isLoadingCategories = true;
   int _selectedCategoryIndex = 0;
-
-  final List<Map<String, dynamic>> _categories = [
-    {'name': 'All', 'icon': Icons.apps_rounded},
-    {'name': 'Vegetables', 'icon': Icons.eco_rounded},
-    {'name': 'Fruits', 'icon': Icons.apple_rounded},
-    {'name': 'Dairy', 'icon': Icons.water_drop_rounded},
-    {'name': 'Grains', 'icon': Icons.grain_rounded},
-    {'name': 'Herbs', 'icon': Icons.local_florist_rounded},
-    {'name': 'Organic', 'icon': Icons.spa_rounded},
-    {'name': 'Seasonal', 'icon': Icons.wb_sunny_rounded},
-  ];
 
   @override
   void initState() {
     super.initState();
-    final categoryIndex = _categories.indexWhere(
-          (category) => category['name'] == widget.initialCategory,
-    );
-    if (categoryIndex != -1) {
-      _selectedCategoryIndex = categoryIndex;
+    _fetchCategories();
+  }
+
+  Future<void> _fetchCategories() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('categories').get();
+      if (snapshot.docs.isNotEmpty) {
+        final fetched = snapshot.docs.map((doc) {
+          final data = doc.data();
+          final iconCode = data['iconCode'] as int?;
+          return {
+            'name': data['name'] ?? 'Category',
+            'icon': iconCode != null ? IconData(iconCode, fontFamily: 'MaterialIcons') : Icons.category,
+          };
+        }).toList();
+
+        if (mounted) {
+          setState(() {
+            _categories = [{'name': 'All', 'icon': Icons.apps_rounded}, ...fetched];
+            _isLoadingCategories = false;
+            
+            // Set initial category index
+            final categoryIndex = _categories.indexWhere(
+              (category) => category['name'] == widget.initialCategory,
+            );
+            if (categoryIndex != -1) {
+              _selectedCategoryIndex = categoryIndex;
+            }
+          });
+        }
+      } else {
+        // Fallback
+        if (mounted) {
+          setState(() {
+            _categories = [
+              {'name': 'All', 'icon': Icons.apps_rounded},
+              {'name': 'Vegetables', 'icon': Icons.eco_rounded},
+              {'name': 'Fruits', 'icon': Icons.apple_rounded},
+              {'name': 'Dairy', 'icon': Icons.water_drop_rounded},
+              {'name': 'Grains', 'icon': Icons.grain_rounded},
+              {'name': 'Herbs', 'icon': Icons.local_florist_rounded},
+              {'name': 'Organic', 'icon': Icons.spa_rounded},
+              {'name': 'Seasonal', 'icon': Icons.wb_sunny_rounded},
+            ];
+            _isLoadingCategories = false;
+
+            final categoryIndex = _categories.indexWhere(
+              (category) => category['name'] == widget.initialCategory,
+            );
+            if (categoryIndex != -1) {
+              _selectedCategoryIndex = categoryIndex;
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching categories: $e");
+      if (mounted) setState(() => _isLoadingCategories = false);
     }
   }
 
@@ -67,21 +112,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _addToCart(Map<String, dynamic> product) {
-    String imagePath = (product['imageUrl'] ?? product['imagePath'] ?? product['image'] ?? 'logo.png').toString();
-    
-    // Normalize image path if it's a local filename
-    if (!imagePath.startsWith('http') && !imagePath.startsWith('data:image') && !imagePath.startsWith('assets/')) {
-      imagePath = 'assets/images/$imagePath';
-    }
-
-    final newProduct = Product(
-      title: (product['name'] ?? product['title'] ?? 'Product').toString(),
-      price: (product['price'] ?? '0').toString(),
-      unit: (product['unit'] ?? 'kg').toString(),
-      image: imagePath,
-      description: (product['description'] ?? product['name'] ?? '').toString(),
-      longDescription: (product['longDescription'] ?? product['description'] ?? '').toString(),
-    );
+    final newProduct = Product.fromMap(product, docId: product['id']);
 
     cartModel.add(newProduct);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -149,6 +180,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   Widget _buildCategoryRow() {
+    if (_isLoadingCategories) {
+      return const SizedBox(height: 90, child: Center(child: CircularProgressIndicator()));
+    }
     return SizedBox(
       height: 90,
       child: ListView.builder(
@@ -183,64 +217,88 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   Widget _buildProductCard(Map<String, dynamic> product) {
     final name = (product['name'] ?? product['title'] ?? 'Product').toString();
-    final isFavorite = widget.externalFavouriteProducts.any((p) => (p['name'] ?? p['title']) == name);
+    final productId = product['id']?.toString();
     
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: _buildProductImage(product['imageUrl'] ?? product['imagePath'] ?? product['image'] ?? ''),
-                ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: GestureDetector(
-                    onTap: () => widget.onExternalFavouriteToggle(product),
-                    child: CircleAvatar(
-                      radius: 14,
-                      backgroundColor: Colors.white.withValues(alpha: 0.8),
-                      child: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, color: Colors.red, size: 16),
-                    ),
-                  ),
-                ),
-              ],
+    final isFavorite = widget.externalFavouriteProducts.any((p) =>
+      (productId != null && (p['id'] == productId || p['docId'] == productId)) ||
+      (p['name'] ?? p['title']) == name
+    );
+
+    final productObj = Product.fromMap(product, docId: productId);
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductDetailScreen(
+              product: productObj,
+              isFavourite: isFavorite,
+              onToggleFavourite: widget.onExternalFavouriteToggle,
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-                Text('Rs.${product['price']} / ${product['unit']}', style: const TextStyle(color: Colors.green, fontSize: 12)),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    icon: const Icon(Icons.add_shopping_cart, size: 18, color: Colors.green),
-                    onPressed: () => _addToCart(product),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    child: _buildProductImage(productObj.image),
                   ),
-                )
-              ],
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: GestureDetector(
+                      onTap: () => widget.onExternalFavouriteToggle(product),
+                      child: CircleAvatar(
+                        radius: 14,
+                        backgroundColor: Colors.white.withValues(alpha: 0.8),
+                        child: Icon(isFavorite ? Icons.favorite : Icons.favorite_border, color: Colors.red, size: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          )
-        ],
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text('Rs.${product['price']} / ${product['unit']}', style: const TextStyle(color: Colors.green, fontSize: 12)),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      icon: const Icon(Icons.add_shopping_cart, size: 18, color: Colors.green),
+                      onPressed: () => _addToCart(product),
+                    ),
+                  )
+                ],
+              ),
+            )
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildProductImage(String image) {
     if (image.isEmpty) {
-      return const Center(child: Icon(Icons.image, color: Colors.grey));
+      return Container(
+        color: Colors.grey.shade100,
+        child: const Center(child: Icon(Icons.image, color: Colors.grey)),
+      );
     }
 
     if (image.startsWith('http')) {
@@ -248,6 +306,18 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         image,
         width: double.infinity,
         fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                  : null,
+              strokeWidth: 2,
+              color: Colors.green.withValues(alpha: 0.5),
+            ),
+          );
+        },
         errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
       );
     } else if (image.startsWith('data:image')) {
