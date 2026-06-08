@@ -467,6 +467,50 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
       "farmName": "Traditional Kol Mills",
       "badge": "Pure",
       "badgeColor": 0xFFFFC107,
+    },
+    // --- PULSES & LENTILS ---
+    {
+      "title": "Local Maas ko Daal",
+      "name": "Local Maas ko Daal",
+      "category": "Pulses",
+      "season": "Autumn",
+      "price": 180,
+      "unit": "kg",
+      "description": "Black gram from the mid-hills.",
+      "longDescription": "High-protein black gram, essential for the traditional Nepali 'Maas ko Daal'.",
+      "imageUrl": "https://images.unsplash.com/photo-1585996853884-bd9c8a8e1e1a?q=80&w=500&auto=format&fit=crop",
+      "farmName": "Sindhupalchowk Agro",
+      "badge": "High Protein",
+      "badgeColor": 0xFF4E342E,
+    },
+    {
+      "title": "Mustang Simi",
+      "name": "Mustang Simi",
+      "category": "Pulses",
+      "season": "Autumn",
+      "price": 350,
+      "unit": "kg",
+      "description": "Famous mountain beans from Mustang.",
+      "longDescription": "Grown in the high-altitude trans-Himalayan region. Famous for their unique taste and quick cooking time.",
+      "imageUrl": "https://images.unsplash.com/photo-1551462147-37885acc3c41?q=80&w=500&auto=format&fit=crop",
+      "farmName": "Thak Khola Cooperatives",
+      "badge": "Himalayan",
+      "badgeColor": 0xFF1976D2,
+    },
+    // --- MUSHROOMS ---
+    {
+      "title": "Local Gobre Chyau",
+      "name": "Local Gobre Chyau",
+      "category": "Mushrooms",
+      "season": "Winter",
+      "price": 250,
+      "unit": "kg",
+      "description": "Fresh Button Mushrooms from Kathmandu valley.",
+      "longDescription": "Organic button mushrooms grown in controlled environments in the outskirts of Kathmandu.",
+      "imageUrl": "https://images.unsplash.com/photo-1567306226416-28f0efdc88ce?q=80&w=500&auto=format&fit=crop",
+      "farmName": "Valley Mushroom Farm",
+      "badge": "Freshly Picked",
+      "badgeColor": 0xFF689F38,
     }
   ];
 
@@ -511,6 +555,8 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
     {"name": "Grains", "iconCode": Icons.grain.codePoint},
     {"name": "Tea & Coffee", "iconCode": Icons.local_cafe_outlined.codePoint},
     {"name": "Spices", "iconCode": Icons.flare.codePoint},
+    {"name": "Pulses", "iconCode": Icons.lens_blur.codePoint},
+    {"name": "Mushrooms", "iconCode": Icons.spa.codePoint},
     {"name": "Specialty", "iconCode": Icons.star_border.codePoint},
   ];
 

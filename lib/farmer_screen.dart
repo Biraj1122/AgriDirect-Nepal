@@ -9,6 +9,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'login_screen.dart';
 import 'notifications_screen.dart';
+import 'screens/crop_health_screen.dart';
+import 'product.dart';
 
 class FarmerScreen extends StatefulWidget {
   const FarmerScreen({super.key});
@@ -74,6 +76,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
           uid: uid),
       _ProductsTab(uid: uid, farmName: farmName),
       _DeliveryTab(uid: uid),
+      const CropHealthScreen(),
       _StockTab(uid: uid),
     ];
 
@@ -101,6 +104,10 @@ class _FarmerScreenState extends State<FarmerScreen> {
               icon: Icon(Icons.local_shipping_outlined),
               activeIcon: Icon(Icons.local_shipping),
               label: 'Deliveries'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.health_and_safety_outlined),
+              activeIcon: Icon(Icons.health_and_safety),
+              label: 'Crop Health'),
           BottomNavigationBarItem(
               icon: Icon(Icons.inventory_2_outlined),
               activeIcon: Icon(Icons.inventory_2),
@@ -437,7 +444,7 @@ class _ProductsTab extends StatelessWidget {
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance.collection('categories').snapshots(),
                   builder: (context, snapshot) {
-                    List<String> categories = ['Vegetables', 'Fruits', 'Grains', 'Dairy', 'Spices'];
+                    List<String> categories = ['Vegetables', 'Fruits', 'Grains', 'Dairy', 'Spices', 'Pulses', 'Mushrooms'];
                     if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
                       categories = snapshot.data!.docs.map((d) => (d.data() as Map<String, dynamic>)['name'] as String).toList();
                     }
@@ -611,9 +618,9 @@ class _ProductsTab extends StatelessWidget {
                   itemBuilder: (ctx, i) {
                     final doc = docs[i];
                     final data = doc.data() as Map<String, dynamic>;
+                    final product = Product.fromMap(data, docId: doc.id);
                     return _ProductCard(
-                      doc: doc,
-                      data: data,
+                      product: product,
                       onEdit: () => _showAddEditProduct(context, doc: doc),
                       onDelete: () async {
                         final confirm = await showDialog<bool>(
@@ -938,14 +945,12 @@ class _StatCard extends StatelessWidget {
 }
 
 class _ProductCard extends StatelessWidget {
-  final DocumentSnapshot doc;
-  final Map<String, dynamic> data;
+  final Product product;
   final VoidCallback onEdit, onDelete;
-  const _ProductCard({required this.doc, required this.data, required this.onEdit, required this.onDelete});
+  const _ProductCard({required this.product, required this.onEdit, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
-    final String imgUrl = data['imageUrl'] ?? '';
     return Card(
       color: Colors.white,
       elevation: 0,
@@ -959,8 +964,18 @@ class _ProductCard extends StatelessWidget {
               width: 70,
               height: 70,
               decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-              child: imgUrl.isNotEmpty
-                  ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(imgUrl, fit: BoxFit.cover))
+              child: product.image.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: product.image.startsWith('assets/')
+                          ? Image.asset(product.image, fit: BoxFit.cover)
+                          : Image.network(
+                              product.image,
+                              fit: BoxFit.cover,
+                              key: ValueKey(product.image), // Force reload if URL changes
+                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey),
+                            ),
+                    )
                   : const Icon(Icons.image_not_supported_outlined, color: Colors.grey),
             ),
             const SizedBox(width: 14),
@@ -968,17 +983,16 @@ class _ProductCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(data['name'] ?? '', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(product.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 2),
-                  if (data['category'] != null)
+                  if (product.category != null)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(4)),
-                      child: Text(data['category'], style: TextStyle(fontSize: 10, color: Colors.grey.shade700, fontWeight: FontWeight.w500)),
+                      child: Text(product.category!, style: TextStyle(fontSize: 10, color: Colors.grey.shade700, fontWeight: FontWeight.w500)),
                     ),
                   const SizedBox(height: 4),
-                  Text("Rs. ${data['price']} / ${data['unit']}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
-                  Text("Stock: ${data['stock']} available", style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  Text("Rs. ${product.price} / ${product.unit}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),

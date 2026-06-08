@@ -352,6 +352,7 @@ class MyFavouritesScreen extends StatelessWidget {
     if (imagePath.startsWith('http')) {
       return Image.network(
         imagePath,
+        key: ValueKey(imagePath), // Forces reload when the URL changes in Firestore
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) => const Center(
           child: Icon(Icons.image_not_supported, size: 50, color: Colors.grey),

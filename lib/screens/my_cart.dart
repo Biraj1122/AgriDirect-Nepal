@@ -244,6 +244,7 @@ class _CartScreenState extends State<CartScreen> {
     if (imagePath.startsWith('http')) {
       return Image.network(
         imagePath,
+        key: ValueKey(imagePath), // Forces reload when URL changes in Firestore
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) => const Center(
           child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),

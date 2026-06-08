@@ -3,6 +3,7 @@ import '../product.dart';
 import 'product_detail_screen.dart';
 import '../notifications_screen.dart';
 import 'orders_screen.dart';
+import 'crop_health_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -173,6 +174,64 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
+              /// CROP HEALTH AI BANNER
+              GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const CropHealthScreen()),
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF1B5E20), Color(0xFF4CAF50)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(color: Colors.green.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4)),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.psychology, color: Colors.white, size: 36),
+                      ),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text("Crop Health AI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
+                            SizedBox(height: 2),
+                            Text("Detect diseases in seconds", style: TextStyle(color: Colors.white70, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Text("BETA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
               /// CATEGORIES
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -196,10 +255,15 @@ class HomeScreen extends StatelessWidget {
                       return ListView(
                         scrollDirection: Axis.horizontal,
                         children: [
-                          categoryItem(context, Icons.local_drink_outlined, "Dairy"),
+                          categoryItem(context, Icons.eco_outlined, "Vegetables"),
                           categoryItem(context, Icons.apple_outlined, "Fruits"),
                           categoryItem(context, Icons.grain, "Grains"),
-                          categoryItem(context, Icons.eco_outlined, "Vegetables"),
+                          categoryItem(context, Icons.local_drink_outlined, "Dairy"),
+                          categoryItem(context, Icons.lens_blur, "Pulses"),
+                          categoryItem(context, Icons.spa, "Mushrooms"),
+                          categoryItem(context, Icons.local_cafe_outlined, "Tea & Coffee"),
+                          categoryItem(context, Icons.flare, "Spices"),
+                          categoryItem(context, Icons.star_border, "Specialty"),
                         ],
                       );
                     }
@@ -358,7 +422,14 @@ class HomeScreen extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   child: product.image.startsWith('assets/')
                       ? Image.asset(product.image, height: 120, width: double.infinity, fit: BoxFit.contain)
-                      : Image.network(product.image, height: 120, width: double.infinity, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported)),
+                      : Image.network(
+                          product.image,
+                          key: ValueKey(product.image), // Forces reload on URL change
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported),
+                        ),
                 ),
                 Positioned(
                   top: 10,

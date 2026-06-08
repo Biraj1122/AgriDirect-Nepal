@@ -42,9 +42,12 @@ class Product {
   }
 
   factory Product.fromMap(Map<String, dynamic> map, {String? docId}) {
+    // Prefer imageUrl then image then imagePath
+    String imageVal = map['imageUrl'] ?? map['image'] ?? map['imagePath'] ?? '';
+    
     return Product(
       id: docId ?? map['id'],
-      image: map['image'] ?? map['imageUrl'] ?? map['imagePath'] ?? '',
+      image: imageVal,
       title: map['title'] ?? map['name'] ?? '',
       price: map['price']?.toString() ?? '0',
       unit: map['unit'] ?? '',

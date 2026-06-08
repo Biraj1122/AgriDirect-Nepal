@@ -50,6 +50,7 @@ class _AdminPageState extends State<AdminPage> {
                 _buildUsersList(),
                 _buildAnnouncementManager(),
                 _buildCategoriesManager(),
+                _buildResearchManager(),
               ],
             ),
           ),
@@ -66,6 +67,7 @@ class _AdminPageState extends State<AdminPage> {
           BottomNavigationBarItem(icon: Icon(Icons.shopping_bag), label: "Orders"),
           BottomNavigationBarItem(icon: Icon(Icons.inventory), label: "Products"),
           BottomNavigationBarItem(icon: Icon(Icons.people), label: "Users"),
+          BottomNavigationBarItem(icon: Icon(Icons.health_and_safety), label: "Research"),
         ],
       ),
     );
@@ -98,8 +100,10 @@ class _AdminPageState extends State<AdminPage> {
           _panelItem(0, Icons.dashboard, "Dashboard"),
           _panelItem(1, Icons.shopping_bag, "Orders Management"),
           _panelItem(2, Icons.inventory_2, "Products & Inventory"),
-          _panelItem(5, Icons.category, "Categories"),
           _panelItem(3, Icons.people, "User Database"),
+          _panelItem(4, Icons.campaign, "Announcements"),
+          _panelItem(5, Icons.category, "Categories"),
+          _panelItem(6, Icons.health_and_safety, "Research Data"),
           const Divider(),
           const Padding(
             padding: EdgeInsets.all(15.0),
@@ -292,6 +296,24 @@ class _AdminPageState extends State<AdminPage> {
                       const SizedBox(width: 15),
                       Expanded(child: _statCard("Pending / Active", pendingDeliveries.toString(), Icons.delivery_dining, Colors.orange)),
                     ],
+                  ),
+                const SizedBox(height: 30),
+                  const Text("AI Research & Crop Health", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('research_submissions').snapshots(),
+                    builder: (context, resSnap) {
+                      final count = resSnap.data?.docs.length ?? 0;
+                      return Card(
+                        child: ListTile(
+                          leading: const CircleAvatar(backgroundColor: Colors.teal, child: Icon(Icons.psychology, color: Colors.white)),
+                          title: const Text("Recent Research Submissions"),
+                          subtitle: Text("$count leaf scans collected for AI training"),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                          onTap: () => setState(() => _currentIndex = 6),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 30),
                   const Text("Quick Summary", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -1044,7 +1066,7 @@ class _AdminPageState extends State<AdminPage> {
 
   Future<void> _handleSeedDatabase(BuildContext context) async {
     final List<String> allCategories = [
-      "Vegetables", "Fruits", "Dairy", "Grains", "Tea & Coffee", "Spices", "Specialty"
+      "Vegetables", "Fruits", "Dairy", "Grains", "Tea & Coffee", "Spices", "Pulses", "Mushrooms", "Specialty"
     ];
     final List<String> allSeasons = [
       "Spring", "Summer", "Monsoon", "Autumn", "Winter", "All Year"
@@ -1200,6 +1222,80 @@ class _AdminPageState extends State<AdminPage> {
         }
       }
     }
+  }
+
+  Widget _buildResearchManager() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Crop Health Research Data", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          const Text("Manage and review leaf scans submitted by users for AI model fine-tuning.", style: TextStyle(color: Colors.grey)),
+          const SizedBox(height: 20),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('research_submissions').orderBy('timestamp', descending: true).snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                
+                final docs = snapshot.data!.docs;
+                if (docs.isEmpty) {
+                  return const Center(child: Text("No research data submitted yet."));
+                }
+
+                return ListView.builder(
+                  itemCount: docs.length,
+                  itemBuilder: (ctx, i) {
+                    final data = docs[i].data() as Map<String, dynamic>;
+                    final timestamp = data['timestamp'] as Timestamp?;
+                    final dateStr = timestamp != null ? timestamp.toDate().toString().split('.')[0] : 'N/A';
+                    
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                data['imageUrl'] ?? '',
+                                width: 80,
+                                height: 80,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 40),
+                              ),
+                            ),
+                            const SizedBox(width: 15),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(data['predictedLabel'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                  Text("Confidence: ${((data['confidence'] ?? 0) * 100).toStringAsFixed(1)}%", style: const TextStyle(color: Colors.green, fontSize: 13)),
+                                  Text("Submitted: $dateStr", style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.red),
+                              onPressed: () => FirebaseFirestore.instance.collection('research_submissions').doc(docs[i].id).delete(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildAnnouncementManager() {
