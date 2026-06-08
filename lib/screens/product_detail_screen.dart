@@ -152,7 +152,11 @@ class ProductDetailScreen extends StatelessWidget {
 
   Widget _buildProductImage(String imagePath) {
     if (imagePath.startsWith('http')) {
-      return Image.network(imagePath, height: 220, fit: BoxFit.contain,
+      return Image.network(
+          imagePath,
+          key: ValueKey(imagePath), // Forces reload when URL changes
+          height: 220,
+          fit: BoxFit.contain,
           errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100));
     } else if (imagePath.startsWith('data:image')) {
       try {

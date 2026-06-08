@@ -74,9 +74,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               {'name': 'Fruits', 'icon': Icons.apple_rounded},
               {'name': 'Dairy', 'icon': Icons.water_drop_rounded},
               {'name': 'Grains', 'icon': Icons.grain_rounded},
-              {'name': 'Herbs', 'icon': Icons.local_florist_rounded},
-              {'name': 'Organic', 'icon': Icons.spa_rounded},
-              {'name': 'Seasonal', 'icon': Icons.wb_sunny_rounded},
+              {'name': 'Pulses', 'icon': Icons.lens_blur},
+              {'name': 'Mushrooms', 'icon': Icons.spa},
+              {'name': 'Tea & Coffee', 'icon': Icons.local_cafe_outlined},
+              {'name': 'Spices', 'icon': Icons.flare},
             ];
             _isLoadingCategories = false;
 
@@ -304,6 +305,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     if (image.startsWith('http')) {
       return Image.network(
         image,
+        key: ValueKey(image), // Forces reload when the URL changes in Firestore
         width: double.infinity,
         fit: BoxFit.cover,
         loadingBuilder: (context, child, loadingProgress) {
