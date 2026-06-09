@@ -63,4 +63,26 @@ class LocationService {
   double calculateDistance(double startLat, double startLng, double endLat, double endLng) {
     return Geolocator.distanceBetween(startLat, startLng, endLat, endLng) / 1000; // in km
   }
+
+  Future<List<Map<String, dynamic>>> searchLocation(String query) async {
+    if (query.isEmpty) return [];
+    try {
+      final url = "https://nominatim.openstreetmap.org/search?q=${Uri.encodeComponent(query)}&format=json&limit=5&addressdetails=1";
+      final response = await http.get(Uri.parse(url), headers: {
+        'User-Agent': 'AgriDirect-Nepal/1.0'
+      }).timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final List data = json.decode(response.body);
+        return data.map((item) => {
+          'display_name': item['display_name'],
+          'lat': double.parse(item['lat']),
+          'lng': double.parse(item['lon']),
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint("Search Location Error: $e");
+    }
+    return [];
+  }
 }
