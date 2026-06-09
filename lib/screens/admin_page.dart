@@ -869,9 +869,9 @@ class _AdminPageState extends State<AdminPage> {
                     child: MapLibreMap(
                       initialCameraPosition: CameraPosition(
                         target: LatLng(lat, lng),
-                        zoom: 14,
+                        zoom: 14.5,
                       ),
-                      styleString: "https://tiles.openfreemap.org/styles/liberty",
+                      styleString: "https://tiles.openfreemap.org/styles/positron",
                       onMapCreated: (controller) {
                         controller.addSymbol(SymbolOptions(
                           geometry: LatLng(lat, lng),
