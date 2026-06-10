@@ -6,6 +6,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'disease_library_screen.dart';
+import '../utils/translations.dart';
 
 class CropHealthScreen extends StatefulWidget {
   const CropHealthScreen({super.key});
@@ -19,6 +20,7 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
   bool _isAnalyzing = false;
   String? _diagnosisResult;
   double? _confidence;
+  bool _isNepali = false;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -110,6 +112,20 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.green),
+        actions: [
+          Row(
+            children: [
+              const Text("EN", style: TextStyle(fontSize: 12)),
+              Switch(
+                value: _isNepali,
+                onChanged: (val) => setState(() => _isNepali = val),
+                activeThumbColor: Colors.green,
+              ),
+              const Text("ने", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+            ],
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -199,6 +215,13 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
   }
 
   Widget _buildAnalysisResult() {
+    final displayResult = _isNepali && _diagnosisResult != null
+        ? AppTranslations.translate(_diagnosisResult!, 'name_ne')
+        : _diagnosisResult;
+    final displaySymptoms = _isNepali && _diagnosisResult != null
+        ? AppTranslations.translate(_diagnosisResult!, 'symptoms_ne')
+        : null;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 25),
       padding: const EdgeInsets.all(16),
@@ -221,11 +244,11 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
           ),
           const SizedBox(height: 16),
           if (_isAnalyzing)
-            const Column(
+            Column(
               children: [
-                CircularProgressIndicator(color: Colors.green),
-                SizedBox(height: 12),
-                Text("Analyzing leaf patterns...", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                const CircularProgressIndicator(color: Colors.green),
+                const SizedBox(height: 12),
+                Text(_isNepali ? "पातको ढाँचा विश्लेषण गर्दै..." : "Analyzing leaf patterns...", style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
               ],
             )
           else if (_diagnosisResult != null)
@@ -237,21 +260,25 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
                     const Icon(Icons.check_circle, color: Colors.green, size: 24),
                     const SizedBox(width: 8),
                     Text(
-                      _diagnosisResult!,
+                      displayResult!,
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Confidence: ${(_confidence! * 100).toStringAsFixed(1)}%",
+                  _isNepali ? "शुद्धता: ${(_confidence! * 100).toStringAsFixed(1)}%" : "Confidence: ${(_confidence! * 100).toStringAsFixed(1)}%",
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                 ),
+                if (displaySymptoms != null) ...[
+                  const SizedBox(height: 12),
+                  Text(displaySymptoms, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic)),
+                ],
                 const SizedBox(height: 12),
                 const Divider(),
                 TextButton(
                   onPressed: () => _showPickerOptions(),
-                  child: const Text("Scan Another Leaf"),
+                  child: Text(_isNepali ? "अर्को पात स्क्यान गर्नुहोस्" : "Scan Another Leaf"),
                 ),
               ],
             ),
