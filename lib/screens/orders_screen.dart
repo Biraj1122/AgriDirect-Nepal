@@ -210,10 +210,10 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                 MapLibreMap(
                   initialCameraPosition: CameraPosition(
                     target: riderPosition ?? const LatLng(UserData.hqLat, UserData.hqLng),
-                    zoom: 12,
+                    zoom: 13.5,
                   ),
                   onMapCreated: _onMapCreated,
-                  styleString: "https://tiles.openfreemap.org/styles/liberty",
+                  styleString: "https://tiles.openfreemap.org/styles/positron",
                 ),
                 Positioned(
                   top: 20,
@@ -257,7 +257,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
               padding: const EdgeInsets.fromLTRB(25, 10, 25, 15),
               child: Column(
                 children: [
-                  Expanded(                              // ✅ steps scroll freely
+                  Expanded(
                     child: SingleChildScrollView(
                       child: Column(
                         children: [
@@ -269,7 +269,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                     ),
                   ),
                   const SizedBox(height: 8),
-                  SizedBox(                             // ✅ button always pinned at bottom
+                  SizedBox(
                     width: double.infinity,
                     height: 55,
                     child: ElevatedButton(
