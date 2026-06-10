@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/translations.dart';
 
 class DiseaseLibraryScreen extends StatefulWidget {
   const DiseaseLibraryScreen({super.key});
@@ -11,6 +12,7 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
   String _selectedCategory = "All";
+  bool _isNepali = false;
 
   final List<String> _categories = ["All", "Potato", "Tomato", "Rice", "Maize"];
 
@@ -96,6 +98,20 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.green),
+        actions: [
+          Row(
+            children: [
+              const Text("EN", style: TextStyle(fontSize: 12)),
+              Switch(
+                value: _isNepali,
+                onChanged: (val) => setState(() => _isNepali = val),
+                activeThumbColor: Colors.green,
+              ),
+              const Text("ने", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -161,6 +177,13 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
   }
 
   Widget _buildDiseaseCard(Map<String, dynamic> disease) {
+    final displayName = _isNepali 
+        ? AppTranslations.translate(disease['name'], 'name_ne') 
+        : disease['name'];
+    final displaySymptoms = _isNepali 
+        ? AppTranslations.translate(disease['name'], 'symptoms_ne') 
+        : disease['symptoms'];
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -189,10 +212,10 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(disease['name'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const SizedBox(height: 4),
                     Text(
-                      disease['symptoms'],
+                      displaySymptoms,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
@@ -202,7 +225,7 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
                       children: [
                         const Icon(Icons.info_outline, size: 14, color: Colors.green),
                         const SizedBox(width: 4),
-                        Text("View Solution", style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
+                        Text(_isNepali ? "उपचार हेर्नुहोस्" : "View Solution", style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ],
@@ -230,6 +253,19 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
   }
 
   void _showDiseaseDetails(Map<String, dynamic> disease) {
+    final displayName = _isNepali 
+        ? AppTranslations.translate(disease['name'], 'name_ne') 
+        : disease['name'];
+    final displaySymptoms = _isNepali 
+        ? AppTranslations.translate(disease['name'], 'symptoms_ne') 
+        : disease['symptoms'];
+    final displayRemedy = _isNepali 
+        ? AppTranslations.translate(disease['name'], 'remedy_ne') 
+        : disease['remedy'];
+    final displayOrganic = _isNepali 
+        ? AppTranslations.translate(disease['name'], 'organic_ne') 
+        : disease['organic'];
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -259,29 +295,29 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
                         IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
                       ],
                     ),
-                    Text(disease['name'], style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    Text(displayName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 20),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(16),
                       child: Image.asset(disease['image'], height: 200, width: double.infinity, fit: BoxFit.cover),
                     ),
                     const SizedBox(height: 25),
-                    _buildSectionHeader(Icons.warning_amber_rounded, "Symptoms", Colors.orange),
+                    _buildSectionHeader(Icons.warning_amber_rounded, _isNepali ? "लक्षणहरू" : "Symptoms", Colors.orange),
                     const SizedBox(height: 8),
-                    Text(disease['symptoms'], style: const TextStyle(fontSize: 15, height: 1.5)),
+                    Text(displaySymptoms, style: const TextStyle(fontSize: 15, height: 1.5)),
                     const SizedBox(height: 25),
-                    _buildSectionHeader(Icons.medication, "Chemical Treatment", Colors.blue),
+                    _buildSectionHeader(Icons.medication, _isNepali ? "रासायनिक उपचार" : "Chemical Treatment", Colors.blue),
                     const SizedBox(height: 8),
-                    Text(disease['remedy'], style: const TextStyle(fontSize: 15, height: 1.5)),
+                    Text(displayRemedy, style: const TextStyle(fontSize: 15, height: 1.5)),
                     const SizedBox(height: 25),
-                    _buildSectionHeader(Icons.eco, "Organic Remedy", Colors.green),
+                    _buildSectionHeader(Icons.eco, _isNepali ? "जैविक उपचार" : "Organic Remedy", Colors.green),
                     const SizedBox(height: 8),
-                    Text(disease['organic'], style: const TextStyle(fontSize: 15, height: 1.5)),
+                    Text(displayOrganic, style: const TextStyle(fontSize: 15, height: 1.5)),
                     const SizedBox(height: 40),
                     ElevatedButton.icon(
                       onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.check, color: Colors.white),
-                      label: const Text("Got it", style: TextStyle(color: Colors.white)),
+                      label: Text(_isNepali ? "बुझें" : "Got it", style: const TextStyle(color: Colors.white)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green,
                         padding: const EdgeInsets.symmetric(vertical: 15),

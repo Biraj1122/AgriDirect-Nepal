@@ -30,9 +30,12 @@ class _SignupScreenState extends State<SignupScreen> {
   bool hideConfirmPassword = true;
   bool _confirmTouched = false;
 
-  bool isValidEmail(String email) {
-    String pattern = r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$';
-    return RegExp(pattern).hasMatch(email);
+  bool isValidEmailOrUsername(String input) {
+    if (input.contains('@')) {
+      String pattern = r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$';
+      return RegExp(pattern).hasMatch(input);
+    }
+    return input.isNotEmpty && !input.contains(' ');
   }
 
   bool isValidNepaliPhone(String phone) {
@@ -201,15 +204,15 @@ class _SignupScreenState extends State<SignupScreen> {
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return "Please enter email";
+                      return "Please enter email or username";
                     }
-                    if (!isValidEmail(value)) {
-                      return "Enter valid email";
+                    if (!isValidEmailOrUsername(value.trim())) {
+                      return "Enter valid email or username";
                     }
                     return null;
                   },
                   decoration: InputDecoration(
-                    hintText: "Email Address",
+                    hintText: "Email or Gmail Username",
                     prefixIcon: const Icon(Icons.email_outlined),
                     filled: true,
                     fillColor: Colors.grey.shade100,
@@ -333,6 +336,11 @@ class _SignupScreenState extends State<SignupScreen> {
                         final messenger = ScaffoldMessenger.of(context);
                         final navigator = Navigator.of(context);
                         
+                        String email = emailController.text.trim();
+                        if (!email.contains('@')) {
+                          email = "$email@gmail.com";
+                        }
+
                         try {
                           showDialog(
                             context: context,
@@ -343,7 +351,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                           UserCredential userCredential =
                           await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                            email: emailController.text.trim(),
+                            email: email,
                             password: passwordController.text.trim(),
                           );
 
@@ -351,7 +359,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           final Map<String, dynamic> userData = {
                             'uid': userCredential.user!.uid,
                             'fullName': firstNameController.text.trim(),
-                            'email': emailController.text.trim(),
+                            'email': email,
                             'phone': phoneController.text.trim(),
                             'role': selectedRole,
                             'createdAt': FieldValue.serverTimestamp(),

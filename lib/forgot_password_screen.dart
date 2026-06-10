@@ -55,9 +55,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
     setState(() => _isLoading = true);
 
+    String email = emailController.text.trim();
+    if (!email.contains('@')) {
+      email = "$email@gmail.com";
+    }
+
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(
-        email: emailController.text.trim(),
+        email: email,
       );
 
       if (mounted) {
