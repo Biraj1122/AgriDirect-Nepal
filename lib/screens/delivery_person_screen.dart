@@ -22,7 +22,6 @@ import 'orders_screen.dart';
 const _kGreen = Color(0xFF2E7D32);
 const _kBg = Color(0xFFF4F6F0);
 
-// ====================== ROOT NAVIGATION CORE ======================
 class DeliveryPersonScreen extends StatefulWidget {
   const DeliveryPersonScreen({super.key});
 
