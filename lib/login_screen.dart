@@ -33,24 +33,31 @@ class _LoginScreenState extends State<LoginScreen> {
         builder: (context) => const Center(child: CircularProgressIndicator()),
       );
 
-      // On Web, you must provide the clientId explicitly
-      final GoogleSignIn googleSignIn = GoogleSignIn(
-        clientId: kIsWeb ? "931317017971-di2o9anp3f1tpqscajiv3435rbpvnfu7.apps.googleusercontent.com" : null,
-      );
+      UserCredential userCredential;
 
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser == null) {
-        if (mounted) Navigator.pop(context);
-        return;
+      if (kIsWeb) {
+        // Use Firebase Auth's direct popup for Web (more stable than google_sign_in package)
+        GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        // You can add scopes if needed: googleProvider.addScope('https://www.googleapis.com/auth/contacts.readonly');
+        userCredential = await FirebaseAuth.instance.signInWithPopup(googleProvider);
+      } else {
+        // Standard flow for Android/iOS
+        final GoogleSignIn googleSignIn = GoogleSignIn();
+        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+        
+        if (googleUser == null) {
+          if (mounted) Navigator.pop(context);
+          return;
+        }
+
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final AuthCredential credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
       }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
       final User? user = userCredential.user;
 
       if (user != null && mounted) {
