@@ -57,7 +57,9 @@ class AppTranslations {
   };
 
   static String translate(String key, String field, {bool isNepali = true}) {
-    if (!isNepali) return ""; // Default fallback logic could be here
-    return diseaseData[key]?[field] ?? "";
+    if (!isNepali) return key;
+    final data = diseaseData[key];
+    if (data == null) return key;
+    return data[field] ?? key;
   }
 }
