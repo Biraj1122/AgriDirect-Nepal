@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'signup_screen.dart';
 import 'forgot_password_screen.dart';
 import 'navigation_screen.dart';
@@ -23,10 +25,81 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
-  /// EMAIL VALIDATION
-  bool isValidEmail(String email) {
-    String pattern = r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$';
-    return RegExp(pattern).hasMatch(email);
+  /// GOOGLE SIGN IN
+  Future<void> _signInWithGoogle() async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      UserCredential userCredential;
+
+      if (kIsWeb) {
+        // Use Firebase Auth's direct popup for Web (more stable than google_sign_in package)
+        GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        // You can add scopes if needed: googleProvider.addScope('https://www.googleapis.com/auth/contacts.readonly');
+        userCredential = await FirebaseAuth.instance.signInWithPopup(googleProvider);
+      } else {
+        // Standard flow for Android/iOS
+        final GoogleSignIn googleSignIn = GoogleSignIn();
+        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+        
+        if (googleUser == null) {
+          if (mounted) Navigator.pop(context);
+          return;
+        }
+
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final AuthCredential credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
+        userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      }
+
+      final User? user = userCredential.user;
+
+      if (user != null && mounted) {
+        // Sync with Firestore
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        
+        if (!userDoc.exists) {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'fullName': user.displayName ?? 'Google User',
+            'email': user.email,
+            'role': 'Customer', // Default role
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
+
+        if (mounted) {
+          Navigator.pop(context); // Pop loading
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => NavigationScreen(userName: user.displayName ?? "User"),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Pop loading
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Google Sign-In failed: $e")));
+      }
+    }
+  }
+
+  /// EMAIL OR USERNAME VALIDATION
+  bool isValidEmailOrUsername(String input) {
+    if (input.contains('@')) {
+      String pattern = r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$';
+      return RegExp(pattern).hasMatch(input);
+    }
+    // If no @, check if it's a valid username (alphanumeric, dots, underscores)
+    return input.isNotEmpty && !input.contains(' ');
   }
 
   /// PHONE VALIDATION
@@ -38,7 +111,7 @@ class _LoginScreenState extends State<LoginScreen> {
   /// EMAIL OR PHONE
   bool isValidLoginInput(String input) {
     input = input.trim();
-    return isValidEmail(input) || isValidPhone(input);
+    return isValidEmailOrUsername(input) || isValidPhone(input);
   }
 
   /// PASSWORD VALIDATION (At least 6 characters)
@@ -87,12 +160,12 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: emailController,
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) return "Enter your email";
-                    if (!isValidEmail(value.trim())) return "Enter a valid email address";
+                    if (value == null || value.trim().isEmpty) return "Enter your email or username";
+                    if (!isValidEmailOrUsername(value.trim())) return "Enter a valid email or username";
                     return null;
                   },
                   decoration: InputDecoration(
-                    hintText: "Email Address",
+                    hintText: "Email or Gmail Username",
                     contentPadding: const EdgeInsets.symmetric(vertical: 16),
                     prefixIcon: Icon(Icons.email_outlined, size: 20, color: Colors.grey.shade600),
                     filled: true,
@@ -146,8 +219,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     onPressed: () async {
                       if (_formKey.currentState!.validate()) {
-                        final String email = emailController.text.trim();
+                        String email = emailController.text.trim();
                         final String password = passwordController.text.trim();
+
+                        // Auto-append @gmail.com if no domain is provided
+                        if (!email.contains('@')) {
+                          email = "$email@gmail.com";
+                        }
 
                         try {
                           // Show loading indicator
@@ -259,7 +337,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 30),
                 Row(
                   children: [
-                    Expanded(child: socialButton("assets/images/Gmail_icon_(2020).svg.png", "Google")),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: _signInWithGoogle,
+                        child: socialButton("assets/images/Gmail_icon_(2020).svg.png", "Google"),
+                      ),
+                    ),
                     const SizedBox(width: 15),
                     Expanded(child: socialButton("assets/images/Facebook.png", "Facebook")),
                   ],

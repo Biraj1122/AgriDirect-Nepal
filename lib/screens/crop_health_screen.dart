@@ -1,11 +1,16 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'disease_library_screen.dart';
+import '../utils/translations.dart';
+import '../utils/ai_helper.dart';
+import '../utils/gemini_helper.dart';
+import 'dart:io' show File;
 
 class CropHealthScreen extends StatefulWidget {
   const CropHealthScreen({super.key});
@@ -19,8 +24,38 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
   bool _isAnalyzing = false;
   String? _diagnosisResult;
   double? _confidence;
+  bool _isNepali = false;
+  final AIHelper _aiHelper = AIHelper();
+  final GeminiHelper _geminiHelper = GeminiHelper();
+  String? _geminiAnalysis;
+  bool _isGeminiLoading = false;
 
   final ImagePicker _picker = ImagePicker();
+
+  Future<void> _analyzeWithExpert() async {
+    if (_imageFile == null) return;
+
+    setState(() {
+      _isGeminiLoading = true;
+    });
+
+    try {
+      // Pulls from local expert database (translations.dart)
+      final result = await _geminiHelper.analyzeCropHealth(_imageFile!, _isNepali, localLabel: _diagnosisResult);
+      
+      if (mounted) {
+        setState(() {
+          _isGeminiLoading = false;
+          _geminiAnalysis = result['analysis'];
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isGeminiLoading = false;
+        _geminiAnalysis = "Local report generation failed.";
+      });
+    }
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -47,29 +82,48 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
       _isAnalyzing = true;
     });
 
-    // Simulate AI analysis delay
-    await Future.delayed(const Duration(seconds: 3));
-
-    // For now, we use a mock diagnosis logic.
-    // In the future, this will call a TFLite model or a Cloud Function.
-    final mockResults = [
-      {"label": "Potato: Late Blight", "confidence": 0.94},
-      {"label": "Tomato: Bacterial Spot", "confidence": 0.88},
-      {"label": "Healthy Leaf", "confidence": 0.97},
-      {"label": "Rice: Brown Spot", "confidence": 0.76},
-    ];
-
-    final result = mockResults[DateTime.now().second % mockResults.length];
-
-    if (mounted) {
-      setState(() {
-        _isAnalyzing = false;
-        _diagnosisResult = result['label'] as String;
-        _confidence = result['confidence'] as double;
-      });
+    try {
+      if (kIsWeb) {
+        // Fallback to mock for Web as TFLite Web requires manual wasm setup
+        await Future.delayed(const Duration(seconds: 2));
+        final mockResults = [
+          {"label": "Potato: Late Blight", "confidence": 0.94},
+          {"label": "Tomato: Bacterial Spot", "confidence": 0.88},
+          {"label": "Healthy Leaf", "confidence": 0.97},
+          {"label": "Rice: Brown Spot", "confidence": 0.76},
+        ];
+        final result = mockResults[DateTime.now().second % mockResults.length];
+        if (mounted) {
+          setState(() {
+            _isAnalyzing = false;
+            _diagnosisResult = result['label'] as String;
+            _confidence = result['confidence'] as double;
+          });
+        }
+      } else {
+        // Real AI Inference for Mobile
+        final result = await _aiHelper.runInference(_imageFile!);
+        
+        if (mounted) {
+          setState(() {
+            _isAnalyzing = false;
+            _diagnosisResult = result['label'];
+            _confidence = result['confidence'];
+          });
+        }
+      }
       
-      // Upload for research (optional background task)
+      // Upload for research
       _uploadForResearch();
+    } catch (e) {
+      debugPrint("Analysis Error: $e");
+      if (mounted) {
+        setState(() {
+          _isAnalyzing = false;
+          _diagnosisResult = "Analysis Failed";
+          _confidence = 0.0;
+        });
+      }
     }
   }
 
@@ -106,10 +160,24 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F5),
       appBar: AppBar(
-        title: const Text("Crop Health AI (Beta)", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: const Text("Crop Health (Stable)", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.green),
+        actions: [
+          Row(
+            children: [
+              const Text("EN", style: TextStyle(fontSize: 12)),
+              Switch(
+                value: _isNepali,
+                onChanged: (val) => setState(() => _isNepali = val),
+                activeThumbColor: Colors.green,
+              ),
+              const Text("ने", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 8),
+            ],
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -199,6 +267,13 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
   }
 
   Widget _buildAnalysisResult() {
+    final displayResult = _isNepali && _diagnosisResult != null
+        ? AppTranslations.translate(_diagnosisResult!, 'name_ne')
+        : _diagnosisResult;
+    final displaySymptoms = _isNepali && _diagnosisResult != null
+        ? AppTranslations.translate(_diagnosisResult!, 'symptoms_ne')
+        : null;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 25),
       padding: const EdgeInsets.all(16),
@@ -221,11 +296,11 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
           ),
           const SizedBox(height: 16),
           if (_isAnalyzing)
-            const Column(
+            Column(
               children: [
-                CircularProgressIndicator(color: Colors.green),
-                SizedBox(height: 12),
-                Text("Analyzing leaf patterns...", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+                const CircularProgressIndicator(color: Colors.green),
+                const SizedBox(height: 12),
+                Text(_isNepali ? "पातको ढाँचा विश्लेषण गर्दै..." : "Analyzing leaf patterns...", style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
               ],
             )
           else if (_diagnosisResult != null)
@@ -237,21 +312,76 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
                     const Icon(Icons.check_circle, color: Colors.green, size: 24),
                     const SizedBox(width: 8),
                     Text(
-                      _diagnosisResult!,
+                      displayResult!,
                       style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Confidence: ${(_confidence! * 100).toStringAsFixed(1)}%",
+                  _isNepali ? "शुद्धता: ${(_confidence! * 100).toStringAsFixed(1)}%" : "Confidence: ${(_confidence! * 100).toStringAsFixed(1)}%",
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                 ),
-                const SizedBox(height: 12),
+                if (displaySymptoms != null) ...[
+                  const SizedBox(height: 12),
+                  Text(displaySymptoms, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontStyle: FontStyle.italic)),
+                ],
+                const SizedBox(height: 20),
                 const Divider(),
+                const SizedBox(height: 10),
+                if (_geminiAnalysis == null && !_isGeminiLoading)
+                  ElevatedButton.icon(
+                    onPressed: _analyzeWithExpert,
+                    icon: const Icon(Icons.description, size: 18),
+                    label: Text(_isNepali ? "विस्तृत विशेषज्ञ रिपोर्ट प्राप्त गर्नुहोस्" : "Get Detailed Expert Report"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade700,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  )
+                else if (_isGeminiLoading)
+                  const Column(
+                    children: [
+                      CircularProgressIndicator(strokeWidth: 2),
+                      SizedBox(height: 8),
+                      Text("Generating report...", style: TextStyle(fontSize: 12)),
+                    ],
+                  )
+                else if (_geminiAnalysis != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.green.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.assignment, color: Colors.green, size: 16),
+                            SizedBox(width: 8),
+                            Text("Expert Analysis Report:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green)),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(_geminiAnalysis!, style: const TextStyle(fontSize: 13, height: 1.4)),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 12),
                 TextButton(
-                  onPressed: () => _showPickerOptions(),
-                  child: const Text("Scan Another Leaf"),
+                  onPressed: () {
+                    setState(() {
+                      _imageFile = null;
+                      _diagnosisResult = null;
+                      _geminiAnalysis = null;
+                    });
+                    _showPickerOptions();
+                  },
+                  child: Text(_isNepali ? "अर्को पात स्क्यान गर्नुहोस्" : "Scan Another Leaf"),
                 ),
               ],
             ),
