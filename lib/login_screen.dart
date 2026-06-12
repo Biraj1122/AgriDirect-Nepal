@@ -8,6 +8,7 @@ import 'forgot_password_screen.dart';
 import 'navigation_screen.dart';
 import 'screens/admin_page.dart';
 import 'farmer_screen.dart';
+import 'package:farmtech_agridirect/screens/delivery_person_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -277,7 +278,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               if (role == 'Farmer') {
                                 Navigator.pushReplacement(
                                   context,
-                                  MaterialPageRoute(builder: (context) => const FarmerScreen()),
+                                  MaterialPageRoute(builder: (
+                                      context) => const FarmerScreen()),
+                                );
+                              } else if (role == 'Delivery Person'){
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => const DeliveryPersonScreen()),
                                 );
                               } else {
                                 // Default target for Customers or unassigned roles
