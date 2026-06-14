@@ -368,6 +368,18 @@ class _SignupScreenState extends State<SignupScreen> {
                           if (selectedRole == 'Farmer') {
                             userData['farmName'] = farmNameController.text.trim();
                             userData['farmLocation'] = farmLocationController.text.trim();
+                            
+                            // Save to dedicated farmers collection
+                            await FirebaseFirestore.instance
+                                .collection('farmers')
+                                .doc(userCredential.user!.uid)
+                                .set(userData);
+                          } else if (selectedRole == 'Delivery Person') {
+                            // Save to dedicated riders collection
+                            await FirebaseFirestore.instance
+                                .collection('riders')
+                                .doc(userCredential.user!.uid)
+                                .set(userData);
                           }
 
                           await FirebaseFirestore.instance

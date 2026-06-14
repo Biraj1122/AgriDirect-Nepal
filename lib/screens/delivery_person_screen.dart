@@ -371,6 +371,10 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
           return data['deliveryId'] == null || data['deliveryId'] == '';
         }).toList();
 
+        if (myOrders.isEmpty && available.isEmpty) {
+          return const Center(child: Text("No active delivery requests found.", style: TextStyle(color: Colors.grey)));
+        }
+
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -408,18 +412,82 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
           itemCount: historyDocs.length,
           itemBuilder: (context, idx) {
             final data = historyDocs[idx].data() as Map<String, dynamic>;
+            final paymentMethod = data['paymentMethod'] ?? 'COD';
+            final isCOD = paymentMethod == 'COD';
+            final shortId = historyDocs[idx].id.substring(0, min(6, historyDocs[idx].id.length));
+
             return Card(
               color: Colors.white,
-              margin: const EdgeInsets.only(bottom: 8),
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: ListTile(
-                leading: const Icon(Icons.check_circle, color: _kGreen),
-                title: Text("Order #${historyDocs[idx].id.substring(0, min(6, historyDocs[idx].id.length))} Delivered"),
-                subtitle: Text(data['deliveryAddress'] ?? data['address'] ?? 'No Address Data'),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading: const Icon(Icons.check_circle, color: _kGreen, size: 32),
+                title: Text("Order #$shortId Delivered", style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 4),
+                    Text(data['deliveryAddress'] ?? data['address'] ?? 'No Address Data', style: const TextStyle(fontSize: 12)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: isCOD ? Colors.red.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            isCOD ? "COD" : "ONLINE",
+                            style: TextStyle(color: isCOD ? Colors.red : Colors.blue, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        if (isCOD) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+                            child: const Text("PENDING", style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+                          )
+                        ]
+                      ],
+                    ),
+                  ],
+                ),
+                trailing: Text("Rs. ${data['total'] != null ? (data['total'] as num).toStringAsFixed(2) : '0.00'}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen)),
+                onTap: () {
+                  if (!isCOD) {
+                    _showReceipt(context, shortId, data);
+                  }
+                },
               ),
             );
           },
         );
       },
+    );
+  }
+
+  void _showReceipt(BuildContext context, String shortId, Map<String, dynamic> data) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Receipt #$shortId"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Status: Paid Online", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            Text("Customer: ${data['userName'] ?? 'N/A'}"),
+            Text("Total: Rs. ${data['total'] ?? 0}"),
+            const SizedBox(height: 10),
+            const Center(child: Icon(Icons.receipt_long, size: 64, color: Colors.grey)),
+          ],
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))],
+      ),
     );
   }
 
@@ -588,68 +656,102 @@ class _EarningsTabState extends State<_EarningsTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.all(16),
-      child: ListView(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [_kGreen, Colors.teal]),
-                borderRadius: BorderRadius.circular(16)
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text("MY WALLET BALANCE", style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
-                SizedBox(height: 4),
-                Text("Rs. 18,450.00", style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text("Accepted Payment Modes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-          const SizedBox(height: 12),
-          _paymentModeRow("Cash On Delivery (COD)", Icons.payments, Colors.amber.shade900),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: _showImageOptions,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
-              child: Column(
-                children: [
-                  Row(
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('orders')
+          .where('deliveryId', isEqualTo: widget.user.uid)
+          .where('status', isEqualTo: 'Delivered')
+          .snapshots(),
+      builder: (context, snapshot) {
+        double totalEarnings = 0;
+        List<Map<String, dynamic>> recentEarnings = [];
+
+        if (snapshot.hasData) {
+          for (var doc in snapshot.data!.docs) {
+            final data = doc.data() as Map<String, dynamic>;
+            final price = (data['total'] ?? 0).toDouble();
+            // Assuming delivery person gets a flat fee or percentage? 
+            // Let's assume they get the 'deliveryFee' if present, otherwise let's say Rs. 100 per delivery for demo
+            final earning = (data['deliveryFee'] ?? 100).toDouble();
+            totalEarnings += earning;
+            recentEarnings.add({
+              'id': doc.id.substring(0, min(6, doc.id.length)),
+              'amount': earning,
+            });
+          }
+        }
+
+        return Container(
+          color: Colors.white,
+          padding: const EdgeInsets.all(16),
+          child: ListView(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [_kGreen, Colors.teal]),
+                    borderRadius: BorderRadius.circular(16)
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("MY WALLET BALANCE", style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text("Rs. ${totalEarnings.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    const Text("Total Earned This Month", style: TextStyle(color: Colors.white60, fontSize: 10)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text("Accepted Payment Modes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 12),
+              _paymentModeRow("Cash On Delivery (COD)", Icons.payments, Colors.amber.shade900),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: _showImageOptions,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
+                  child: Column(
                     children: [
-                      Icon(Icons.qr_code_scanner, color: Colors.blue.shade800),
-                      const SizedBox(width: 12),
-                      const Text("Tap here to update/manage QR Code", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      Row(
+                        children: [
+                          Icon(Icons.qr_code_scanner, color: Colors.blue.shade800),
+                          const SizedBox(width: 12),
+                          const Text("Tap here to update/manage QR Code", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        ],
+                      ),
+                      if (_qrCodeImgPath != null) ...[
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          height: 180,
+                          width: double.infinity,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: kIsWeb || _qrCodeImgPath!.startsWith('http')
+                                ? Image.network(_qrCodeImgPath!, fit: BoxFit.contain)
+                                : Image.file(File(_qrCodeImgPath!), fit: BoxFit.contain),
+                          ),
+                        )
+                      ]
                     ],
                   ),
-                  if (_qrCodeImgPath != null) ...[
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 180,
-                      width: double.infinity,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: kIsWeb || _qrCodeImgPath!.startsWith('http')
-                            ? Image.network(_qrCodeImgPath!, fit: BoxFit.contain)
-                            : Image.file(File(_qrCodeImgPath!), fit: BoxFit.contain),
-                      ),
-                    )
-                  ]
-                ],
+                ),
               ),
-            ),
+              const SizedBox(height: 16),
+              const Text("Recent Shipments Income", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              if (recentEarnings.isEmpty) 
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Text("No earnings yet.", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                )
+              else
+                ...recentEarnings.reversed.take(10).map((e) => _paymentHistoryRow("Delivery complete #${e['id']}", "Rs. ${e['amount']}")),
+            ],
           ),
-          const SizedBox(height: 16),
-          const Text("Recent Shipments Income", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          _paymentHistoryRow("Delivery complete #1980", "Rs. 600.00"),
-          _paymentHistoryRow("Delivery complete #4410", "Rs. 1,450.00"),
-        ],
-      ),
+        );
+      }
     );
   }
 
@@ -773,19 +875,32 @@ class _ProfileTabState extends State<_ProfileTab> {
     setState(() => _isSaving = true);
 
     final updates = <String, dynamic>{
+      'fullName': _nameController.text.trim(), // Consistent with signup
       'name': _nameController.text.trim(),
       'phone': _phoneController.text.trim(),
       'vehicleDetails': _vehicleController.text.trim(),
       'updatedAt': FieldValue.serverTimestamp()
     };
 
-    if (_profileImgPath == null) updates['profileImageUrl'] = FieldValue.delete();
-    else updates['profileImageUrl'] = _profileImgPath;
+    if (_profileImgPath == null) {
+      updates['profileImageUrl'] = FieldValue.delete();
+    } else {
+      updates['profileImageUrl'] = _profileImgPath;
+    }
 
-    if (_licenseImgPath == null) updates['licenseImageUrl'] = FieldValue.delete();
-    else updates['licenseImageUrl'] = _licenseImgPath;
+    if (_licenseImgPath == null) {
+      updates['licenseImageUrl'] = FieldValue.delete();
+    } else {
+      updates['licenseImageUrl'] = _licenseImgPath;
+    }
 
+    // Save to both collections (generic users and specific riders section)
     await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set(
+        updates,
+        SetOptions(merge: true)
+    );
+
+    await FirebaseFirestore.instance.collection('riders').doc(widget.user.uid).set(
         updates,
         SetOptions(merge: true)
     );
@@ -810,7 +925,7 @@ class _ProfileTabState extends State<_ProfileTab> {
                   onTap: () => _showImageOptions(isProfile: true),
                   child: CircleAvatar(
                     radius: 44,
-                    backgroundColor: _kGreen.withOpacity(0.1),
+                    backgroundColor: _kGreen.withValues(alpha: 0.1),
                     backgroundImage: _profileImgPath != null
                         ? (kIsWeb || _profileImgPath!.startsWith('http')
                         ? NetworkImage(_profileImgPath!)
@@ -923,7 +1038,7 @@ class _OrderCard extends StatelessWidget {
                 Text("Order #$shortId", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: _kGreen.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(color: _kGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
                   child: Text(status, style: const TextStyle(color: _kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
                 )
               ],
@@ -931,7 +1046,7 @@ class _OrderCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(address, style: const TextStyle(color: Colors.black87, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 4),
-            Text("Price: Rs. $total", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen, fontSize: 12)),
+            Text("Price: Rs. ${total is num ? total.toStringAsFixed(2) : total}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen, fontSize: 12)),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -966,46 +1081,85 @@ class _OrderCard extends StatelessWidget {
 
   Future<void> _advance(BuildContext context, String orderId, String status, Map<String, dynamic> data, String riderUid) async {
     String next = 'Delivered';
-    if (status == 'Processing' || status == 'Shipped') next = 'Picked Up';
-    else if (status == 'Picked Up') next = 'On the way';
-
-    final shortId = orderId.substring(0, min(6, orderId.length));
-
-    await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-      'status': next,
-      'deliveryId': riderUid,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    final customerId = data['userId'];
-    if (customerId != null) {
-      String title = 'Order Status Updated';
-      String body = 'Your order #$shortId status is now $next';
-
-      if (next == 'Picked Up') {
-        title = '📦 Order Picked Up';
-        body = 'Rider has picked up your package #$shortId.';
-      } else if (next == 'On the way') {
-        title = '🚴 On The Way';
-        body = 'Rider is coming to your location with package #$shortId.';
-      } else if (next == 'Delivered') {
-        title = '✅ Delivered';
-        body = 'Package #$shortId has been dropped off. Thank you!';
-      }
-
-      await FirebaseFirestore.instance.collection('users').doc(customerId).collection('notifications').add({
-        'title': title,
-        'body': body,
-        'type': 'delivery_status',
-        'status': next,
-        'orderId': orderId,
-        'createdAt': FieldValue.serverTimestamp(),
-        'isRead': false,
-      });
+    if (status == 'Processing' || status == 'Shipped') {
+      next = 'Picked Up';
+    } else if (status == 'Picked Up') {
+      next = 'On the way';
     }
 
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Status changed to: $next")));
+    try {
+      // Fetch the actual name from the Rider's Firestore profile (from the riders collection)
+      final riderDoc = await FirebaseFirestore.instance.collection('riders').doc(riderUid).get();
+      // Fallback to users collection if not found in riders
+      final riderData = riderDoc.exists 
+          ? riderDoc.data() 
+          : (await FirebaseFirestore.instance.collection('users').doc(riderUid).get()).data();
+      
+      final riderName = riderData?['fullName'] ?? riderData?['name'] ?? "Rider";
+
+      // 1. Verify the order isn't already taken by someone else
+      final freshSnap = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
+      final freshData = freshSnap.data();
+      if (freshData != null && 
+          freshData['deliveryId'] != null && 
+          freshData['deliveryId'] != "" && 
+          freshData['deliveryId'] != riderUid) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Sorry, this order was just accepted by another rider."), backgroundColor: Colors.red),
+          );
+        }
+        return;
+      }
+
+      // 2. Perform the update
+      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+        'status': next,
+        'deliveryId': riderUid,
+        'deliveryName': riderName, // Dynamically fetched name
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      final shortId = orderId.substring(0, min(6, orderId.length));
+      final customerId = data['userId'];
+
+      if (customerId != null) {
+        String title = 'Order Status Updated';
+        String body = 'Your order #$shortId status is now $next';
+
+        if (next == 'Picked Up') {
+          title = '📦 Order Picked Up';
+          body = 'Rider has picked up your package #$shortId.';
+        } else if (next == 'On the way') {
+          title = '🚴 On The Way';
+          body = 'Rider is coming to your location with package #$shortId.';
+        } else if (next == 'Delivered') {
+          title = '✅ Delivered';
+          body = 'Package #$shortId has been dropped off. Thank you!';
+        }
+
+        await FirebaseFirestore.instance.collection('users').doc(customerId).collection('notifications').add({
+          'title': title,
+          'body': body,
+          'type': 'delivery_status',
+          'status': next,
+          'orderId': orderId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'isRead': false,
+        });
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Success: Status is now $next"), backgroundColor: _kGreen)
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red)
+        );
+      }
     }
   }
 }
