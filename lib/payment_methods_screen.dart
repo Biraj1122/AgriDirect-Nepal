@@ -1,3 +1,4 @@
+import 'package:farmtech_agridirect/user_data.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -26,6 +27,7 @@ class PaymentMethodsScreen extends StatefulWidget {
 
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   bool _isProcessing = false;
+  String _selectedMethod = 'COD'; // Default to Cash on Delivery
 
   Future<void> _processPayment() async {
     setState(() => _isProcessing = true);
@@ -34,16 +36,24 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
       final user = FirebaseAuth.instance.currentUser;
       String? orderId;
       if (user != null) {
+        // Fetch user phone from Firestore profile
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final userPhone = userDoc.data()?['phone'] ?? "No Number";
+
         // Save Order to Firestore
         final docRef = await FirebaseFirestore.instance.collection('orders').add({
           'userId': user.uid,
           'userName': user.displayName ?? "User",
+          'userPhone': userPhone,
           'subtotal': widget.subtotal,
           'deliveryFee': widget.deliveryFee,
           'total': widget.total,
-          'lat': widget.selectedLat,
-          'lng': widget.selectedLng,
-          'status': 'Pending',
+          'lat': widget.selectedLat ?? UserData.defaultLat,
+          'lng': widget.selectedLng ?? UserData.defaultLng,
+          'deliveryAddress': UserData.defaultAddress ?? 'No Address Data',
+          'status': 'Processing',
+          'paymentMethod': _selectedMethod,
+          'paymentStatus': _selectedMethod == 'COD' ? 'Pending' : 'Paid',
           'createdAt': FieldValue.serverTimestamp(),
           'items': cartModel.items.map((item) => {
             'title': item.title,
@@ -51,6 +61,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             'image': item.image,
             'unit': item.unit,
           }).toList(),
+          'itemsSummary': cartModel.items.map((e) => e.title).join(", "),
         });
         orderId = docRef.id;
       }
@@ -87,7 +98,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                   color: Colors.green, size: 60),
               const SizedBox(height: 15),
               const Text(
-                "Payment Successful",
+                "Order Placed Successfully",
                 style: TextStyle(
                     fontWeight: FontWeight.bold, fontSize: 18),
               ),
@@ -123,13 +134,21 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(18),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _box("Subtotal", widget.subtotal),
             _box("Delivery", widget.deliveryFee),
             _box("Total", widget.total, highlight: true),
+
+            const SizedBox(height: 25),
+            const Text("Select Payment Method", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 15),
+
+            _methodTile("COD", "Cash On Delivery", Icons.payments),
+            _methodTile("ONLINE", "Online Payment", Icons.account_balance_wallet),
 
             const SizedBox(height: 30),
 
@@ -140,12 +159,38 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
                 onPressed: _isProcessing ? null : _processPayment,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _isProcessing
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Confirm Payment", style: TextStyle(color: Colors.white)),
+                    : Text(_selectedMethod == 'COD' ? "Confirm Order" : "Pay Now & Confirm", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _methodTile(String value, String title, IconData icon) {
+    bool isSel = _selectedMethod == value;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedMethod = value),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSel ? Colors.green : Colors.transparent, width: 2),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: isSel ? Colors.green : Colors.grey),
+            const SizedBox(width: 15),
+            Text(title, style: TextStyle(fontWeight: isSel ? FontWeight.bold : FontWeight.normal)),
+            const Spacer(),
+            if (isSel) const Icon(Icons.check_circle, color: Colors.green, size: 20),
           ],
         ),
       ),

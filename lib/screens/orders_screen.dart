@@ -18,6 +18,7 @@ class OrderScreen extends StatefulWidget {
 }
 
 class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin {
+  String riderName = "yathu";
   String status = "Pending";
   MapLibreMapController? mapController;
   final LocationService _locationService = LocationService();
@@ -54,6 +55,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         final data = snapshot.data() as Map<String, dynamic>;
         setState(() {
           status = data['status'] ?? status;
+          riderName = data['deliveryName'] ?? "yathu";
         });
       }
     });
@@ -237,7 +239,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text("Rider: Suresh K.", style: TextStyle(fontWeight: FontWeight.bold)),
+                                Text("Rider: $riderName", style: const TextStyle(fontWeight: FontWeight.bold)),
                                 Text(estimatedTime > 0 ? "$estimatedTime mins away" : "Arrived", style: const TextStyle(color: Colors.grey)),
                               ],
                             ),
@@ -261,9 +263,10 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                     child: SingleChildScrollView(
                       child: Column(
                         children: [
-                          _step(Icons.check_circle, "Order Received", "We have received your order", true),
-                          _step(Icons.local_shipping, "On the way", "Rider is heading to you", status == "On the way" || status == "Arrived"),
-                          _step(Icons.home, "Delivered", "Enjoy your fresh produce!", status == "Arrived", isLast: true),
+                          _step(Icons.check_circle, "Order Received", "We have received your order", status != "Cancelled"),
+                          _step(Icons.inventory, "Picked Up", "Rider has picked up your items", status == "Picked Up" || status == "On the way" || status == "Arrived" || status == "Delivered"),
+                          _step(Icons.local_shipping, "On the way", "Rider is heading to you", status == "On the way" || status == "Arrived" || status == "Delivered"),
+                          _step(Icons.home, "Delivered", "Enjoy your fresh produce!", status == "Arrived" || status == "Delivered", isLast: true),
                         ],
                       ),
                     ),
