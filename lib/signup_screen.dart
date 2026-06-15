@@ -390,13 +390,16 @@ class _SignupScreenState extends State<SignupScreen> {
                           await userCredential.user
                               ?.updateDisplayName(firstNameController.text.trim());
 
+                          // --- SEND VERIFICATION EMAIL ---
+                          await userCredential.user?.sendEmailVerification();
+
                           if (!mounted) return;
                           
                           navigator.pop(); // Pop loading
                           messenger.showSnackBar(
                             const SnackBar(
                                 content: Text(
-                                    "Account created successfully! Please login.")),
+                                    "Account created! Please check your email for a verification link.")),
                           );
                           navigator.pushReplacement(
                             MaterialPageRoute(
