@@ -241,6 +241,45 @@ class _LoginScreenState extends State<LoginScreen> {
                             password: password,
                           );
 
+                          final User? user = userCredential.user;
+
+                          // --- EMAIL VERIFICATION CHECK ---
+                          if (user != null && !user.emailVerified && email != "farmadmin@gmail.com") {
+                            if (context.mounted) {
+                              Navigator.pop(context); // Pop loading
+                              
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text("Email Not Verified"),
+                                  content: const Text("Please verify your email address to continue. Check your inbox for the verification link."),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () async {
+                                        await user.sendEmailVerification();
+                                        if (context.mounted) {
+                                          Navigator.pop(context);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text("Verification email resent!")),
+                                          );
+                                        }
+                                      },
+                                      child: const Text("Resend Email"),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.pop(context);
+                                      },
+                                      child: const Text("OK"),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              await FirebaseAuth.instance.signOut();
+                            }
+                            return;
+                          }
+
                           // 2. Check for hardcoded Admin Login first (after successful Auth)
                           if (email == "farmadmin@gmail.com" && password == "Farmadmin@1") {
                             // Ensure Admin document exists in Firestore for security rules to pass
