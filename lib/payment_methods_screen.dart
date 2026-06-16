@@ -27,48 +27,7 @@ class PaymentMethodsScreen extends StatefulWidget {
 
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   bool _isProcessing = false;
-  String _selectedMethod = 'COD'; // Default to Cash on Delivery
-
-  void _showQRCode() {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text("Scan to Pay", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Image.network(
-                  "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=AgriDirectPay",
-                  height: 200,
-                  width: 200,
-                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.qr_code_2, size: 200),
-                ),
-              ),
-              const SizedBox(height: 15),
-              const Text("Amount: Rs. ", style: TextStyle(fontSize: 16)),
-              Text("Rs. ${widget.total.toStringAsFixed(0)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.green)),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                child: const Text("I have Paid", style: TextStyle(color: Colors.white)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  final String _selectedMethod = 'COD'; // Fixed to Cash on Delivery
 
   Future<void> _processPayment() async {
     setState(() => _isProcessing = true);
@@ -94,7 +53,7 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           'deliveryAddress': UserData.defaultAddress ?? 'No Address Data',
           'status': 'Processing',
           'paymentMethod': _selectedMethod,
-          'paymentStatus': _selectedMethod == 'COD' ? 'Pending' : 'Paid',
+          'paymentStatus': 'Pending',
           'createdAt': FieldValue.serverTimestamp(),
           'items': cartModel.items.map((item) => {
             'title': item.title,
@@ -171,81 +130,89 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xffF7F8F3),
       appBar: AppBar(
-        title: const Text("Payment"),
+        title: const Text("Payment", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
+        elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _box("Total Payable", widget.total, highlight: true),
-
-            const SizedBox(height: 25),
-            const Text("Select Payment Method", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 10),
+            const Text("Payment Method", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 15),
 
-            _methodTile("COD", "Cash On Delivery", Icons.payments),
-            _methodTile("QR", "QR Payment", Icons.qr_code_scanner),
+            _methodTile("Cash On Delivery", Icons.payments),
+            
+            const SizedBox(height: 15),
+            
+            // Coming Soon Bar
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      "Other payment methods (eSewa, Khalti) coming soon!",
+                      style: TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
-            const SizedBox(height: 30),
+            const SizedBox(height: 40),
 
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 55,
               child: ElevatedButton(
-                onPressed: _isProcessing ? null : () {
-                  if (_selectedMethod == 'QR') {
-                    _showQRCode();
-                  } else {
-                    _processPayment();
-                  }
-                },
+                onPressed: _isProcessing ? null : _processPayment,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  elevation: 0,
                 ),
                 child: _isProcessing
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(_selectedMethod == 'COD' ? "Confirm Order" : "Pay with QR", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    : const Text(
+                        "Confirm Order", 
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
+                      ),
               ),
             ),
-            if (_selectedMethod == 'QR')
-              Padding(
-                padding: const EdgeInsets.only(top: 15),
-                child: TextButton(
-                  onPressed: _processPayment,
-                  child: const Center(child: Text("Already Paid? Confirm Order", style: TextStyle(color: Colors.green))),
-                ),
-              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _methodTile(String value, String title, IconData icon) {
-    bool isSel = _selectedMethod == value;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedMethod = value),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSel ? Colors.green : Colors.transparent, width: 2),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: isSel ? Colors.green : Colors.grey),
-            const SizedBox(width: 15),
-            Text(title, style: TextStyle(fontWeight: isSel ? FontWeight.bold : FontWeight.normal)),
-            const Spacer(),
-            if (isSel) const Icon(Icons.check_circle, color: Colors.green, size: 20),
-          ],
-        ),
+  Widget _methodTile(String title, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green, width: 2),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.green),
+          const SizedBox(width: 15),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+          const Spacer(),
+          const Icon(Icons.check_circle, color: Colors.green, size: 20),
+        ],
       ),
     );
   }
@@ -257,14 +224,18 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4))
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
           Text(
             "Rs. ${value.toStringAsFixed(0)}",
             style: TextStyle(
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: highlight ? Colors.green : Colors.black,
             ),

@@ -12,174 +12,224 @@ class MyAddressesScreen extends StatefulWidget {
 }
 
 class _MyAddressesScreenState extends State<MyAddressesScreen> {
-  String _savedAddress = "Select your address";
+  final user = FirebaseAuth.instance.currentUser;
 
-  double? _lat;
-  double? _lng;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAddress();
-  }
-
-  Future<void> _loadAddress() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      if (doc.exists && doc.data()?['address'] != null) {
-        setState(() {
-          _savedAddress = doc.data()?['address'];
-          _lat = doc.data()?['lat'];
-          _lng = doc.data()?['lng'];
-        });
-        // Sync to local SharedPreferences as fallback
-        UserData.setAddress(address: _savedAddress, latitude: _lat!, longitude: _lng!);
-        return;
-      }
-    }
-    
-    // Fallback to local
-    if (UserData.defaultAddress != null) {
-      setState(() {
-        _savedAddress = UserData.defaultAddress!;
-        _lat = UserData.defaultLat;
-        _lng = UserData.defaultLng;
-      });
-    }
-  }
-
-  Future<void> _pickAddress() async {
+  Future<void> _addNewAddress() async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(builder: (_) => const FarmOsmScreen()),
     );
 
-    if (result == null || result['address'] == null) return;
+    if (result == null || result['address'] == null || user == null) return;
 
     final String address = result['address'].toString();
     final double? lat = (result['lat'] as num?)?.toDouble();
     final double? lng = (result['lng'] as num?)?.toDouble();
 
-    setState(() {
-      _savedAddress = address;
-      _lat = lat;
-      _lng = lng;
-    });
+    if (lat == null || lng == null) return;
 
-    if (lat != null && lng != null) {
-      // Save Locally
-      UserData.setAddress(
-        address: address,
-        latitude: lat,
-        longitude: lng,
-      );
+    // Show dialog to pick label
+    String selectedLabel = 'Home';
+    final label = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Address Label"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _labelOption(context, 'Home', Icons.home, (val) => Navigator.pop(context, val)),
+            _labelOption(context, 'Work', Icons.work, (val) => Navigator.pop(context, val)),
+            _labelOption(context, 'Other', Icons.location_on, (val) => Navigator.pop(context, val)),
+          ],
+        ),
+      ),
+    );
+
+    if (label != null) {
+      selectedLabel = label;
       
-      // Save to Firestore
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-          'address': address,
-          'lat': lat,
-          'lng': lng,
-        });
-      }
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid)
+          .collection('addresses')
+          .add({
+        'label': selectedLabel,
+        'address': address,
+        'lat': lat,
+        'lng': lng,
+        'isDefault': false,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
     }
+  }
+
+  Widget _labelOption(BuildContext context, String label, IconData icon, Function(String) onSelect) {
+    return ListTile(
+      leading: Icon(icon, color: Colors.green),
+      title: Text(label),
+      onTap: () => onSelect(label),
+    );
+  }
+
+  Future<void> _setDefault(String docId, String address, double lat, double lng) async {
+    if (user == null) return;
+
+    final batch = FirebaseFirestore.instance.batch();
+    
+    // Unset current default
+    final query = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .collection('addresses')
+        .where('isDefault', isEqualTo: true)
+        .get();
+    
+    for (var doc in query.docs) {
+      batch.update(doc.reference, {'isDefault': false});
+    }
+
+    // Set new default
+    batch.update(
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid)
+          .collection('addresses')
+          .doc(docId),
+      {'isDefault': true},
+    );
+
+    // Update main user doc for legacy compatibility
+    batch.update(
+      FirebaseFirestore.instance.collection('users').doc(user!.uid),
+      {'address': address, 'lat': lat, 'lng': lng},
+    );
+
+    await batch.commit();
+    
+    // Sync local
+    UserData.setAddress(address: address, latitude: lat, longitude: lng);
+  }
+
+  Future<void> _deleteAddress(String docId) async {
+    if (user == null) return;
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user!.uid)
+        .collection('addresses')
+        .doc(docId)
+        .delete();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (user == null) return const Scaffold(body: Center(child: Text("Please login")));
+
     return Scaffold(
       backgroundColor: const Color(0xffF7F8F3),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: const Text(
-          "My Address",
-          style: TextStyle(color: Colors.black),
-        ),
+        title: const Text("My Addresses", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: () => Navigator.pop(context)),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Icons.home, color: Colors.green),
-                      SizedBox(width: 10),
-                      Text("Home Address",
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(_savedAddress),
-                  const SizedBox(height: 20),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(user!.uid)
+            .collection('addresses')
+            .orderBy('createdAt', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Colors.green));
+          }
 
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      onPressed: _pickAddress,
-                      icon: const Icon(Icons.map),
-                      label: const Text("Select Address"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
+          final docs = snapshot.data?.docs ?? [];
+
+          if (docs.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.location_off, size: 80, color: Colors.grey.shade300),
+                  const SizedBox(height: 15),
+                  const Text("No addresses saved", style: TextStyle(color: Colors.grey, fontSize: 16)),
+                  const SizedBox(height: 25),
+                  ElevatedButton(
+                    onPressed: _addNewAddress,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    child: const Text("Add New Address", style: TextStyle(color: Colors.white)),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 20),
-            if (UserData.hasAddress)
-              Container(
-                padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: InkWell(
-                  onTap: _removeAddress,
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+            );
+          }
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(18),
+            itemCount: docs.length,
+            itemBuilder: (context, index) {
+              final data = docs[index].data() as Map<String, dynamic>;
+              final bool isDefault = data['isDefault'] ?? false;
+              final String label = data['label'] ?? 'Home';
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                child: Padding(
+                  padding: const EdgeInsets.all(15),
+                  child: Column(
                     children: [
-                      Icon(Icons.delete_outline, color: Colors.red),
-                      SizedBox(width: 10),
-                      Text("Remove Address", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                      Row(
+                        children: [
+                          Icon(
+                            label == 'Home' ? Icons.home : (label == 'Work' ? Icons.work : Icons.location_on),
+                            color: Colors.green,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                          const Spacer(),
+                          if (isDefault)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(5)),
+                              child: const Text("DEFAULT", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                            onPressed: () => _deleteAddress(docs[index].id),
+                          ),
+                        ],
+                      ),
+                      const Divider(),
+                      Text(data['address'] ?? '', style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                      const SizedBox(height: 15),
+                      if (!isDefault)
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton(
+                            onPressed: () => _setDefault(docs[index].id, data['address'], data['lat'], data['lng']),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.green,
+                              side: const BorderSide(color: Colors.green),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            child: const Text("Set as Default"),
+                          ),
+                        ),
                     ],
                   ),
                 ),
-              ),
-          ],
-        ),
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addNewAddress,
+        backgroundColor: Colors.green,
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
-  }
-
-  void _removeAddress() async {
-    UserData.clearAddress();
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'address': FieldValue.delete(),
-        'lat': FieldValue.delete(),
-        'lng': FieldValue.delete(),
-      });
-    }
-    setState(() {
-      _savedAddress = "Select your address";
-      _lat = null;
-      _lng = null;
-    });
   }
 }
