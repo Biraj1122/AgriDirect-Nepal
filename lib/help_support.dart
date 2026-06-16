@@ -15,7 +15,7 @@ class HelpSupportScreen extends StatelessWidget {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          "Help & Sup``port",
+          "Help & Support",
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
       ),

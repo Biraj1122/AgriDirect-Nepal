@@ -29,6 +29,47 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   bool _isProcessing = false;
   String _selectedMethod = 'COD'; // Default to Cash on Delivery
 
+  void _showQRCode() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("Scan to Pay", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Image.network(
+                  "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=AgriDirectPay",
+                  height: 200,
+                  width: 200,
+                  errorBuilder: (context, error, stackTrace) => const Icon(Icons.qr_code_2, size: 200),
+                ),
+              ),
+              const SizedBox(height: 15),
+              const Text("Amount: Rs. ", style: TextStyle(fontSize: 16)),
+              Text("Rs. ${widget.total.toStringAsFixed(0)}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.green)),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                child: const Text("I have Paid", style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _processPayment() async {
     setState(() => _isProcessing = true);
 
@@ -139,16 +180,14 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _box("Subtotal", widget.subtotal),
-            _box("Delivery", widget.deliveryFee),
-            _box("Total", widget.total, highlight: true),
+            _box("Total Payable", widget.total, highlight: true),
 
             const SizedBox(height: 25),
             const Text("Select Payment Method", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
             const SizedBox(height: 15),
 
             _methodTile("COD", "Cash On Delivery", Icons.payments),
-            _methodTile("ONLINE", "Online Payment", Icons.account_balance_wallet),
+            _methodTile("QR", "QR Payment", Icons.qr_code_scanner),
 
             const SizedBox(height: 30),
 
@@ -156,16 +195,30 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                onPressed: _isProcessing ? null : _processPayment,
+                onPressed: _isProcessing ? null : () {
+                  if (_selectedMethod == 'QR') {
+                    _showQRCode();
+                  } else {
+                    _processPayment();
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: _isProcessing
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(_selectedMethod == 'COD' ? "Confirm Order" : "Pay Now & Confirm", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    : Text(_selectedMethod == 'COD' ? "Confirm Order" : "Pay with QR", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
+            if (_selectedMethod == 'QR')
+              Padding(
+                padding: const EdgeInsets.only(top: 15),
+                child: TextButton(
+                  onPressed: _processPayment,
+                  child: const Center(child: Text("Already Paid? Confirm Order", style: TextStyle(color: Colors.green))),
+                ),
+              ),
           ],
         ),
       ),

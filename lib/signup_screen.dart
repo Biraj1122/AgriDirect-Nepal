@@ -1,3 +1,4 @@
+import 'package:farmtech_agridirect/verify_otp_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -396,14 +397,15 @@ class _SignupScreenState extends State<SignupScreen> {
                           if (!mounted) return;
                           
                           navigator.pop(); // Pop loading
-                          messenger.showSnackBar(
-                            const SnackBar(
-                                content: Text(
-                                    "Account created! Please check your email for a verification link.")),
-                          );
+                          
+                          // --- NAVIGATE TO OTP ---
                           navigator.pushReplacement(
                             MaterialPageRoute(
-                                builder: (context) => const LoginScreen()),
+                                builder: (context) => VerifyOtpScreen(
+                                  email: email,
+                                  source: OtpSource.signup,
+                                  userData: userData,
+                                )),
                           );
                         } on FirebaseAuthException catch (e) {
                           if (!mounted) return;
