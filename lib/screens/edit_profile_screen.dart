@@ -19,20 +19,24 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
-  late TextEditingController _phoneController;
+  late TextEditingController _passwordController;
+  late TextEditingController _confirmPasswordController;
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.currentName);
-    _phoneController = TextEditingController(text: widget.currentPhone);
+    _passwordController = TextEditingController();
+    _confirmPasswordController = TextEditingController();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
-    _phoneController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -44,14 +48,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // Update Firestore
+        // Update Name in Firestore
         await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
           'fullName': _nameController.text.trim(),
-          'phone': _phoneController.text.trim(),
         });
 
         // Update Firebase Auth Display Name
         await user.updateDisplayName(_nameController.text.trim());
+
+        // Update Password if provided
+        if (_passwordController.text.isNotEmpty) {
+          if (!user.emailVerified) {
+            throw "Please verify your email address before changing your password.";
+          }
+          await user.updatePassword(_passwordController.text.trim());
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -62,8 +73,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
+        String message = e.toString();
+        if (message.contains("requires-recent-login")) {
+          message = "This action requires you to login again for security.";
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update profile: $e')),
+          SnackBar(content: Text(message)),
         );
       }
     } finally {
@@ -107,16 +122,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               const SizedBox(height: 20),
               TextFormField(
-                controller: _phoneController,
+                controller: _passwordController,
+                obscureText: _obscurePassword,
                 decoration: InputDecoration(
-                  labelText: 'Phone Number',
-                  prefixIcon: const Icon(Icons.phone_outlined),
+                  labelText: 'New Password (Optional)',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  ),
                   filled: true,
                   fillColor: Colors.white,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                keyboardType: TextInputType.phone,
-                validator: (value) => value == null || value.isEmpty ? 'Enter your phone' : null,
+                validator: (value) {
+                  if (value != null && value.isNotEmpty && value.length < 6) {
+                    return 'Password must be at least 6 characters';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _confirmPasswordController,
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Confirm New Password',
+                  prefixIcon: const Icon(Icons.lock_outline),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                validator: (value) {
+                  if (_passwordController.text.isNotEmpty && value != _passwordController.text) {
+                    return 'Passwords do not match';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 40),
               SizedBox(

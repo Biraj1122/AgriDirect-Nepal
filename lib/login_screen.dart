@@ -1,3 +1,4 @@
+import 'package:farmtech_agridirect/verify_otp_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -243,103 +244,61 @@ class _LoginScreenState extends State<LoginScreen> {
 
                           final User? user = userCredential.user;
 
-                          // --- EMAIL VERIFICATION CHECK ---
-                          if (user != null && !user.emailVerified && email != "farmadmin@gmail.com") {
-                            if (context.mounted) {
-                              Navigator.pop(context); // Pop loading
+                          if (user != null && mounted) {
+                            // --- ADMIN EXCEPTION ---
+                            if (email == "farmadmin@gmail.com") {
+                                Navigator.pop(context); // Pop loading
+                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminPage()));
+                                return;
+                            }
+
+                            // --- REAL EMAIL VERIFICATION CHECK ---
+                            if (user.emailVerified) {
+                              // If already verified, go straight to appropriate dashboard
+                              DocumentSnapshot userDoc = await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(user.uid)
+                                  .get();
                               
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text("Email Not Verified"),
-                                  content: const Text("Please verify your email address to continue. Check your inbox for the verification link."),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () async {
-                                        await user.sendEmailVerification();
-                                        if (context.mounted) {
-                                          Navigator.pop(context);
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text("Verification email resent!")),
-                                          );
-                                        }
-                                      },
-                                      child: const Text("Resend Email"),
-                                    ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pop(context);
-                                      },
-                                      child: const Text("OK"),
-                                    ),
-                                  ],
-                                ),
-                              );
-                              await FirebaseAuth.instance.signOut();
-                            }
-                            return;
-                          }
-
-                          // 2. Check for hardcoded Admin Login first (after successful Auth)
-                          if (email == "farmadmin@gmail.com" && password == "Farmadmin@1") {
-                            // Ensure Admin document exists in Firestore for security rules to pass
-                            await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
-                              'email': email,
-                              'role': 'Admin',
-                              'fullName': 'Super Admin',
-                              'lastLogin': FieldValue.serverTimestamp(),
-                            }, SetOptions(merge: true));
-
-                            if (context.mounted) {
-                              Navigator.pop(context); // Pop loading
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(builder: (context) => const AdminPage()),
-                              );
-                            }
-                            return;
-                          }
-
-                          // 3. Fetch user's profile document from Firestore for other roles
-                          DocumentSnapshot userDoc = await FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(userCredential.user!.uid)
-                              .get();
-
-                          if (context.mounted) {
-                            Navigator.pop(context); // Pop loading
-
-                            if (userDoc.exists) {
                               final userData = userDoc.data() as Map<String, dynamic>?;
-                              String role = userData?['role'] ?? 'Customer';
 
-                              // 3. Conditional routing based on explicit role
-                              if (role == 'Farmer') {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (
-                                      context) => const FarmerScreen()),
-                                );
-                              } else if (role == 'Delivery Person'){
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => const DeliveryPersonScreen()),
-                                );
-                              } else {
-                                // Default target for Customers or unassigned roles
-                                Navigator.pushReplacement(
+                              if (mounted) {
+                                Navigator.pop(context); // Pop loading
+                                String role = userData?['role'] ?? 'Customer';
+                                
+                                Widget target;
+                                if (role == 'Farmer') target = const FarmerScreen();
+                                else if (role == 'Delivery Person') target = const DeliveryPersonScreen();
+                                else target = NavigationScreen(userName: user.displayName ?? user.email ?? "User");
+                                
+                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => target));
+                              }
+                              return;
+                            } else {
+                              // If NOT verified, send REAL verification email and show OTP UI
+                              await user.sendEmailVerification();
+                              
+                              DocumentSnapshot userDoc = await FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(user.uid)
+                                  .get();
+                              
+                              final userData = userDoc.data() as Map<String, dynamic>?;
+
+                              if (mounted) {
+                                Navigator.pop(context); // Pop loading
+                                Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (context) => NavigationScreen(
-                                      userName: userCredential.user?.displayName ?? userCredential.user?.email ?? "User",
+                                    builder: (context) => VerifyOtpScreen(
+                                      email: email,
+                                      source: OtpSource.login,
+                                      userData: userData,
                                     ),
                                   ),
                                 );
                               }
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("User data not found in database.")),
-                              );
+                              return;
                             }
                           }
                         } on FirebaseAuthException catch (e) {
