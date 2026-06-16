@@ -48,7 +48,17 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
     if (label != null) {
       selectedLabel = label;
       
-      await FirebaseFirestore.instance
+      // Check if this is the first address to set it as default
+      final existingDocs = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user!.uid)
+          .collection('addresses')
+          .limit(1)
+          .get();
+      
+      final bool setAsDefault = existingDocs.docs.isEmpty;
+
+      final docRef = await FirebaseFirestore.instance
           .collection('users')
           .doc(user!.uid)
           .collection('addresses')
@@ -57,9 +67,18 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
         'address': address,
         'lat': lat,
         'lng': lng,
-        'isDefault': false,
+        'isDefault': setAsDefault,
         'createdAt': FieldValue.serverTimestamp(),
       });
+
+      if (setAsDefault) {
+        await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({
+          'address': address,
+          'lat': lat,
+          'lng': lng,
+        });
+        UserData.setAddress(address: address, latitude: lat, longitude: lng);
+      }
     }
   }
 
@@ -110,14 +129,25 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
     UserData.setAddress(address: address, latitude: lat, longitude: lng);
   }
 
-  Future<void> _deleteAddress(String docId) async {
+  Future<void> _deleteAddress(String docId, bool isDefault) async {
     if (user == null) return;
+    
     await FirebaseFirestore.instance
         .collection('users')
         .doc(user!.uid)
         .collection('addresses')
         .doc(docId)
         .delete();
+
+    // If we deleted the default address, clear the legacy fields
+    if (isDefault) {
+      await FirebaseFirestore.instance.collection('users').doc(user!.uid).update({
+        'address': FieldValue.delete(),
+        'lat': FieldValue.delete(),
+        'lng': FieldValue.delete(),
+      });
+      UserData.clearAddress();
+    }
   }
 
   @override
@@ -197,7 +227,7 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
                             ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
-                            onPressed: () => _deleteAddress(docs[index].id),
+                            onPressed: () => _deleteAddress(docs[index].id, isDefault),
                           ),
                         ],
                       ),

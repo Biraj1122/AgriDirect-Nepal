@@ -19,6 +19,7 @@ class OrderScreen extends StatefulWidget {
 
 class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin {
   String riderName = "Assigning...";
+  String? riderPhone;
   String? deliveryId;
   String status = "Pending";
   MapLibreMapController? mapController;
@@ -96,6 +97,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         final data = snapshot.data() as Map<String, dynamic>;
         final newStatus = data['status'] ?? status;
         final newRiderName = data['deliveryName'] ?? "Assigning...";
+        final newRiderPhone = data['userPhone'] ?? data['deliveryPhone']; // Check both common fields
         final newDeliveryId = data['deliveryId'];
 
         bool shouldStartSimulation = false;
@@ -106,6 +108,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         setState(() {
           status = newStatus;
           riderName = newRiderName;
+          riderPhone = newRiderPhone;
           deliveryId = newDeliveryId;
         });
 
@@ -244,7 +247,8 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   }
 
   Future<void> _makeCall() async {
-    final Uri url = Uri.parse('tel:+9779800000000');
+    final String phone = riderPhone ?? "+9779861509463"; // Use support number as fallback
+    final Uri url = Uri.parse('tel:$phone');
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
     }
