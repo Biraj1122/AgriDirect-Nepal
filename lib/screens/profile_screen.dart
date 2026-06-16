@@ -76,15 +76,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _fetchUserData() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      if (doc.exists && mounted) {
-        setState(() {
-          fullName = doc.data()?['fullName'];
-          phone = doc.data()?['phone'];
-        });
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (doc.exists && mounted) {
+          setState(() {
+            fullName = doc.data()?['fullName'];
+            phone = doc.data()?['phone'];
+          });
+        }
       }
+    } catch (e) {
+      debugPrint("Error fetching user data: $e");
     }
   }
 
@@ -157,7 +161,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             MaterialPageRoute(
                               builder: (_) => EditProfileScreen(
                                 currentName: fullName ?? widget.userName,
-                                currentPhone: phone ?? "+977 98XXXXXXXX",
+                                currentPhone: phone ?? "Not set",
                               ),
                             ),
                           );
@@ -197,7 +201,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               Text(
-                                phone ?? "+977 98XXXXXXXX",
+                                phone ?? "Add phone number",
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.w500,
