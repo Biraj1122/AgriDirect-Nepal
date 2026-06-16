@@ -8,6 +8,7 @@ import 'navigation_screen.dart';
 import 'farmer_screen.dart';
 import 'screens/delivery_person_screen.dart';
 import 'screens/admin_page.dart';
+import 'services/social_auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  final SocialAuthService _socialAuthService = SocialAuthService();
   bool hidePassword = true;
 
   @override
@@ -27,6 +29,48 @@ class _LoginScreenState extends State<LoginScreen> {
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
+  }
+
+  void _handleSocialSignIn(Future<UserCredential?> signInMethod) async {
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      final UserCredential? userCredential = await signInMethod;
+      if (userCredential?.user != null) {
+        if (!mounted) return;
+        Navigator.pop(context); // Pop loading
+
+        final user = userCredential!.user!;
+        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        final userData = userDoc.data() as Map<String, dynamic>?;
+
+        if (mounted) {
+          String role = userData?['role'] ?? 'Customer';
+          Widget target;
+          if (role == 'Farmer') {
+            target = const FarmerScreen();
+          } else if (role == 'Delivery Person') {
+            target = const DeliveryPersonScreen();
+          } else if (role == 'Admin') {
+            target = const AdminPage();
+          } else {
+            target = NavigationScreen(userName: user.displayName ?? user.email ?? "User");
+          }
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => target));
+        }
+      } else {
+        if (mounted) Navigator.pop(context); // Pop loading
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // Pop loading
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login failed: $e")));
+      }
+    }
   }
 
   @override
@@ -44,7 +88,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Image.asset("assets/images/logo.png", height: 140),
                 const SizedBox(height: 10),
                 const Text(
-                  "Welcome back",
+                  "Welcome!",
                   style: TextStyle(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
@@ -131,21 +175,40 @@ class _LoginScreenState extends State<LoginScreen> {
                             builder: (context) => const Center(child: CircularProgressIndicator()),
                           );
 
-                          final UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-                            email: email,
-                            password: password,
-                          );
+                          final String normalizedEmail = email.toLowerCase();
+                          final bool isMasterAdmin = (normalizedEmail == "agrifarmadmin@gmail.com") && password == "Farmadmin@5";
 
-                          final User? user = userCredential.user;
+                          UserCredential? userCredential;
+                          
+                          try {
+                            userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+                              email: email,
+                              password: password,
+                            );
+                          } on FirebaseAuthException catch (e) {
+                            // If sign-in fails but it's the master admin, try to auto-register/sync
+                            if (isMasterAdmin && (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential')) {
+                              try {
+                                userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+                                  email: email,
+                                  password: password,
+                                );
+                              } catch (signUpError) {
+                                // If registration also fails, re-throw the original error
+                                rethrow;
+                              }
+                            } else {
+                              rethrow;
+                            }
+                          }
+
+                          final User? user = userCredential?.user;
                           if (user == null) {
                             if (context.mounted) Navigator.pop(context);
                             return;
                           }
 
-                          final String normalizedEmail = email.toLowerCase();
-                          final bool isAdminLogin = (normalizedEmail == "farmadmin@gmail.com" || normalizedEmail == "agrifarmadmin@gmail.com") && password == "Farmadmin@1";
-
-                          if (isAdminLogin) {
+                          if (isMasterAdmin) {
                             await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
                               'email': email,
                               'role': 'Admin',
@@ -219,10 +282,54 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
+                
+                const SizedBox(height: 20),
+                const Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10),
+                      child: Text("OR", style: TextStyle(color: Colors.grey)),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                
+                // Social Login Buttons
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _socialButton(
+                      asset: "assets/images/Gmail_icon_(2020).svg.png",
+                      onTap: () => _handleSocialSignIn(_socialAuthService.signInWithGoogle()),
+                    ),
+                    const SizedBox(width: 20),
+                    _socialButton(
+                      asset: "assets/images/Facebook.png",
+                      onTap: () => _handleSocialSignIn(_socialAuthService.signInWithFacebook()),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _socialButton({required String asset, required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade300),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Image.asset(asset, height: 30),
       ),
     );
   }

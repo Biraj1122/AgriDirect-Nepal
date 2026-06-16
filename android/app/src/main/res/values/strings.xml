@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">farmtech_agridirect</string>
+    <!-- Replace with your Facebook App ID -->
+    <string name="facebook_app_id">YOUR_FACEBOOK_APP_ID</string>
+    <!-- Replace with your Facebook Client Token -->
+    <string name="facebook_client_token">YOUR_FACEBOOK_CLIENT_TOKEN</string>
+    <!-- Replace with fb + your Facebook App ID (e.g., fb123456789) -->
+    <string name="fb_login_protocol_scheme">fbYOUR_FACEBOOK_APP_ID</string>
+</resources>
