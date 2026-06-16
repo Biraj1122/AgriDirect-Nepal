@@ -244,7 +244,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           final User? user = userCredential.user;
 
                           // --- EMAIL VERIFICATION CHECK ---
-                          if (user != null && !user.emailVerified && email != "farmadmin@gmail.com") {
+                          if (user != null && !user.emailVerified && email.toLowerCase() != "agrifarmadmin@gmail.com") {
                             if (context.mounted) {
                               Navigator.pop(context); // Pop loading
                               
@@ -281,7 +281,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
 
                           // 2. Check for hardcoded Admin Login first (after successful Auth)
-                          if (email == "farmadmin@gmail.com" && password == "Farmadmin@1") {
+                          if (email.toLowerCase() == "agrifarmadmin@gmail.com" && password == "Farmadmin@1") {
                             // Ensure Admin document exists in Firestore for security rules to pass
                             await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
                               'email': email,
