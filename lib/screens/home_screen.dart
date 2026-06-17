@@ -75,6 +75,7 @@ class HomeScreen extends StatelessWidget {
                                   .collection('users')
                                   .doc(user.uid)
                                   .collection('notifications')
+                                  .where('isRead', isEqualTo: false)
                                   .snapshots(),
                               builder: (context, snapshot) {
                                 if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
@@ -473,13 +474,7 @@ class HomeScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 5),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text("Rs. ${product.price}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                      const Icon(Icons.add_circle, color: Colors.green),
-                    ],
-                  ),
+                  Text("Rs. ${product.price}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
                 ],
               ),
             ),
