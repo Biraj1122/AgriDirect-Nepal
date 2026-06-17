@@ -218,6 +218,23 @@ class OrderHistoryScreen extends StatelessWidget {
                           ],
                         ],
                       ),
+                      if (_canCancelOrder(order)) ...[
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: () => _cancelOrder(context, orders[index].id),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text(
+                              "Cancel Order",
+                              style: TextStyle(fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -236,6 +253,65 @@ class OrderHistoryScreen extends StatelessWidget {
       case 'Delivered': return Colors.green;
       case 'Cancelled': return Colors.red;
       default: return Colors.grey;
+    }
+  }
+
+  bool _canCancelOrder(Map<String, dynamic> order) {
+    final status = order['status']?.toString() ?? 'Pending';
+    final deliveryId = order['deliveryId'];
+
+    // Can only cancel if:
+    // 1. Status is not Delivered or Cancelled
+    // 2. No delivery person has accepted (deliveryId is null or empty)
+    return status != 'Delivered' &&
+           status != 'Cancelled' &&
+           (deliveryId == null || deliveryId.toString().isEmpty);
+  }
+
+  Future<void> _cancelOrder(BuildContext context, String orderId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Cancel Order", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("Are you sure you want to cancel this order? This action cannot be undone."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Keep Order", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Yes, Cancel", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('orders')
+            .doc(orderId)
+            .update({
+          'status': 'Cancelled',
+          'cancelledAt': FieldValue.serverTimestamp(),
+        });
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Order cancelled successfully"),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error cancelling order: $e")),
+          );
+        }
+      }
     }
   }
 

@@ -34,7 +34,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       duration: const Duration(milliseconds: 2000),
     );
 
-    // Sequential animations
+
     _logoScale = Tween<double>(begin: 0.5, end: 1.0).animate(
       CurvedAnimation(
         parent: _mainController,
@@ -72,7 +72,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
     _mainController.forward();
     
-    _skipTimer = Timer(const Duration(seconds: 8), () {
+    _skipTimer = Timer(const Duration(seconds: 6), () {
       if (mounted) {
         setState(() => _showSkipButton = true);
       }
@@ -84,19 +84,26 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   }
 
   Future<void> _initApp() async {
+    final stopwatch = Stopwatch()..start();
     try {
       debugPrint("Starting Initialization...");
       
-      // 1. Initialize Firebase
+      
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       ).timeout(const Duration(seconds: 15));
 
-      // 2. Initialize App Data
+
       await UserData.init();
       
-      // Wait for at least the animation to finish or a bit more for smoothness
-      await Future.delayed(const Duration(milliseconds: 1000));
+
+      // Calculate remaining time to reach 4 seconds (4000 milliseconds)
+      final int elapsed = stopwatch.elapsedMilliseconds;
+      final int remaining = 4000 - elapsed;
+
+      if (remaining > 0) {
+        await Future.delayed(Duration(milliseconds: remaining));
+      }
       
       _navigateToLogin();
     } catch (e) {
@@ -106,6 +113,8 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
           _errorMessage = e.toString();
         });
       }
+    } finally {
+      stopwatch.stop();
     }
   }
 
@@ -134,7 +143,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final isLargeScreen = size.height > 800; // Typically 6.7" to 6.9" phones
+    final isLargeScreen = size.height > 800; // Typically large 6.7 to 6.9 inch phones
 
     return Scaffold(
       body: Container(

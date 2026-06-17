@@ -53,29 +53,40 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
       return;
     }
 
-    if (widget.orderId != null) {
-      _activeOrderId = widget.orderId;
-      _startTrackingFlow();
-    } else {
-      // Find the most recent active order
-      final query = await FirebaseFirestore.instance
-          .collection('orders')
-          .where('userId', isEqualTo: user.uid)
-          .where('status', whereIn: ['Pending', 'Processing', 'Picked Up', 'On the way', 'Arrived'])
-          .orderBy('createdAt', descending: true)
-          .limit(1)
-          .get();
-
-      if (query.docs.isNotEmpty) {
-        _activeOrderId = query.docs.first.id;
+    try {
+      if (widget.orderId != null) {
+        _activeOrderId = widget.orderId;
         _startTrackingFlow();
       } else {
-        if (mounted) {
-          setState(() {
-            _noActiveOrder = true;
-            _isLoading = false;
-          });
+        // Find the most recent active order
+        final query = await FirebaseFirestore.instance
+            .collection('orders')
+            .where('userId', isEqualTo: user.uid)
+            .where('status', whereIn: ['Pending', 'Processing', 'Picked Up', 'On the way', 'Arrived'])
+            .orderBy('createdAt', descending: true)
+            .limit(1)
+            .get();
+
+        if (query.docs.isNotEmpty) {
+          _activeOrderId = query.docs.first.id;
+          _startTrackingFlow();
+        } else {
+          if (mounted) {
+            setState(() {
+              _noActiveOrder = true;
+              _isLoading = false;
+            });
+          }
         }
+      }
+    } catch (e) {
+      debugPrint("Order Initialization Error: $e");
+      // If there's an error (like a missing index), fall back to empty state
+      if (mounted) {
+        setState(() {
+          _noActiveOrder = true;
+          _isLoading = false;
+        });
       }
     }
   }
@@ -99,6 +110,15 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         final newRiderName = data['deliveryName'] ?? "Assigning...";
         final newRiderPhone = data['userPhone'] ?? data['deliveryPhone']; // Check both common fields
         final newDeliveryId = data['deliveryId'];
+
+        // If the order is now Delivered or Cancelled, and we arrived here via general "Orders" tab
+        // (no specific orderId passed), we should show the empty state as requested.
+        if (widget.orderId == null && (newStatus == 'Delivered' || newStatus == 'Cancelled')) {
+          setState(() {
+            _noActiveOrder = true;
+          });
+          return;
+        }
 
         bool shouldStartSimulation = false;
         if (deliveryId == null && newDeliveryId != null) {
@@ -254,6 +274,63 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     }
   }
 
+  bool _canCancelOrder() {
+    // Can only cancel if:
+    // 1. Status is not Delivered or Cancelled
+    // 2. No delivery person has accepted (deliveryId is null or empty)
+    return status != 'Delivered' &&
+           status != 'Cancelled' &&
+           (deliveryId == null || deliveryId!.isEmpty);
+  }
+
+  Future<void> _cancelOrder() async {
+    if (_activeOrderId == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Cancel Order", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("Are you sure you want to cancel this order?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("No", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Yes, Cancel", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('orders')
+            .doc(_activeOrderId)
+            .update({
+          'status': 'Cancelled',
+          'cancelledAt': FieldValue.serverTimestamp(),
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Order cancelled successfully"), backgroundColor: Colors.red),
+          );
+          // After cancellation, we might want to refresh the state or navigate back
+          // The stream listener will update the status to "Cancelled"
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error cancelling order: $e")),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -380,6 +457,23 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                     ),
                   ),
                   const SizedBox(height: 8),
+                  if (_canCancelOrder())
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: OutlinedButton(
+                          onPressed: _cancelOrder,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                          ),
+                          child: const Text("Cancel Order", style: TextStyle(fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ),
                   SizedBox(
                     width: double.infinity,
                     height: 55,
