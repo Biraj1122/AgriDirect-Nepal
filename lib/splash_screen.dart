@@ -97,7 +97,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       await UserData.init();
       
 
-      // Calculate remaining time to reach 4 seconds (4000ms)
+      // Calculate remaining time to reach 4 seconds (4000 milliseconds)
       final int elapsed = stopwatch.elapsedMilliseconds;
       final int remaining = 4000 - elapsed;
 
@@ -143,7 +143,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final isLargeScreen = size.height > 800; // Typically 6.7" to 6.9" phones
+    final isLargeScreen = size.height > 800; // Typically large 6.7 to 6.9 inch phones
 
     return Scaffold(
       body: Container(
