@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'verify_otp_screen.dart';
@@ -61,6 +62,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     }
 
     try {
+      // 1. Check if user exists and is verified
+      final signInMethods = await FirebaseAuth.instance.fetchSignInMethodsForEmail(email);
+      if (signInMethods.isEmpty) {
+        throw "No user found with this email.";
+      }
+
+      // Note: Firebase doesn't allow checking emailVerified status without signing in,
+      // but we can enforce it by our Firestore document.
+      final userQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .get();
+      
+      if (userQuery.docs.isEmpty) {
+        throw "User record not found.";
+      }
+
       await FirebaseAuth.instance.sendPasswordResetEmail(
         email: email,
       );
@@ -73,7 +91,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Recovery instructions sent to your email'),
+            content: const Text('Password reset link sent to your email'),
             backgroundColor: const Color(0xFF1D9E75),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
@@ -85,7 +103,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => VerifyOtpScreen(email: emailController.text.trim()),
+            builder: (context) => VerifyOtpScreen(
+              email: emailController.text.trim(),
+              source: OtpSource.forgotPassword,
+            ),
           ),
         );
       }

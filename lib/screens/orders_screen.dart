@@ -18,7 +18,9 @@ class OrderScreen extends StatefulWidget {
 }
 
 class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin {
-  String riderName = "yathu";
+  String riderName = "Assigning...";
+  String? riderPhone;
+  String? deliveryId;
   String status = "Pending";
   MapLibreMapController? mapController;
   final LocationService _locationService = LocationService();
@@ -33,30 +35,87 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   Timer? _trackingTimer;
   StreamSubscription? _orderSubscription;
 
+  bool _isLoading = true;
+  String? _activeOrderId;
+  bool _noActiveOrder = false;
+
   @override
   void initState() {
     super.initState();
-    _calculateTrackingDetails();
     _setupAnimation();
-    _startTrackingSimulation();
+    _initializeOrder();
+  }
+
+  Future<void> _initializeOrder() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
+    if (widget.orderId != null) {
+      _activeOrderId = widget.orderId;
+      _startTrackingFlow();
+    } else {
+      // Find the most recent active order
+      final query = await FirebaseFirestore.instance
+          .collection('orders')
+          .where('userId', isEqualTo: user.uid)
+          .where('status', whereIn: ['Pending', 'Processing', 'Picked Up', 'On the way', 'Arrived'])
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        _activeOrderId = query.docs.first.id;
+        _startTrackingFlow();
+      } else {
+        if (mounted) {
+          setState(() {
+            _noActiveOrder = true;
+            _isLoading = false;
+          });
+        }
+      }
+    }
+  }
+
+  void _startTrackingFlow() {
     _listenToOrderUpdates();
+    if (mounted) setState(() => _isLoading = false);
   }
 
   void _listenToOrderUpdates() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null || widget.orderId == null) return;
+    if (_activeOrderId == null) return;
 
     _orderSubscription = FirebaseFirestore.instance
         .collection('orders')
-        .doc(widget.orderId)
+        .doc(_activeOrderId)
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists && mounted) {
         final data = snapshot.data() as Map<String, dynamic>;
+        final newStatus = data['status'] ?? status;
+        final newRiderName = data['deliveryName'] ?? "Assigning...";
+        final newRiderPhone = data['userPhone'] ?? data['deliveryPhone']; // Check both common fields
+        final newDeliveryId = data['deliveryId'];
+
+        bool shouldStartSimulation = false;
+        if (deliveryId == null && newDeliveryId != null) {
+          shouldStartSimulation = true;
+        }
+
         setState(() {
-          status = data['status'] ?? status;
-          riderName = data['deliveryName'] ?? "yathu";
+          status = newStatus;
+          riderName = newRiderName;
+          riderPhone = newRiderPhone;
+          deliveryId = newDeliveryId;
         });
+
+        if (shouldStartSimulation) {
+          _calculateTrackingDetails();
+          _startTrackingSimulation();
+        }
       }
     });
   }
@@ -74,8 +133,6 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
       parent: _riderCardController,
       curve: Curves.easeOutBack,
     ));
-
-    _riderCardController.forward();
   }
 
   void _calculateTrackingDetails() {
@@ -92,7 +149,10 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   }
 
   void _startTrackingSimulation() {
-    if (!UserData.hasAddress) return;
+    if (!UserData.hasAddress || UserData.defaultLat == null || UserData.defaultLng == null) return;
+    if (_trackingTimer != null) return; // Already running
+
+    _riderCardController.forward();
 
     const steps = 50;
     int currentStep = 0;
@@ -132,7 +192,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   Future<void> _addMarkers() async {
     if (mapController == null) return;
 
-    if (UserData.hasAddress) {
+    if (UserData.hasAddress && UserData.defaultLat != null && UserData.defaultLng != null) {
       await mapController!.addSymbol(SymbolOptions(
         geometry: LatLng(UserData.defaultLat!, UserData.defaultLng!),
         iconImage: "marker-15",
@@ -187,7 +247,8 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   }
 
   Future<void> _makeCall() async {
-    final Uri url = Uri.parse('tel:+9779800000000');
+    final String phone = riderPhone ?? "+9779861509463"; // Use support number as fallback
+    final Uri url = Uri.parse('tel:$phone');
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
     }
@@ -195,6 +256,18 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: Colors.green)),
+      );
+    }
+
+    if (_noActiveOrder) {
+      return _buildEmptyState();
+    }
+
+    final bool hasRider = deliveryId != null && deliveryId!.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Track Order", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
@@ -217,39 +290,74 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                   onMapCreated: _onMapCreated,
                   styleString: "https://tiles.openfreemap.org/styles/positron",
                 ),
-                Positioned(
-                  top: 20,
-                  left: 15,
-                  right: 15,
-                  child: SlideTransition(
-                    position: _riderCardOffsetAnimation,
+                
+                // Show Rider Card ONLY if a rider has accepted
+                if (hasRider)
+                  Positioned(
+                    top: 20,
+                    left: 15,
+                    right: 15,
+                    child: SlideTransition(
+                      position: _riderCardOffsetAnimation,
+                      child: Container(
+                        padding: const EdgeInsets.all(15),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, 5))],
+                        ),
+                        child: Row(
+                          children: [
+                            const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.delivery_dining, color: Colors.white)),
+                            const SizedBox(width: 15),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text("Rider: $riderName", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  Text(estimatedTime > 0 ? "$estimatedTime mins away" : "Arrived", style: const TextStyle(color: Colors.grey)),
+                                ],
+                              ),
+                            ),
+                            IconButton(onPressed: _makeCall, icon: const Icon(Icons.phone, color: Colors.green)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Show "Waiting for Rider" message if no rider yet
+                if (!hasRider && status != "Delivered" && status != "Cancelled")
+                  Positioned(
+                    top: 20,
+                    left: 15,
+                    right: 15,
                     child: Container(
-                      padding: const EdgeInsets.all(15),
+                      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Colors.white.withValues(alpha: 0.95),
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, 5))],
                       ),
-                      child: Row(
+                      child: const Row(
                         children: [
-                          const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.delivery_dining, color: Colors.white)),
-                          const SizedBox(width: 15),
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+                          ),
+                          SizedBox(width: 15),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text("Rider: $riderName", style: const TextStyle(fontWeight: FontWeight.bold)),
-                                Text(estimatedTime > 0 ? "$estimatedTime mins away" : "Arrived", style: const TextStyle(color: Colors.grey)),
-                              ],
+                            child: Text(
+                              "Waiting for rider to accept your order...",
+                              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
                             ),
                           ),
-                          IconButton(onPressed: _makeCall, icon: const Icon(Icons.phone, color: Colors.green)),
                         ],
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -286,6 +394,82 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: const Text("Orders", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(30),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.shopping_bag_outlined,
+                  size: 80,
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                "No active orders",
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1D25),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "You don't have any active orders right now. Let's find something fresh for you!",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey.shade500,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: ElevatedButton(
+                  onPressed: _handleBack,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    "Start Shopping",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

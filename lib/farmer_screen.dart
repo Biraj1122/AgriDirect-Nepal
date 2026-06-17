@@ -444,7 +444,7 @@ class _ProductsTab extends StatelessWidget {
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance.collection('categories').snapshots(),
                   builder: (context, snapshot) {
-                    List<String> categories = ['Vegetables', 'Fruits', 'Grains', 'Dairy', 'Spices', 'Pulses', 'Mushrooms'];
+                    List<String> categories = ['Vegetables', 'Fruits', 'Grains', 'Dairy', 'Spices', 'Pulses', 'Mushrooms', 'Tea & Coffee', 'Specialty'];
                     if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
                       categories = snapshot.data!.docs.map((d) => (d.data() as Map<String, dynamic>)['name'] as String).toList();
                     }
