@@ -11,18 +11,26 @@ class SocialAuthService {
   // Sign in with Google
   Future<UserCredential?> signInWithGoogle() async {
     try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-      if (googleUser == null) return null;
+      if (kIsWeb) {
+        // More stable for Web
+        GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        final UserCredential userCredential = await _auth.signInWithPopup(googleProvider);
+        await _updateUserData(userCredential.user);
+        return userCredential;
+      } else {
+        final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+        if (googleUser == null) return null;
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final AuthCredential credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final AuthCredential credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken: googleAuth.idToken,
+        );
 
-      final UserCredential userCredential = await _auth.signInWithCredential(credential);
-      await _updateUserData(userCredential.user);
-      return userCredential;
+        final UserCredential userCredential = await _auth.signInWithCredential(credential);
+        await _updateUserData(userCredential.user);
+        return userCredential;
+      }
     } catch (e) {
       debugPrint("Google Sign-In Error: $e");
       rethrow;
@@ -32,14 +40,22 @@ class SocialAuthService {
   // Sign in with Facebook
   Future<UserCredential?> signInWithFacebook() async {
     try {
-      final LoginResult result = await FacebookAuth.instance.login();
-      if (result.status == LoginStatus.success) {
-        final AuthCredential credential = FacebookAuthProvider.credential(result.accessToken!.tokenString);
-        final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      if (kIsWeb) {
+        // Use Firebase Popup for Web to avoid plugin issues
+        FacebookAuthProvider facebookProvider = FacebookAuthProvider();
+        final UserCredential userCredential = await _auth.signInWithPopup(facebookProvider);
         await _updateUserData(userCredential.user);
         return userCredential;
+      } else {
+        final LoginResult result = await FacebookAuth.instance.login();
+        if (result.status == LoginStatus.success) {
+          final AuthCredential credential = FacebookAuthProvider.credential(result.accessToken!.tokenString);
+          final UserCredential userCredential = await _auth.signInWithCredential(credential);
+          await _updateUserData(userCredential.user);
+          return userCredential;
+        }
+        return null;
       }
-      return null;
     } catch (e) {
       debugPrint("Facebook Sign-In Error: $e");
       rethrow;
