@@ -105,6 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Email field
                 TextFormField(
                   controller: emailController,
+                  onChanged: (val) => setState(() {}), // Update UI to show Admin hint
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) return "Please enter email";
                     return null;
@@ -117,7 +118,28 @@ class _LoginScreenState extends State<LoginScreen> {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 8),
+                if (emailController.text.toLowerCase() == "agrifarmadmin@gmail.com")
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.blue.shade200),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.admin_panel_settings, color: Colors.blue),
+                        SizedBox(width: 8),
+                        Text(
+                          "Admin Panel Login Mode",
+                          style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 10),
                 
                 // Password field
                 TextFormField(
@@ -176,6 +198,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           );
 
                           final String normalizedEmail = email.toLowerCase();
+                          // Admin credentials updated to match your screenshot
                           final bool isMasterAdmin = (normalizedEmail == "agrifarmadmin@gmail.com") && password == "Farmadmin@5";
 
                           UserCredential? userCredential;
@@ -186,20 +209,21 @@ class _LoginScreenState extends State<LoginScreen> {
                               password: password,
                             );
                           } on FirebaseAuthException catch (e) {
-                            // If sign-in fails but it's the master admin, try to auto-register/sync
-                            if (isMasterAdmin && (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential')) {
-                              try {
-                                userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                                  email: email,
-                                  password: password,
+                            // If it's the master admin and it failed, give a specific hint
+                            if (isMasterAdmin) {
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("Admin Login Failed: Please check if 'Farmadmin@5' is set as the password in Firebase Console."),
+                                    backgroundColor: Colors.red,
+                                    duration: Duration(seconds: 5),
+                                  ),
                                 );
-                              } catch (signUpError) {
-                                // If registration also fails, re-throw the original error
-                                rethrow;
                               }
-                            } else {
-                              rethrow;
+                              return;
                             }
+                            rethrow;
                           }
 
                           final User? user = userCredential?.user;
@@ -209,6 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
 
                           if (isMasterAdmin) {
+                            // Create/Update Admin record in Firestore
                             await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
                               'email': email,
                               'role': 'Admin',
@@ -218,6 +243,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
                             if (context.mounted) {
                               Navigator.pop(context);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text("Admin Panel Access Granted"),
+                                  backgroundColor: Colors.blue,
+                                ),
+                              );
                               Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminPage()));
                             }
                             return;
