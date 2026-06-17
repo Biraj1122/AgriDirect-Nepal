@@ -53,29 +53,40 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
       return;
     }
 
-    if (widget.orderId != null) {
-      _activeOrderId = widget.orderId;
-      _startTrackingFlow();
-    } else {
-      // Find the most recent active order
-      final query = await FirebaseFirestore.instance
-          .collection('orders')
-          .where('userId', isEqualTo: user.uid)
-          .where('status', whereIn: ['Pending', 'Processing', 'Picked Up', 'On the way', 'Arrived'])
-          .orderBy('createdAt', descending: true)
-          .limit(1)
-          .get();
-
-      if (query.docs.isNotEmpty) {
-        _activeOrderId = query.docs.first.id;
+    try {
+      if (widget.orderId != null) {
+        _activeOrderId = widget.orderId;
         _startTrackingFlow();
       } else {
-        if (mounted) {
-          setState(() {
-            _noActiveOrder = true;
-            _isLoading = false;
-          });
+        // Find the most recent active order
+        final query = await FirebaseFirestore.instance
+            .collection('orders')
+            .where('userId', isEqualTo: user.uid)
+            .where('status', whereIn: ['Pending', 'Processing', 'Picked Up', 'On the way', 'Arrived'])
+            .orderBy('createdAt', descending: true)
+            .limit(1)
+            .get();
+
+        if (query.docs.isNotEmpty) {
+          _activeOrderId = query.docs.first.id;
+          _startTrackingFlow();
+        } else {
+          if (mounted) {
+            setState(() {
+              _noActiveOrder = true;
+              _isLoading = false;
+            });
+          }
         }
+      }
+    } catch (e) {
+      debugPrint("Order Initialization Error: $e");
+      // If there's an error (like a missing index), fall back to empty state
+      if (mounted) {
+        setState(() {
+          _noActiveOrder = true;
+          _isLoading = false;
+        });
       }
     }
   }
