@@ -2,23 +2,25 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'screens/home_screen.dart';
-import 'screens/my_cart.dart';
-import 'screens/categories_screen.dart';
-import 'screens/orders_screen.dart';
-import 'screens/profile_screen.dart';
-import 'my_favourites.dart';
-import 'farmer_screen.dart';
-import 'screens/delivery_person_screen.dart';
-import 'screens/admin_page.dart';
-import 'login_screen.dart';
+import 'package:farmtech_agridirect/screens/home_screen.dart';
+import 'package:farmtech_agridirect/screens/my_cart.dart';
+import 'package:farmtech_agridirect/screens/categories_screen.dart';
+import 'package:farmtech_agridirect/screens/orders_screen.dart';
+import 'package:farmtech_agridirect/screens/profile_screen.dart';
+import 'package:farmtech_agridirect/my_favourites.dart';
+import 'package:farmtech_agridirect/farmer_screen.dart';
+import 'package:farmtech_agridirect/screens/delivery_person_screen.dart';
+import 'package:farmtech_agridirect/screens/admin_page.dart';
+import 'package:farmtech_agridirect/login_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String userName;
+  final int initialTabIndex;
 
   const NavigationScreen({
     super.key,
     required this.userName,
+    this.initialTabIndex = 0,
   });
 
   @override
@@ -26,7 +28,7 @@ class NavigationScreen extends StatefulWidget {
 }
 
 class _NavigationScreenState extends State<NavigationScreen> {
-  int currentIndex = 0;
+  late int currentIndex;
   String selectedCategory = "All";
   bool _isCheckingRole = true;
 
@@ -36,6 +38,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   @override
   void initState() {
     super.initState();
+    currentIndex = widget.initialTabIndex;
     _checkRole();
   }
 

@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'cart_model.dart';
-import 'product.dart';
+import 'package:farmtech_agridirect/cart_model.dart';
+import 'package:farmtech_agridirect/product.dart';
+import 'package:farmtech_agridirect/navigation_screen.dart';
 
 class MyFavouritesScreen extends StatelessWidget {
   final Function(Map<String, dynamic>) onFavouriteToggle;
@@ -128,7 +129,19 @@ class MyFavouritesScreen extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12)),
               padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
             ),
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              // Always redirect to Categories tab in NavigationScreen
+              final user = FirebaseAuth.instance.currentUser;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(
+                  builder: (_) => NavigationScreen(
+                    userName: user?.displayName ?? user?.email ?? "User",
+                    initialTabIndex: 1, // 1 is Categories tab
+                  ),
+                ),
+                (route) => false,
+              );
+            },
             child: const Text(
               'Browse Products',
               style: TextStyle(color: Colors.white, fontSize: 15),

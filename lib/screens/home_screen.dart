@@ -49,7 +49,7 @@ class HomeScreen extends StatelessWidget {
                         style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 2),
-                      const Text("Good morning", style: TextStyle(color: Colors.grey)),
+                      Text(_getTimeBasedGreeting(), style: const TextStyle(color: Colors.grey)),
                     ],
                   ),
                   Row(
@@ -499,6 +499,17 @@ class HomeScreen extends StatelessWidget {
         return "Order almost delivered!";
       default:
         return "Order in progress";
+    }
+  }
+
+  String _getTimeBasedGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) {
+      return "Good morning";
+    } else if (hour < 17) {
+      return "Good afternoon";
+    } else {
+      return "Good evening";
     }
   }
 
