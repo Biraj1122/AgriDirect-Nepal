@@ -7,6 +7,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../user_data.dart';
 import '../location_service.dart';
 import '../navigation_screen.dart';
+import '../farmer_screen.dart';
+import 'delivery_person_screen.dart';
+import 'admin_page.dart';
 
 class OrderScreen extends StatefulWidget {
   final String? orderId;
@@ -255,14 +258,37 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     super.dispose();
   }
 
-  void _handleBack() {
-    if (widget.onBackToHome != null) {
-      widget.onBackToHome!();
+  void _handleBack() async {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
     } else {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const NavigationScreen(userName: "User")),
-            (route) => false,
-      );
+      if (widget.onBackToHome != null) {
+        widget.onBackToHome!();
+      } else {
+        // Find role and redirect
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+          final role = doc.data()?['role'];
+
+          if (mounted) {
+            Widget target;
+            if (role == 'Farmer') {
+              target = const FarmerScreen();
+            } else if (role == 'Delivery Person') {
+              target = const DeliveryPersonScreen();
+            } else if (role == 'Admin') {
+              target = const AdminPage();
+            } else {
+              target = NavigationScreen(userName: user.displayName ?? user.email ?? "User");
+            }
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => target),
+              (route) => false,
+            );
+          }
+        }
+      }
     }
   }
 

@@ -279,7 +279,7 @@ class HomeScreen extends StatelessWidget {
 
                         // SAFE ALTERNATIVE TO BYPASS TREE-SHAKING CONSTRAINTS
                         final displayIcon = iconCode != null
-                            ? IconData(iconCode, fontFamily: 'MaterialIcons', fontPackage: '')
+                            ? IconData(iconCode, fontFamily: 'MaterialIcons')
                             : Icons.category;
 
                         return categoryItem(

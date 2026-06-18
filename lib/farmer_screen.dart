@@ -27,7 +27,34 @@ class _FarmerScreenState extends State<FarmerScreen> {
   @override
   void initState() {
     super.initState();
+    _checkRole();
     _loadFarmerData();
+  }
+
+  Future<void> _checkRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _logout();
+      return;
+    }
+
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final role = doc.data()?['role'];
+
+    if (role != 'Farmer') {
+      _logout();
+    }
+  }
+
+  void _logout() {
+    if (mounted) {
+      FirebaseAuth.instance.signOut();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 
   Future<void> _loadFarmerData() async {
