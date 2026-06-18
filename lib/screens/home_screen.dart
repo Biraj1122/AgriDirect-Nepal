@@ -276,11 +276,16 @@ class HomeScreen extends StatelessWidget {
                         final cat = snapshot.data!.docs[index].data() as Map<String, dynamic>;
                         final name = cat['name'] ?? 'Category';
                         final iconCode = cat['iconCode'] as int?;
-                        
+
+                        // SAFE ALTERNATIVE TO BYPASS TREE-SHAKING CONSTRAINTS
+                        final displayIcon = iconCode != null
+                            ? IconData(iconCode, fontFamily: 'MaterialIcons', fontPackage: '')
+                            : Icons.category;
+
                         return categoryItem(
-                          context, 
-                          iconCode != null ? IconData(iconCode, fontFamily: 'MaterialIcons') : Icons.category, 
-                          name
+                            context,
+                            displayIcon,
+                            name
                         );
                       },
                     );

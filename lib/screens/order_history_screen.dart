@@ -32,17 +32,14 @@ class OrderHistoryScreen extends StatelessWidget {
         stream: FirebaseFirestore.instance
             .collection('orders')
             .where('userId', isEqualTo: user.uid)
-            .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            // If you see an error here about a missing index, 
-            // click the link provided in the debug console to create it.
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Text(
-                  "Error loading history. Make sure you have a Firestore index for 'userId' and 'createdAt'.",
+                  "Error loading history. Please try again.",
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.red[700]),
                 ),
@@ -54,7 +51,17 @@ class OrderHistoryScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator(color: Colors.green));
           }
 
-          final orders = snapshot.data?.docs ?? [];
+          // Copy list to make it modifiable before sorting
+          final orders = (snapshot.data?.docs ?? []).toList();
+
+          // Sort orders by createdAt in Dart instead of Firestore
+          orders.sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>;
+            final bData = b.data() as Map<String, dynamic>;
+            final aTime = (aData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            final bTime = (bData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            return bTime.compareTo(aTime); // descending order
+          });
 
           if (orders.isEmpty) {
             return const Center(
@@ -112,7 +119,7 @@ class OrderHistoryScreen extends StatelessWidget {
                         ],
                       ),
                       const Divider(height: 25),
-                    ...items.take(3).map((item) {
+                      ...items.take(3).map((item) {
                         final itemData = item as Map<String, dynamic>;
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
@@ -264,8 +271,8 @@ class OrderHistoryScreen extends StatelessWidget {
     // 1. Status is not Delivered or Cancelled
     // 2. No delivery person has accepted (deliveryId is null or empty)
     return status != 'Delivered' &&
-           status != 'Cancelled' &&
-           (deliveryId == null || deliveryId.toString().isEmpty);
+        status != 'Cancelled' &&
+        (deliveryId == null || deliveryId.toString().isEmpty);
   }
 
   Future<void> _cancelOrder(BuildContext context, String orderId) async {

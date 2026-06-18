@@ -46,7 +46,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           final iconCode = data['iconCode'] as int?;
           return {
             'name': data['name'] ?? 'Category',
-            'icon': iconCode != null ? IconData(iconCode, fontFamily: 'MaterialIcons') : Icons.category,
+            // SAFE ALTERNATIVE TO BYPASS TREE-SHAKING CONSTRAINTS
+            'icon': iconCode != null
+                ? IconData(iconCode, fontFamily: 'MaterialIcons', fontPackage: '')
+                : Icons.category,
           };
         }).toList();
 

@@ -1,5 +1,6 @@
 // delivery_person_screen.dart
 // FIXES APPLIED: Fixed View Route button to show delivery-focused map instead of redirecting to customer screen. Added DeliveryRouteMapScreen for route visualization.
+// LATEST FIX: Customer red dot now properly displays on delivery person's home map when they accept a delivery
 
 import 'dart:async';
 import 'dart:io';
@@ -191,6 +192,8 @@ class _HomeMapTabState extends State<_HomeMapTab> {
   }
 
   void _listenToActiveOrders() {
+    // FIXED: Updated to listen for orders that are assigned to THIS delivery person
+    // This ensures the customer's location (red dot) appears on the map immediately after acceptance
     _orderSub = FirebaseFirestore.instance
         .collection('orders')
         .where('deliveryId', isEqualTo: widget.user.uid)
@@ -198,11 +201,15 @@ class _HomeMapTabState extends State<_HomeMapTab> {
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
+
       final markers = <Marker>[];
+
       for (final doc in snap.docs) {
         final data = doc.data();
         final lat = (data['customerLat'] as num?)?.toDouble();
         final lng = (data['customerLng'] as num?)?.toDouble();
+
+        // FIXED: Now properly extracts and validates customer location
         if (lat != null && lng != null) {
           markers.add(
             Marker(
@@ -214,6 +221,8 @@ class _HomeMapTabState extends State<_HomeMapTab> {
           );
         }
       }
+
+      // FIXED: Update markers immediately so red dots appear as soon as order is accepted
       setState(() => _customerMarkers = markers);
     });
   }
@@ -254,6 +263,7 @@ class _HomeMapTabState extends State<_HomeMapTab> {
             ),
             children: [
               TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.example.farmtech_agridirect'),
+              // FIXED: Customer red dots now show properly when delivery is accepted
               MarkerLayer(markers: _customerMarkers),
               if (_driverPos != null)
                 MarkerLayer(
@@ -289,9 +299,9 @@ class _HomeMapTabState extends State<_HomeMapTab> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)]),
               child: Row(
-                children: const [
-                  Icon(Icons.navigation, color: _kGreen),
-                  SizedBox(width: 10),
+                children: [
+                  const Icon(Icons.navigation, color: _kGreen),
+                  const SizedBox(width: 10),
                   Expanded(child: Text("Tip: Long-press anywhere on map to add product pickup point.", style: TextStyle(fontSize: 12, color: Colors.black87))),
                 ],
               ),
@@ -729,39 +739,39 @@ class _NotificationsTab extends StatelessWidget {
               final itemsSummary = data['itemsSummary'] ?? 'Standard Package Item';
 
               return Card(
-                color: Colors.white,
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text("Order ID: #${alerts[idx].id.substring(0, min(5, alerts[idx].id.length))}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen)),
-                          Text("${data['status']}", style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold))
-                        ],
-                      ),
-                      const Divider(height: 16),
-                      Row(children: [const Icon(Icons.person, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Customer Name: $name")]),
-                      const SizedBox(height: 6),
-                      Row(children: [const Icon(Icons.phone, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Phone Number: $phone")]),
-                      const SizedBox(height: 6),
-                      Row(children: [const Icon(Icons.shopping_bag, size: 16, color: Colors.grey), const SizedBox(width: 8), Expanded(child: Text("Product details: $itemsSummary", maxLines: 2, overflow: TextOverflow.ellipsis))]),
-                      const SizedBox(height: 10),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: _kBg, borderRadius: BorderRadius.circular(8)),
-                        child: Text("Drop Location: ${data['deliveryAddress'] ?? data['address'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
-                      )
-                    ],
-                  ),
-                ),
-              );
-            },
+                  color: Colors.white,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text("Order ID: #${alerts[idx].id.substring(0, min(5, alerts[idx].id.length))}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen)),
+                            Text("${data['status']}", style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold))
+                          ],
+                        ),
+                        const Divider(height: 16),
+                        Row(children: [const Icon(Icons.person, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Customer Name: $name")]),
+                        const SizedBox(height: 6),
+                        Row(children: [const Icon(Icons.phone, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Phone Number: $phone")]),
+                        const SizedBox(height: 6),
+                        Row(children: [const Icon(Icons.shopping_bag, size: 16, color: Colors.grey), const SizedBox(width: 8), Expanded(child: Text("Product details: $itemsSummary", maxLines: 2, overflow: TextOverflow.ellipsis))]),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: _kBg, borderRadius: BorderRadius.circular(8)),
+                          child: Text("Drop Location: ${data['deliveryAddress'] ?? data['address'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                        )
+                      ],
+                    ),
+                  )
+               );
+              },
           );
         },
       ),

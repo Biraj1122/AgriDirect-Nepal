@@ -40,31 +40,51 @@ class MyFavouritesScreen extends StatelessWidget {
       body: user == null
           ? const Center(child: Text("Please login to see favourites"))
           : StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(user.uid)
-                  .collection('favorites')
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Center(child: Text("Something went wrong"));
-                }
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('favorites')
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 60, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Unable to load favourites",
+                      style: TextStyle(color: Colors.red[700], fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Please try again later",
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Colors.green));
+          }
 
-                final favouriteProducts = snapshot.data?.docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return {...data, 'docId': doc.id};
-                }).toList() ?? [];
+          final favouriteProducts = snapshot.data?.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {...data, 'docId': doc.id};
+          }).toList() ?? [];
 
-                if (favouriteProducts.isEmpty) {
-                  return _buildEmptyState(context);
-                }
+          if (favouriteProducts.isEmpty) {
+            return _buildEmptyState(context);
+          }
 
-                return _buildFavouritesList(context, favouriteProducts);
-              },
-            ),
+          return _buildFavouritesList(context, favouriteProducts);
+        },
+      ),
     );
   }
 
@@ -150,7 +170,7 @@ class MyFavouritesScreen extends StatelessWidget {
     final String imagePath =
         product['imagePath'] ?? product['image'] ?? 'assets/images/logo.png';
     final String productName =
-        (product['name'] ?? product['title'] ?? 'No Name').toString();
+    (product['name'] ?? product['title'] ?? 'No Name').toString();
 
     return Container(
       decoration: BoxDecoration(
@@ -186,7 +206,7 @@ class MyFavouritesScreen extends StatelessWidget {
                 left: 8,
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
                     color: badgeColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
@@ -259,7 +279,7 @@ class MyFavouritesScreen extends StatelessWidget {
                   Text(
                     (product['farm'] ?? 'Local Farm').toString(),
                     style:
-                        const TextStyle(fontSize: 10, color: Color(0xFF9E9E9E)),
+                    const TextStyle(fontSize: 10, color: Color(0xFF9E9E9E)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -314,7 +334,7 @@ class MyFavouritesScreen extends StatelessWidget {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content:
-                                  Text('${cartProduct.title} added to cart'),
+                              Text('${cartProduct.title} added to cart'),
                               backgroundColor: const Color(0xFF2E7D32),
                               behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(
@@ -352,7 +372,7 @@ class MyFavouritesScreen extends StatelessWidget {
     if (imagePath.startsWith('http')) {
       return Image.network(
         imagePath,
-        key: ValueKey(imagePath), // Forces reload when the URL changes in Firestore
+        key: ValueKey(imagePath),
         fit: BoxFit.contain,
         errorBuilder: (context, error, stackTrace) => const Center(
           child: Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
