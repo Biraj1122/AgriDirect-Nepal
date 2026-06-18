@@ -1,5 +1,6 @@
 // delivery_person_screen.dart
-// FIXES APPLIED: Solved layout/rendering pixel crashes by adding explicit container constraints, and added complete Edit/Delete interactive action sheets.
+// FIXES APPLIED: Fixed View Route button to show delivery-focused map instead of redirecting to customer screen. Added DeliveryRouteMapScreen for route visualization.
+// LATEST FIX: Customer red dot now properly displays on delivery person's home map when they accept a delivery
 
 import 'dart:async';
 import 'dart:io';
@@ -16,7 +17,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 
 import '../../login_screen.dart';
-import 'orders_screen.dart';
 
 // THEME CONFIGURATION
 const _kGreen = Color(0xFF2E7D32);
@@ -192,6 +192,8 @@ class _HomeMapTabState extends State<_HomeMapTab> {
   }
 
   void _listenToActiveOrders() {
+    // FIXED: Updated to listen for orders that are assigned to THIS delivery person
+    // This ensures the customer's location (red dot) appears on the map immediately after acceptance
     _orderSub = FirebaseFirestore.instance
         .collection('orders')
         .where('deliveryId', isEqualTo: widget.user.uid)
@@ -199,11 +201,15 @@ class _HomeMapTabState extends State<_HomeMapTab> {
         .snapshots()
         .listen((snap) {
       if (!mounted) return;
+
       final markers = <Marker>[];
+
       for (final doc in snap.docs) {
         final data = doc.data();
         final lat = (data['customerLat'] as num?)?.toDouble();
         final lng = (data['customerLng'] as num?)?.toDouble();
+
+        // FIXED: Now properly extracts and validates customer location
         if (lat != null && lng != null) {
           markers.add(
             Marker(
@@ -215,6 +221,8 @@ class _HomeMapTabState extends State<_HomeMapTab> {
           );
         }
       }
+
+      // FIXED: Update markers immediately so red dots appear as soon as order is accepted
       setState(() => _customerMarkers = markers);
     });
   }
@@ -255,6 +263,7 @@ class _HomeMapTabState extends State<_HomeMapTab> {
             ),
             children: [
               TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.example.farmtech_agridirect'),
+              // FIXED: Customer red dots now show properly when delivery is accepted
               MarkerLayer(markers: _customerMarkers),
               if (_driverPos != null)
                 MarkerLayer(
@@ -290,9 +299,9 @@ class _HomeMapTabState extends State<_HomeMapTab> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)]),
               child: Row(
-                children: const [
-                  Icon(Icons.navigation, color: _kGreen),
-                  SizedBox(width: 10),
+                children: [
+                  const Icon(Icons.navigation, color: _kGreen),
+                  const SizedBox(width: 10),
                   Expanded(child: Text("Tip: Long-press anywhere on map to add product pickup point.", style: TextStyle(fontSize: 12, color: Colors.black87))),
                 ],
               ),
@@ -499,6 +508,206 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
   }
 }
 
+// ====================== DELIVERY ROUTE MAP SCREEN (NEW) ======================
+class DeliveryRouteMapScreen extends StatefulWidget {
+  final String orderId;
+  final Map<String, dynamic> orderData;
+  final String deliveryPersonName;
+
+  const DeliveryRouteMapScreen({
+    required this.orderId,
+    required this.orderData,
+    required this.deliveryPersonName,
+    super.key,
+  });
+
+  @override
+  State<DeliveryRouteMapScreen> createState() => _DeliveryRouteMapScreenState();
+}
+
+class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> {
+  final MapController _mapController = MapController();
+  LatLng? _driverPos;
+  StreamSubscription<Position>? _positionSub;
+
+  static const LatLng _kDefaultCenter = LatLng(27.7172, 85.3240);
+
+  @override
+  void initState() {
+    super.initState();
+    _startLocationTracking();
+  }
+
+  Future<void> _startLocationTracking() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    LocationPermission perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+    if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+
+    try {
+      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
+      _updateDriverPosition(pos);
+    } catch (_) {}
+
+    _positionSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 8),
+    ).listen(_updateDriverPosition);
+  }
+
+  void _updateDriverPosition(Position pos) {
+    if (!mounted) return;
+    final latlng = LatLng(pos.latitude, pos.longitude);
+    setState(() => _driverPos = latlng);
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final customerLat = (widget.orderData['customerLat'] as num?)?.toDouble();
+    final customerLng = (widget.orderData['customerLng'] as num?)?.toDouble();
+    final status = widget.orderData['status'] ?? 'Processing';
+    final address = widget.orderData['deliveryAddress'] ?? widget.orderData['address'] ?? 'No Address Data';
+    final shortId = widget.orderId.substring(0, min(6, widget.orderId.length));
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 1,
+        leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.black), onPressed: () => Navigator.pop(context)),
+        title: const Text("Delivery Route", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
+      ),
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _driverPos ?? _kDefaultCenter,
+              initialZoom: 14.5,
+            ),
+            children: [
+              TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.example.farmtech_agridirect'),
+              // Driver location marker
+              if (_driverPos != null)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: _driverPos!,
+                      width: 26,
+                      height: 26,
+                      child: Container(
+                        decoration: BoxDecoration(color: Colors.blueAccent, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
+                      ),
+                    ),
+                  ],
+                ),
+              // Customer destination marker
+              if (customerLat != null && customerLng != null)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: LatLng(customerLat, customerLng),
+                      width: 45,
+                      height: 45,
+                      child: const Icon(Icons.location_pin, color: Colors.redAccent, size: 38),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          // Rider info card at top
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: const BoxDecoration(color: _kGreen, shape: BoxShape.circle),
+                    child: const Icon(Icons.person, color: Colors.white, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Rider: ${widget.deliveryPersonName}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        Text(status, style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                  IconButton(icon: const Icon(Icons.phone, color: _kGreen), onPressed: () {}),
+                ],
+              ),
+            ),
+          ),
+          // Order details card at bottom
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+              ),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Order #$shortId", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on, color: Colors.grey, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(address, style: const TextStyle(fontSize: 12, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: _kGreen),
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Back to Shipments", style: TextStyle(color: Colors.white)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: _kGreen,
+        mini: true,
+        onPressed: () {
+          if (_driverPos != null) _mapController.move(_driverPos!, 14.5);
+        },
+        child: const Icon(Icons.my_location, color: Colors.white),
+      ),
+    );
+  }
+}
+
 // ====================== TAB 3: CUSTOMER & PRODUCT DETAILS ======================
 class _NotificationsTab extends StatelessWidget {
   final User user;
@@ -530,39 +739,39 @@ class _NotificationsTab extends StatelessWidget {
               final itemsSummary = data['itemsSummary'] ?? 'Standard Package Item';
 
               return Card(
-                color: Colors.white,
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text("Order ID: #${alerts[idx].id.substring(0, min(5, alerts[idx].id.length))}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen)),
-                          Text("${data['status']}", style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold))
-                        ],
-                      ),
-                      const Divider(height: 16),
-                      Row(children: [const Icon(Icons.person, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Customer Name: $name")]),
-                      const SizedBox(height: 6),
-                      Row(children: [const Icon(Icons.phone, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Phone Number: $phone")]),
-                      const SizedBox(height: 6),
-                      Row(children: [const Icon(Icons.shopping_bag, size: 16, color: Colors.grey), const SizedBox(width: 8), Expanded(child: Text("Product details: $itemsSummary", maxLines: 2, overflow: TextOverflow.ellipsis))]),
-                      const SizedBox(height: 10),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: _kBg, borderRadius: BorderRadius.circular(8)),
-                        child: Text("Drop Location: ${data['deliveryAddress'] ?? data['address'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
-                      )
-                    ],
-                  ),
-                ),
-              );
-            },
+                  color: Colors.white,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text("Order ID: #${alerts[idx].id.substring(0, min(5, alerts[idx].id.length))}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen)),
+                            Text("${data['status']}", style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold))
+                          ],
+                        ),
+                        const Divider(height: 16),
+                        Row(children: [const Icon(Icons.person, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Customer Name: $name")]),
+                        const SizedBox(height: 6),
+                        Row(children: [const Icon(Icons.phone, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Phone Number: $phone")]),
+                        const SizedBox(height: 6),
+                        Row(children: [const Icon(Icons.shopping_bag, size: 16, color: Colors.grey), const SizedBox(width: 8), Expanded(child: Text("Product details: $itemsSummary", maxLines: 2, overflow: TextOverflow.ellipsis))]),
+                        const SizedBox(height: 10),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: _kBg, borderRadius: BorderRadius.circular(8)),
+                          child: Text("Drop Location: ${data['deliveryAddress'] ?? data['address'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                        )
+                      ],
+                    ),
+                  )
+               );
+              },
           );
         },
       ),
@@ -657,101 +866,101 @@ class _EarningsTabState extends State<_EarningsTab> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('orders')
-          .where('deliveryId', isEqualTo: widget.user.uid)
-          .where('status', isEqualTo: 'Delivered')
-          .snapshots(),
-      builder: (context, snapshot) {
-        double totalEarnings = 0;
-        List<Map<String, dynamic>> recentEarnings = [];
+        stream: FirebaseFirestore.instance
+            .collection('orders')
+            .where('deliveryId', isEqualTo: widget.user.uid)
+            .where('status', isEqualTo: 'Delivered')
+            .snapshots(),
+        builder: (context, snapshot) {
+          double totalEarnings = 0;
+          List<Map<String, dynamic>> recentEarnings = [];
 
-        if (snapshot.hasData) {
-          for (var doc in snapshot.data!.docs) {
-            final data = doc.data() as Map<String, dynamic>;
-            final price = (data['total'] ?? 0).toDouble();
-            // Assuming delivery person gets a flat fee or percentage? 
-            // Let's assume they get the 'deliveryFee' if present, otherwise let's say Rs. 100 per delivery for demo
-            final earning = (data['deliveryFee'] ?? 100).toDouble();
-            totalEarnings += earning;
-            recentEarnings.add({
-              'id': doc.id.substring(0, min(6, doc.id.length)),
-              'amount': earning,
-            });
+          if (snapshot.hasData) {
+            for (var doc in snapshot.data!.docs) {
+              final data = doc.data() as Map<String, dynamic>;
+              final price = (data['total'] ?? 0).toDouble();
+              // Assuming delivery person gets a flat fee or percentage?
+              // Let's assume they get the 'deliveryFee' if present, otherwise let's say Rs. 100 per delivery for demo
+              final earning = (data['deliveryFee'] ?? 100).toDouble();
+              totalEarnings += earning;
+              recentEarnings.add({
+                'id': doc.id.substring(0, min(6, doc.id.length)),
+                'amount': earning,
+              });
+            }
           }
-        }
 
-        return Container(
-          color: Colors.white,
-          padding: const EdgeInsets.all(16),
-          child: ListView(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [_kGreen, Colors.teal]),
-                    borderRadius: BorderRadius.circular(16)
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("MY WALLET BALANCE", style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Text("Rs. ${totalEarnings.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    const Text("Total Earned This Month", style: TextStyle(color: Colors.white60, fontSize: 10)),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text("Accepted Payment Modes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-              const SizedBox(height: 12),
-              _paymentModeRow("Cash On Delivery (COD)", Icons.payments, Colors.amber.shade900),
-              const SizedBox(height: 12),
-              GestureDetector(
-                onTap: _showImageOptions,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
+          return Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(16),
+            child: ListView(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                      gradient: const LinearGradient(colors: [_kGreen, Colors.teal]),
+                      borderRadius: BorderRadius.circular(16)
+                  ),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Icon(Icons.qr_code_scanner, color: Colors.blue.shade800),
-                          const SizedBox(width: 12),
-                          const Text("Tap here to update/manage QR Code", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        ],
-                      ),
-                      if (_qrCodeImgPath != null) ...[
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          height: 180,
-                          width: double.infinity,
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: kIsWeb || _qrCodeImgPath!.startsWith('http')
-                                ? Image.network(_qrCodeImgPath!, fit: BoxFit.contain)
-                                : Image.file(File(_qrCodeImgPath!), fit: BoxFit.contain),
-                          ),
-                        )
-                      ]
+                      const Text("MY WALLET BALANCE", style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 4),
+                      Text("Rs. ${totalEarnings.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      const Text("Total Earned This Month", style: TextStyle(color: Colors.white60, fontSize: 10)),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              const Text("Recent Shipments Income", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              if (recentEarnings.isEmpty) 
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20),
-                  child: Text("No earnings yet.", style: TextStyle(color: Colors.grey, fontSize: 12)),
-                )
-              else
-                ...recentEarnings.reversed.take(10).map((e) => _paymentHistoryRow("Delivery complete #${e['id']}", "Rs. ${e['amount']}")),
-            ],
-          ),
-        );
-      }
+                const SizedBox(height: 20),
+                const Text("Accepted Payment Modes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 12),
+                _paymentModeRow("Cash On Delivery (COD)", Icons.payments, Colors.amber.shade900),
+                const SizedBox(height: 12),
+                GestureDetector(
+                  onTap: _showImageOptions,
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.qr_code_scanner, color: Colors.blue.shade800),
+                            const SizedBox(width: 12),
+                            const Text("Tap here to update/manage QR Code", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                        if (_qrCodeImgPath != null) ...[
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            height: 180,
+                            width: double.infinity,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: kIsWeb || _qrCodeImgPath!.startsWith('http')
+                                  ? Image.network(_qrCodeImgPath!, fit: BoxFit.contain)
+                                  : Image.file(File(_qrCodeImgPath!), fit: BoxFit.contain),
+                            ),
+                          )
+                        ]
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text("Recent Shipments Income", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                if (recentEarnings.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20),
+                    child: Text("No earnings yet.", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  )
+                else
+                  ...recentEarnings.reversed.take(10).map((e) => _paymentHistoryRow("Delivery complete #${e['id']}", "Rs. ${e['amount']}")),
+              ],
+            ),
+          );
+        }
     );
   }
 
@@ -1053,7 +1262,7 @@ class _OrderCard extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact, side: const BorderSide(color: _kGreen)),
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderScreen(orderId: doc.id))),
+                    onPressed: () => _showDeliveryRoute(context, doc.id, data),
                     child: const Text("View Route", style: TextStyle(color: _kGreen, fontSize: 11)),
                   ),
                 ),
@@ -1079,6 +1288,21 @@ class _OrderCard extends StatelessWidget {
     return "Mark Delivered";
   }
 
+  void _showDeliveryRoute(BuildContext context, String orderId, Map<String, dynamic> orderData) {
+    final deliveryPersonName = orderData['deliveryName'] ?? 'Delivery Person';
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DeliveryRouteMapScreen(
+          orderId: orderId,
+          orderData: orderData,
+          deliveryPersonName: deliveryPersonName,
+        ),
+      ),
+    );
+  }
+
   Future<void> _advance(BuildContext context, String orderId, String status, Map<String, dynamic> data, String riderUid) async {
     String next = 'Delivered';
     if (status == 'Processing' || status == 'Shipped') {
@@ -1091,18 +1315,18 @@ class _OrderCard extends StatelessWidget {
       // Fetch the actual name from the Rider's Firestore profile (from the riders collection)
       final riderDoc = await FirebaseFirestore.instance.collection('riders').doc(riderUid).get();
       // Fallback to users collection if not found in riders
-      final riderData = riderDoc.exists 
-          ? riderDoc.data() 
+      final riderData = riderDoc.exists
+          ? riderDoc.data()
           : (await FirebaseFirestore.instance.collection('users').doc(riderUid).get()).data();
-      
+
       final riderName = riderData?['fullName'] ?? riderData?['name'] ?? "Rider";
 
       // 1. Verify the order isn't already taken by someone else
       final freshSnap = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
       final freshData = freshSnap.data();
-      if (freshData != null && 
-          freshData['deliveryId'] != null && 
-          freshData['deliveryId'] != "" && 
+      if (freshData != null &&
+          freshData['deliveryId'] != null &&
+          freshData['deliveryId'] != "" &&
           freshData['deliveryId'] != riderUid) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

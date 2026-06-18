@@ -224,7 +224,7 @@ class _AdminPageState extends State<AdminPage> {
                 children: [
                   const Icon(Icons.error_outline, color: Colors.red, size: 40),
                   const SizedBox(height: 10),
-                  Text("Database Error: ${snapshot.error}", 
+                  Text("Database Error: ${snapshot.error}",
                        textAlign: TextAlign.center,
                        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                 ],
@@ -244,7 +244,7 @@ class _AdminPageState extends State<AdminPage> {
 
         for (var doc in docs) {
           final data = doc.data() as Map<String, dynamic>;
-          
+
           var rawPrice = data['totalPrice'] ?? data['total'] ?? 0;
           double price = 0;
           if (rawPrice is num) {
@@ -341,7 +341,7 @@ class _AdminPageState extends State<AdminPage> {
       builder: (context, snapshot) {
         if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        
+
         final docs = snapshot.data?.docs ?? [];
         if (docs.isEmpty) {
           return Center(
@@ -369,7 +369,7 @@ class _AdminPageState extends State<AdminPage> {
             ),
           );
         }
-        
+
         // Sort in memory instead of Firestore to avoid index requirement
         final sortedDocs = List.from(docs);
         sortedDocs.sort((a, b) {
@@ -385,11 +385,11 @@ class _AdminPageState extends State<AdminPage> {
           itemBuilder: (context, index) {
             final order = sortedDocs[index].data() as Map<String, dynamic>;
             final status = order['status'] ?? 'Pending';
-            
+
             // Handle both 'totalPrice' and 'total'
             var rawPrice = order['totalPrice'] ?? order['total'] ?? 0;
             double price = (rawPrice is num) ? rawPrice.toDouble() : (double.tryParse(rawPrice.toString()) ?? 0);
-            
+
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
@@ -439,7 +439,7 @@ class _AdminPageState extends State<AdminPage> {
               const Text("Products:", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 10),
               Expanded(
-                child: items.isEmpty 
+                child: items.isEmpty
                   ? const Center(child: Text("No items listed in this order."))
                   : ListView.builder(
                     controller: scrollController,
@@ -456,7 +456,7 @@ class _AdminPageState extends State<AdminPage> {
                             color: Colors.grey[100],
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: imgUrl.startsWith('http') 
+                          child: imgUrl.startsWith('http')
                             ? Image.network(imgUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image))
                             : Image.asset(imgUrl.isEmpty ? 'assets/images/logo.png' : imgUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.image)),
                         ),
@@ -499,14 +499,14 @@ class _AdminPageState extends State<AdminPage> {
     return InkWell(
       onTap: () async {
         await FirebaseFirestore.instance.collection('orders').doc(id).update({'status': status});
-        
+
         if (!context.mounted) return;
 
         final orderDoc = await FirebaseFirestore.instance.collection('orders').doc(id).get();
         if (orderDoc.exists) {
           final data = orderDoc.data()!;
           final userId = data['userId'];
-          
+
           if (userId != null) {
             await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
               'title': 'Order Update: $status',
@@ -517,7 +517,7 @@ class _AdminPageState extends State<AdminPage> {
             });
           }
         }
-        
+
         if (context.mounted) Navigator.pop(context);
       },
       child: Container(
@@ -658,8 +658,8 @@ class _AdminPageState extends State<AdminPage> {
                     decoration: InputDecoration(
                       labelText: "Image URL (Direct link)",
                       hintText: "https://example.com/image.jpg",
-                      suffixIcon: urlController.text.isNotEmpty 
-                        ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setDialogState(() => urlController.clear())) 
+                      suffixIcon: urlController.text.isNotEmpty
+                        ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setDialogState(() => urlController.clear()))
                         : null,
                     ),
                     onChanged: (val) => setDialogState(() {}), // Refresh preview
@@ -681,7 +681,7 @@ class _AdminPageState extends State<AdminPage> {
                       if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
                         categories = snapshot.data!.docs.map((d) => (d.data() as Map<String, dynamic>)['name'] as String).toList();
                       }
-                      
+
                       if (!categories.contains(selectedCategory)) {
                         selectedCategory = categories.isNotEmpty ? categories.first : 'Vegetables';
                       }
@@ -903,7 +903,7 @@ class _AdminPageState extends State<AdminPage> {
 
   Widget _buildCategoriesManager() {
     final nameController = TextEditingController();
-    
+
     // Mapping some common icons to their names/codes for the admin to pick
     final List<Map<String, dynamic>> availableIcons = [
       {'name': 'Eco', 'icon': Icons.eco_outlined},
@@ -915,7 +915,7 @@ class _AdminPageState extends State<AdminPage> {
       {'name': 'Grain', 'icon': Icons.grain},
       {'name': 'Fast Food', 'icon': Icons.fastfood},
     ];
-    
+
     IconData selectedIcon = Icons.category;
 
     return Scaffold(
@@ -1000,13 +1000,13 @@ class _AdminPageState extends State<AdminPage> {
             itemBuilder: (context, index) {
               final cat = docs[index].data() as Map<String, dynamic>;
               final iconCode = cat['iconCode'] as int?;
-              
+
               return Card(
                 child: ListTile(
                   leading: CircleAvatar(
                     backgroundColor: Colors.green.withValues(alpha: 0.1),
                     child: Icon(
-                      iconCode != null ? IconData(iconCode, fontFamily: 'MaterialIcons') : Icons.category,
+                      iconCode != null ? IconData(iconCode, fontFamily: 'MaterialIcons', fontPackage: "") : Icons.category,
                       color: Colors.green,
                     ),
                   ),
@@ -1177,16 +1177,16 @@ class _AdminPageState extends State<AdminPage> {
           ),
         ),
       );
-      
+
       try {
         final results = await seedProducts(
           selectedCategories: selectedCategories,
           selectedSeasons: selectedSeasons,
         );
-        
+
         if (context.mounted) {
           Navigator.pop(context); // Close loading dialog
-          
+
           int totalSuccess = results['productSuccess']! + results['categorySuccess']!;
           int totalError = results['productError']! + results['categoryError']!;
 
@@ -1239,7 +1239,7 @@ class _AdminPageState extends State<AdminPage> {
               builder: (context, snapshot) {
                 if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                
+
                 final docs = snapshot.data!.docs;
                 if (docs.isEmpty) {
                   return const Center(child: Text("No research data submitted yet."));
@@ -1251,7 +1251,7 @@ class _AdminPageState extends State<AdminPage> {
                     final data = docs[i].data() as Map<String, dynamic>;
                     final timestamp = data['timestamp'] as Timestamp?;
                     final dateStr = timestamp != null ? timestamp.toDate().toString().split('.')[0] : 'N/A';
-                    
+
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
