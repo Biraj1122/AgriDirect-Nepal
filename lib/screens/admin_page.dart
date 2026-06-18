@@ -17,6 +17,38 @@ class _AdminPageState extends State<AdminPage> {
   final String? adminEmail = FirebaseAuth.instance.currentUser?.email;
 
   @override
+  void initState() {
+    super.initState();
+    _checkRole();
+  }
+
+  Future<void> _checkRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _logout();
+      return;
+    }
+
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final role = doc.data()?['role'];
+
+    if (role != 'Admin' && user.email != 'agrifarmadmin@gmail.com') {
+      _logout();
+    }
+  }
+
+  void _logout() {
+    if (mounted) {
+      FirebaseAuth.instance.signOut();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     bool isWide = MediaQuery.of(context).size.width > 900;
 

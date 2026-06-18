@@ -48,7 +48,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             'name': data['name'] ?? 'Category',
             // SAFE ALTERNATIVE TO BYPASS TREE-SHAKING CONSTRAINTS
             'icon': iconCode != null
-                ? IconData(iconCode, fontFamily: 'MaterialIcons', fontPackage: '')
+                ? IconData(iconCode, fontFamily: 'MaterialIcons')
                 : Icons.category,
           };
         }).toList();
@@ -106,6 +106,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   List<Map<String, dynamic>> _getFilteredProducts(List<Map<String, dynamic>> liveProducts) {
+    if (_categories.isEmpty || _selectedCategoryIndex >= _categories.length) {
+      return [];
+    }
     final selectedCategory = _categories[_selectedCategoryIndex]['name'];
     return liveProducts.where((product) {
       final matchesCategory = selectedCategory == 'All' || product['category'] == selectedCategory;
@@ -208,7 +211,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(_categories[index]['icon'], color: isSelected ? Colors.white : Colors.green),
+                  Icon(_categories[index]['icon'] as IconData?, color: isSelected ? Colors.white : Colors.green),
                   Text(_categories[index]['name'], style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontSize: 10)),
                 ],
               ),

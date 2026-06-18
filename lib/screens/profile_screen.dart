@@ -291,6 +291,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           .collection('users')
                           .doc(FirebaseAuth.instance.currentUser?.uid)
                           .collection('notifications')
+                          .where('isRead', isEqualTo: false)
                           .snapshots(),
                       onTap: () {
                         Navigator.push(

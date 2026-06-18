@@ -167,9 +167,12 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
             .collection('users')
             .doc(user!.uid)
             .collection('addresses')
-            .orderBy('createdAt', descending: true)
+            // Temporarily removing orderBy to prevent crash if index is missing
             .snapshots(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text("Error loading addresses: ${snapshot.error}", style: const TextStyle(color: Colors.red)));
+          }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Colors.green));
           }

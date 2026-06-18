@@ -8,6 +8,10 @@ import 'screens/categories_screen.dart';
 import 'screens/orders_screen.dart';
 import 'screens/profile_screen.dart';
 import 'my_favourites.dart';
+import 'farmer_screen.dart';
+import 'screens/delivery_person_screen.dart';
+import 'screens/admin_page.dart';
+import 'login_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String userName;
@@ -24,6 +28,7 @@ class NavigationScreen extends StatefulWidget {
 class _NavigationScreenState extends State<NavigationScreen> {
   int currentIndex = 0;
   String selectedCategory = "All";
+  bool _isCheckingRole = true;
 
   List<Map<String, dynamic>> _favouriteProducts = [];
   StreamSubscription? _favSubscription;
@@ -31,7 +36,58 @@ class _NavigationScreenState extends State<NavigationScreen> {
   @override
   void initState() {
     super.initState();
-    _listenToFavorites();
+    _checkRole();
+  }
+
+  Future<void> _checkRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _logout();
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final role = doc.data()?['role'];
+
+      if (mounted) {
+        if (role != 'Customer' && role != null) {
+          Widget target;
+          if (role == 'Farmer') {
+            target = const FarmerScreen();
+          } else if (role == 'Delivery Person') {
+            target = const DeliveryPersonScreen();
+          } else if (role == 'Admin') {
+            target = const AdminPage();
+          } else {
+            setState(() => _isCheckingRole = false);
+            return;
+          }
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => target));
+          return;
+        }
+
+        // Only start listeners if we are indeed a Customer
+        _listenToFavorites();
+        setState(() => _isCheckingRole = false);
+      }
+    } catch (e) {
+      debugPrint("Error checking role: $e");
+      if (mounted) {
+        setState(() => _isCheckingRole = false);
+      }
+    }
+  }
+
+  void _logout() {
+    if (mounted) {
+      FirebaseAuth.instance.signOut();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
   }
 
   void _listenToFavorites() {
@@ -70,7 +126,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
     if (name.isEmpty) return;
 
     // 2. Determine the Document ID. Check if it already exists in our local list first
-    // This handles cases where a product might be favorited by Name but we have its Firestore ID too.
     final existing = _favouriteProducts.firstWhere(
       (p) => (p['name'] == name || p['title'] == name) || 
              (product['docId'] != null && p['docId'] == product['docId']) ||
@@ -126,6 +181,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isCheckingRole) {
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.green),
+              SizedBox(height: 15),
+              Text("Securing your session...", style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
     final List<Widget> screens = [
       HomeScreen(
         userName: widget.userName,
