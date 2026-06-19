@@ -35,6 +35,9 @@ dependencies:
   latlong2: ^0.9.1
   maplibre_gl: ^0.26.1
   osm_search_and_pick: ^0.4.0
+  cached_network_image: ^3.4.1
+  images_picker: ^1.1.2
+  cloudinary_public: ^0.23.1
 
   url_launcher: ^6.3.1
 
