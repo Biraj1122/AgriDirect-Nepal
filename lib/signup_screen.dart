@@ -1,3 +1,4 @@
+import 'package:farmtech_agridirect/verify_otp_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -30,9 +31,12 @@ class _SignupScreenState extends State<SignupScreen> {
   bool hideConfirmPassword = true;
   bool _confirmTouched = false;
 
-  bool isValidEmail(String email) {
-    String pattern = r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$';
-    return RegExp(pattern).hasMatch(email);
+  bool isValidEmailOrUsername(String input) {
+    if (input.contains('@')) {
+      String pattern = r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$';
+      return RegExp(pattern).hasMatch(input);
+    }
+    return input.isNotEmpty && !input.contains(' ');
   }
 
   bool isValidNepaliPhone(String phone) {
@@ -111,7 +115,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 /// ROLE SELECTION DROPDOWN
                 DropdownButtonFormField<String>(
-                  value: selectedRole,
+                  initialValue: selectedRole,
                   decoration: InputDecoration(
                     hintText: "Sign up as",
                     prefixIcon: const Icon(Icons.badge_outlined),
@@ -201,15 +205,15 @@ class _SignupScreenState extends State<SignupScreen> {
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return "Please enter email";
+                      return "Please enter email or username";
                     }
-                    if (!isValidEmail(value)) {
-                      return "Enter valid email";
+                    if (!isValidEmailOrUsername(value.trim())) {
+                      return "Enter valid email or username";
                     }
                     return null;
                   },
                   decoration: InputDecoration(
-                    hintText: "Email Address",
+                    hintText: "Email or Gmail Username",
                     prefixIcon: const Icon(Icons.email_outlined),
                     filled: true,
                     fillColor: Colors.grey.shade100,
@@ -330,6 +334,14 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     onPressed: () async {
                       if (_formKey.currentState!.validate()) {
+                        final messenger = ScaffoldMessenger.of(context);
+                        final navigator = Navigator.of(context);
+                        
+                        String email = emailController.text.trim();
+                        if (!email.contains('@')) {
+                          email = "$email@gmail.com";
+                        }
+
                         try {
                           showDialog(
                             context: context,
@@ -340,7 +352,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                           UserCredential userCredential =
                           await FirebaseAuth.instance.createUserWithEmailAndPassword(
-                            email: emailController.text.trim(),
+                            email: email,
                             password: passwordController.text.trim(),
                           );
 
@@ -348,7 +360,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           final Map<String, dynamic> userData = {
                             'uid': userCredential.user!.uid,
                             'fullName': firstNameController.text.trim(),
-                            'email': emailController.text.trim(),
+                            'email': email,
                             'phone': phoneController.text.trim(),
                             'role': selectedRole,
                             'createdAt': FieldValue.serverTimestamp(),
@@ -357,6 +369,18 @@ class _SignupScreenState extends State<SignupScreen> {
                           if (selectedRole == 'Farmer') {
                             userData['farmName'] = farmNameController.text.trim();
                             userData['farmLocation'] = farmLocationController.text.trim();
+                            
+                            // Save to dedicated farmers collection
+                            await FirebaseFirestore.instance
+                                .collection('farmers')
+                                .doc(userCredential.user!.uid)
+                                .set(userData);
+                          } else if (selectedRole == 'Delivery Person') {
+                            // Save to dedicated riders collection
+                            await FirebaseFirestore.instance
+                                .collection('riders')
+                                .doc(userCredential.user!.uid)
+                                .set(userData);
                           }
 
                           await FirebaseFirestore.instance
@@ -367,33 +391,34 @@ class _SignupScreenState extends State<SignupScreen> {
                           await userCredential.user
                               ?.updateDisplayName(firstNameController.text.trim());
 
-                          if (mounted) {
-                            Navigator.pop(context); // Pop loading
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text(
-                                      "Account created successfully! Please login.")),
-                            );
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => const LoginScreen()),
-                            );
-                          }
+                          // --- SEND VERIFICATION EMAIL ---
+                          await userCredential.user?.sendEmailVerification();
+
+                          if (!mounted) return;
+                          
+                          navigator.pop(); // Pop loading
+                          
+                          // --- NAVIGATE TO OTP ---
+                          navigator.pushReplacement(
+                            MaterialPageRoute(
+                                builder: (context) => VerifyOtpScreen(
+                                  email: email,
+                                  source: OtpSource.signup,
+                                  userData: userData,
+                                )),
+                          );
                         } on FirebaseAuthException catch (e) {
-                          if (mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(e.message ?? "Registration failed")),
-                            );
-                          }
+                          if (!mounted) return;
+                          navigator.pop(); // Pop loading
+                          messenger.showSnackBar(
+                            SnackBar(content: Text(e.message ?? "Registration failed")),
+                          );
                         } catch (e) {
-                          if (mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("An error occurred: $e")),
-                            );
-                          }
+                          if (!mounted) return;
+                          navigator.pop(); // Pop loading
+                          messenger.showSnackBar(
+                            SnackBar(content: Text("An error occurred: $e")),
+                          );
                         }
                       }
                     },

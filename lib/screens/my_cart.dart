@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../cart_model.dart';
 import '../payment_methods_screen.dart';
@@ -137,10 +138,10 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Image.asset(
-                                    product.image,
+                                  SizedBox(
                                     height: 70,
                                     width: 70,
+                                    child: _buildProductImage(product.image),
                                   ),
                                   const SizedBox(width: 15),
                                   Expanded(
@@ -237,6 +238,42 @@ class _CartScreenState extends State<CartScreen> {
         },
       ),
     );
+  }
+
+  Widget _buildProductImage(String imagePath) {
+    if (imagePath.startsWith('http')) {
+      return Image.network(
+        imagePath,
+        key: ValueKey(imagePath), // Forces reload when URL changes in Firestore
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+        ),
+      );
+    } else if (imagePath.startsWith('data:image')) {
+      try {
+        final base64String = imagePath.split(',').last;
+        return Image.memory(
+          base64Decode(base64String),
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Center(
+            child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+          ),
+        );
+      } catch (e) {
+        return const Center(
+          child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+        );
+      }
+    } else {
+      return Image.asset(
+        imagePath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+        ),
+      );
+    }
   }
 
   Widget _row(String title, double value, {bool bold = false}) {

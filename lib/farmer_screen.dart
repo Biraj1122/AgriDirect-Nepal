@@ -1,11 +1,16 @@
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'login_screen.dart';
+import 'notifications_screen.dart';
+import 'screens/crop_health_screen.dart';
+import 'product.dart';
 
 class FarmerScreen extends StatefulWidget {
   const FarmerScreen({super.key});
@@ -22,18 +27,53 @@ class _FarmerScreenState extends State<FarmerScreen> {
   @override
   void initState() {
     super.initState();
+    _checkRole();
     _loadFarmerData();
   }
 
-  Future<void> _loadFarmerData() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+  Future<void> _checkRole() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _logout();
+      return;
+    }
+
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final role = doc.data()?['role'];
+
+    if (role != 'Farmer') {
+      _logout();
+    }
+  }
+
+  void _logout() {
     if (mounted) {
-      setState(() {
-        _farmerData = doc.data();
-        _loading = false;
-      });
+      FirebaseAuth.instance.signOut();
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    }
+  }
+
+  Future<void> _loadFarmerData() async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (mounted) {
+        setState(() {
+          _farmerData = doc.data();
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading farmer data: $e");
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -49,9 +89,13 @@ class _FarmerScreenState extends State<FarmerScreen> {
     final String farmerName = _farmerData?['fullName'] ?? 'Farmer';
     final String farmName = _farmerData?['farmName'] ?? 'My Farm';
     final String farmLocation = _farmerData?['farmLocation'] ?? '';
-    final String uid = FirebaseAuth.instance.currentUser!.uid;
+    final String? uid = FirebaseAuth.instance.currentUser?.uid;
 
-    final List<Widget> _pages = [
+    if (uid == null) {
+      return const Scaffold(body: Center(child: Text("User not authenticated")));
+    }
+
+    final List<Widget> pages = [
       _DashboardTab(
           farmerName: farmerName,
           farmName: farmName,
@@ -59,12 +103,13 @@ class _FarmerScreenState extends State<FarmerScreen> {
           uid: uid),
       _ProductsTab(uid: uid, farmName: farmName),
       _DeliveryTab(uid: uid),
+      const CropHealthScreen(),
       _StockTab(uid: uid),
     ];
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F5),
-      body: _pages[_currentIndex],
+      body: pages[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (i) => setState(() => _currentIndex = i),
@@ -86,6 +131,10 @@ class _FarmerScreenState extends State<FarmerScreen> {
               icon: Icon(Icons.local_shipping_outlined),
               activeIcon: Icon(Icons.local_shipping),
               label: 'Deliveries'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.health_and_safety_outlined),
+              activeIcon: Icon(Icons.health_and_safety),
+              label: 'Crop Health'),
           BottomNavigationBarItem(
               icon: Icon(Icons.inventory_2_outlined),
               activeIcon: Icon(Icons.inventory_2),
@@ -136,19 +185,64 @@ class _DashboardTab extends StatelessWidget {
                       ),
                   ],
                 ),
-                GestureDetector(
-                  onTap: () async {
-                    await FirebaseAuth.instance.signOut();
-                    if (context.mounted) {
-                      Navigator.pushAndRemoveUntil(
-                          context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.logout, color: Colors.red, size: 22),
-                  ),
+                Row(
+                  children: [
+                    Stack(
+                      children: [
+                        IconButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                            );
+                          },
+                          icon: const Icon(Icons.notifications_none, color: Color(0xFF1A2E1A)),
+                        ),
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(uid)
+                              .collection('notifications')
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                              return Positioned(
+                                right: 8,
+                                top: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    "${snapshot.data!.docs.length}",
+                                    style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              );
+                            }
+                            return const SizedBox();
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 4),
+                    GestureDetector(
+                      onTap: () async {
+                        await FirebaseAuth.instance.signOut();
+                        if (context.mounted) {
+                          Navigator.pushAndRemoveUntil(
+                              context, MaterialPageRoute(builder: (_) => const LoginScreen()), (route) => false);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10)),
+                        child: const Icon(Icons.logout, color: Colors.red, size: 22),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -200,6 +294,52 @@ class _DashboardTab extends StatelessWidget {
                 );
               },
             ),
+            const SizedBox(height: 25),
+
+            /// DYNAMIC BANNER (ADMIN ANNOUNCEMENT)
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance.collection('settings').doc('announcement').snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return const SizedBox();
+                }
+                final data = snapshot.data!.data() as Map<String, dynamic>;
+                final title = data['title'] ?? 'Special Announcement';
+                final content = data['content'] ?? 'Important updates from the admin team.';
+
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    image: const DecorationImage(
+                      image: AssetImage("assets/images/vegetables.png"),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: LinearGradient(
+                        colors: [Colors.black.withAlpha(180), Colors.transparent],
+                        begin: Alignment.bottomLeft,
+                        end: Alignment.topRight,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 5),
+                        Text(content, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 24),
             const Text("Recent Orders", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
             const SizedBox(height: 12),
@@ -207,10 +347,11 @@ class _DashboardTab extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('orders')
                   .where('farmerUid', isEqualTo: uid)
-                  .orderBy('createdAt', descending: true)
-                  .limit(5)
                   .snapshots(),
               builder: (context, snap) {
+                if (snap.hasError) {
+                  return Text("Error: ${snap.error}");
+                }
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
                 final docs = snap.data!.docs;
                 if (docs.isEmpty) return const _EmptyState(icon: Icons.receipt_long, message: "No orders yet");
@@ -240,14 +381,14 @@ class _ProductsTab extends StatelessWidget {
     final priceCtrl = TextEditingController(text: doc != null ? doc['price'].toString() : '');
     final descCtrl = TextEditingController(text: doc != null ? doc['description'] : '');
     final stockCtrl = TextEditingController(text: doc != null ? doc['stock'].toString() : '');
+    final urlCtrl = TextEditingController(text: doc != null ? (doc['imageUrl'] ?? '') : '');
 
     String selectedUnit = doc != null ? (doc['unit'] ?? 'kg') : 'kg';
     final units = ['kg', 'g', 'pcs', 'dozen', 'litre', 'bunch'];
-
     String selectedCategory = doc != null ? (doc['category'] ?? 'Vegetables') : 'Vegetables';
-    final categories = ['Vegetables', 'Fruits', 'Grains', 'Dairy', 'Spices'];
 
-    File? pickedImageFile;
+    XFile? pickedXFile;
+    Uint8List? webImage;
     String existingImageUrl = doc != null ? (doc['imageUrl'] ?? '') : '';
 
     showModalBottomSheet(
@@ -265,39 +406,57 @@ class _ProductsTab extends StatelessWidget {
               children: [
                 Text(doc == null ? "Add Product" : "Edit Product", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 20),
-                GestureDetector(
-                  onTap: () async {
-                    final ImagePicker picker = ImagePicker();
-                    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
-                    if (image != null) {
-                      setS(() {
-                        pickedImageFile = File(image.path);
-                      });
-                    }
-                  },
-                  child: Container(
-                    height: 140,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
-                    ),
-                    child: pickedImageFile != null
-                        ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(pickedImageFile!, fit: BoxFit.cover))
-                        : existingImageUrl.isNotEmpty
-                        ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(existingImageUrl, fit: BoxFit.cover))
-                        : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_a_photo_outlined, color: Colors.grey.shade600, size: 32),
-                        const SizedBox(height: 8),
-                        Text("Tap to add product image", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                      ],
-                    ),
+                
+                // --- IMAGE PREVIEW AREA ---
+                Container(
+                  height: 140,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: urlCtrl.text.startsWith('http')
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(urlCtrl.text.trim(), fit: BoxFit.cover, 
+                            errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.red)))
+                      : pickedXFile != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: kIsWeb ? Image.memory(webImage!, fit: BoxFit.cover) : Image.file(File(pickedXFile!.path), fit: BoxFit.cover))
+                          : const Icon(Icons.add_a_photo_outlined, size: 32, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                
+                _buildInput(urlCtrl, "Direct Image URL (e.g. .jpg, .png)", Icons.link, 
+                  onChanged: (v) => setS(() {}),
+                  suffix: urlCtrl.text.isNotEmpty 
+                    ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setS(() => urlCtrl.clear())) 
+                    : null
+                ),
+                const Text("Tip: Right-click Google Image and 'Copy image address'", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                const SizedBox(height: 10),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final ImagePicker picker = ImagePicker();
+                      final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                      if (image != null) {
+                        if (kIsWeb) {
+                          final bytes = await image.readAsBytes();
+                          setS(() { pickedXFile = image; webImage = bytes; urlCtrl.clear(); });
+                        } else {
+                          setS(() { pickedXFile = image; urlCtrl.clear(); });
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.photo_library, size: 18),
+                    label: const Text("Select Local Photo"),
                   ),
                 ),
-                const SizedBox(height: 18),
+                
+                const Divider(height: 30),
                 _buildInput(nameCtrl, "Product Name", Icons.eco_outlined),
                 const SizedBox(height: 12),
                 _buildInput(descCtrl, "Description", Icons.description_outlined, maxLines: 2),
@@ -308,21 +467,37 @@ class _ProductsTab extends StatelessWidget {
                   Expanded(child: _buildInput(stockCtrl, "Stock Qty", Icons.inventory_2_outlined, type: TextInputType.number)),
                 ]),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: selectedCategory,
-                  decoration: InputDecoration(
-                    labelText: "Category",
-                    prefixIcon: const Icon(Icons.category_outlined),
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                  ),
-                  items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                  onChanged: (v) => setS(() => selectedCategory = v!),
+                // ... (rest of the dropdowns remain the same)
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('categories').snapshots(),
+                  builder: (context, snapshot) {
+                    List<String> categories = ['Vegetables', 'Fruits', 'Grains', 'Dairy', 'Spices', 'Pulses', 'Mushrooms', 'Tea & Coffee', 'Specialty'];
+                    if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                      categories = snapshot.data!.docs.map((d) => (d.data() as Map<String, dynamic>)['name'] as String).toList();
+                    }
+                    
+                    // Ensure selectedCategory is in the list or default to the first one
+                    if (!categories.contains(selectedCategory)) {
+                      selectedCategory = categories.isNotEmpty ? categories.first : 'Vegetables';
+                    }
+
+                    return DropdownButtonFormField<String>(
+                      initialValue: selectedCategory,
+                      decoration: InputDecoration(
+                        labelText: "Category",
+                        prefixIcon: const Icon(Icons.category_outlined),
+                        filled: true,
+                        fillColor: Colors.grey.shade100,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                      ),
+                      items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                      onChanged: (v) => setS(() => selectedCategory = v!),
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: selectedUnit,
+                  initialValue: selectedUnit,
                   decoration: InputDecoration(
                     labelText: "Unit",
                     prefixIcon: const Icon(Icons.straighten),
@@ -355,25 +530,37 @@ class _ProductsTab extends StatelessWidget {
 
                         String finalImageUrl = existingImageUrl;
 
-                        if (pickedImageFile != null) {
-                          String fileName = '${uid}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+                        if (pickedXFile != null) {
+                          String fileName = 'prod_${DateTime.now().millisecondsSinceEpoch}.jpg';
                           Reference storageRef = FirebaseStorage.instance.ref().child('product_images').child(fileName);
 
-                          UploadTask uploadTask = storageRef.putFile(pickedImageFile!);
-                          TaskSnapshot snapshot = await uploadTask;
-                          finalImageUrl = await snapshot.ref.getDownloadURL();
+                          final metadata = SettableMetadata(contentType: 'image/jpeg');
+                          if (kIsWeb) {
+                            final bytes = webImage ?? await pickedXFile!.readAsBytes();
+                            UploadTask uploadTask = storageRef.putData(bytes, metadata);
+                            TaskSnapshot snapshot = await uploadTask;
+                            finalImageUrl = await snapshot.ref.getDownloadURL();
+                          } else {
+                            UploadTask uploadTask = storageRef.putFile(File(pickedXFile!.path), metadata);
+                            TaskSnapshot snapshot = await uploadTask;
+                            finalImageUrl = await snapshot.ref.getDownloadURL();
+                          }
+                        } else if (urlCtrl.text.isNotEmpty) {
+                          finalImageUrl = urlCtrl.text.trim();
                         }
 
                         final data = {
                           'farmerUid': uid,
                           'farmName': farmName,
                           'name': nameCtrl.text.trim(),
+                          'title': nameCtrl.text.trim(), // Standardize with Admin
                           'description': descCtrl.text.trim(),
                           'category': selectedCategory,
-                          'price': double.tryParse(priceCtrl.text) ?? 0,
+                          'price': double.tryParse(priceCtrl.text) ?? 0.0,
                           'stock': int.tryParse(stockCtrl.text) ?? 0,
                           'unit': selectedUnit,
                           'imageUrl': finalImageUrl,
+                          'image': finalImageUrl, // Standardize with Admin
                           'updatedAt': FieldValue.serverTimestamp(),
                         };
 
@@ -385,12 +572,25 @@ class _ProductsTab extends StatelessWidget {
                         }
 
                         if (context.mounted) {
-                          Navigator.pop(context);
-                          Navigator.pop(ctx);
+                          // Use a small delay to ensure Firestore has processed before closing
+                          Future.delayed(const Duration(milliseconds: 500), () {
+                            if (context.mounted) {
+                              Navigator.of(context, rootNavigator: true).pop(); // Dismiss loading
+                              Navigator.pop(ctx); // Dismiss bottom sheet
+                            }
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(doc == null ? "Product added successfully!" : "Product updated!")),
+                          );
                         }
                       } catch (e) {
-                        if (context.mounted) Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Failed to save product: $e")));
+                        debugPrint("Error saving product: $e");
+                        if (context.mounted) {
+                          Navigator.of(context, rootNavigator: true).pop(); // Ensure dialog is dismissed
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Failed to save product: ${e.toString()}")),
+                          );
+                        }
                       }
                     },
                     child: Text(doc == null ? "Add Product" : "Update Product", style: const TextStyle(color: Colors.white, fontSize: 16)),
@@ -431,9 +631,9 @@ class _ProductsTab extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('products')
                   .where('farmerUid', isEqualTo: uid)
-                  .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snap) {
+                if (snap.hasError) return Center(child: Text("Error: ${snap.error}"));
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
                 final docs = snap.data!.docs;
                 if (docs.isEmpty) {
@@ -445,9 +645,9 @@ class _ProductsTab extends StatelessWidget {
                   itemBuilder: (ctx, i) {
                     final doc = docs[i];
                     final data = doc.data() as Map<String, dynamic>;
+                    final product = Product.fromMap(data, docId: doc.id);
                     return _ProductCard(
-                      doc: doc,
-                      data: data,
+                      product: product,
                       onEdit: () => _showAddEditProduct(context, doc: doc),
                       onDelete: () async {
                         final confirm = await showDialog<bool>(
@@ -463,11 +663,11 @@ class _ProductsTab extends StatelessWidget {
                         );
                         if (confirm == true) {
                           await FirebaseFirestore.instance.collection('products').doc(doc.id).delete();
-                          if (data['imageUrl'] != null && (data['imageUrl'] as String).isNotEmpty) {
-                            try {
-                              await FirebaseStorage.instance.refFromURL(data['imageUrl']).delete();
-                            } catch (_) {}
-                          }
+                          if (data['imageUrl'] != null && data['imageUrl'].toString().isNotEmpty) {
+                          try {
+                            await FirebaseStorage.instance.refFromURL(data['imageUrl'].toString()).delete();
+                          } catch (_) {}
+                        }
                         }
                       },
                     );
@@ -481,14 +681,16 @@ class _ProductsTab extends StatelessWidget {
     );
   }
 
-  Widget _buildInput(TextEditingController ctrl, String hint, IconData icon, {int maxLines = 1, TextInputType type = TextInputType.text}) {
+  Widget _buildInput(TextEditingController ctrl, String hint, IconData icon, {int maxLines = 1, TextInputType type = TextInputType.text, ValueChanged<String>? onChanged, Widget? suffix}) {
     return TextFormField(
       controller: ctrl,
       maxLines: maxLines,
       keyboardType: type,
+      onChanged: onChanged,
       decoration: InputDecoration(
         hintText: hint,
         prefixIcon: Icon(icon),
+        suffixIcon: suffix,
         filled: true,
         fillColor: Colors.grey.shade100,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
@@ -548,9 +750,10 @@ class _DeliveryTabState extends State<_DeliveryTab> {
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _filter == 'All'
-                  ? FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).orderBy('createdAt', descending: true).snapshots()
-                  : FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).where('status', isEqualTo: _filter).orderBy('createdAt', descending: true).snapshots(),
+                  ? FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).snapshots()
+                  : FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).where('status', isEqualTo: _filter).snapshots(),
               builder: (context, snap) {
+                if (snap.hasError) return Center(child: Text("Error: ${snap.error}"));
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
                 final docs = snap.data!.docs;
                 if (docs.isEmpty) return const _EmptyState(icon: Icons.local_shipping_outlined, message: "No orders found\nfor this status.");
@@ -568,6 +771,19 @@ class _DeliveryTabState extends State<_DeliveryTab> {
                           'status': newStatus,
                           'updatedAt': FieldValue.serverTimestamp(),
                         });
+                        
+                        // Notify the Customer
+                        final userId = data['userId'];
+                        if (userId != null) {
+                          await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
+                            'title': 'Order Status: $newStatus',
+                            'body': 'Farmer updated your order #${doc.id.substring(0, 6)} to $newStatus.',
+                            'time': DateTime.now().toString(),
+                            'createdAt': FieldValue.serverTimestamp(),
+                            'type': 'delivery',
+                          });
+                        }
+
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Order status updated to $newStatus")));
                         }
@@ -656,8 +872,9 @@ class _StockTab extends StatelessWidget {
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).orderBy('stock', descending: false).snapshots(),
+              stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).snapshots(),
               builder: (context, snap) {
+                if (snap.hasError) return Center(child: Text("Error: ${snap.error}"));
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
                 final docs = snap.data!.docs;
                 if (docs.isEmpty) return const _EmptyState(icon: Icons.inventory_2_outlined, message: "No products to track.\nAdd products first.");
@@ -755,14 +972,12 @@ class _StatCard extends StatelessWidget {
 }
 
 class _ProductCard extends StatelessWidget {
-  final DocumentSnapshot doc;
-  final Map<String, dynamic> data;
+  final Product product;
   final VoidCallback onEdit, onDelete;
-  const _ProductCard({required this.doc, required this.data, required this.onEdit, required this.onDelete});
+  const _ProductCard({required this.product, required this.onEdit, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
-    final String imgUrl = data['imageUrl'] ?? '';
     return Card(
       color: Colors.white,
       elevation: 0,
@@ -776,8 +991,18 @@ class _ProductCard extends StatelessWidget {
               width: 70,
               height: 70,
               decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
-              child: imgUrl.isNotEmpty
-                  ? ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(imgUrl, fit: BoxFit.cover))
+              child: product.image.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: product.image.startsWith('assets/')
+                          ? Image.asset(product.image, fit: BoxFit.cover)
+                          : Image.network(
+                              product.image,
+                              fit: BoxFit.cover,
+                              key: ValueKey(product.image), // Force reload if URL changes
+                              errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey),
+                            ),
+                    )
                   : const Icon(Icons.image_not_supported_outlined, color: Colors.grey),
             ),
             const SizedBox(width: 14),
@@ -785,17 +1010,16 @@ class _ProductCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(data['name'] ?? '', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Text(product.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 2),
-                  if (data['category'] != null)
+                  if (product.category != null)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(4)),
-                      child: Text(data['category'], style: TextStyle(fontSize: 10, color: Colors.grey.shade700, fontWeight: FontWeight.w500)),
+                      child: Text(product.category!, style: TextStyle(fontSize: 10, color: Colors.grey.shade700, fontWeight: FontWeight.w500)),
                     ),
                   const SizedBox(height: 4),
-                  Text("Rs. ${data['price']} / ${data['unit']}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
-                  Text("Stock: ${data['stock']} available", style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  Text("Rs. ${product.price} / ${product.unit}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
                 ],
               ),
             ),

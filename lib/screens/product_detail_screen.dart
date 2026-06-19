@@ -1,13 +1,18 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../product.dart';
 import '../cart_model.dart';
 
 class ProductDetailScreen extends StatelessWidget {
   final Product product;
+  final bool isFavourite;
+  final Function(Map<String, dynamic>) onToggleFavourite;
 
   const ProductDetailScreen({
     super.key,
     required this.product,
+    required this.isFavourite,
+    required this.onToggleFavourite,
   });
 
   @override
@@ -18,6 +23,23 @@ class ProductDetailScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: () {
+              final map = product.toMap();
+              map['badge'] = 'Fresh';
+              map['badgeColor'] = Colors.green.toARGB32();
+              map['farm'] = product.farmName ?? 'Local Farm';
+              map['rating'] = 4.5;
+              onToggleFavourite(map);
+            },
+            icon: Icon(
+              isFavourite ? Icons.favorite : Icons.favorite_border,
+              color: Colors.red,
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
       ),
 
       body: Column(                                      // ✅ wrap in Column
@@ -30,7 +52,7 @@ class ProductDetailScreen extends StatelessWidget {
                 children: [
 
                   Center(
-                    child: Image.asset(product.image, height: 220, fit: BoxFit.contain),
+                    child: _buildProductImage(product.image),
                   ),
 
                   const SizedBox(height: 20),
@@ -126,5 +148,31 @@ class ProductDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildProductImage(String imagePath) {
+    if (imagePath.startsWith('http')) {
+      return Image.network(
+          imagePath,
+          key: ValueKey(imagePath), // Forces reload when URL changes
+          height: 220,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100));
+    } else if (imagePath.startsWith('data:image')) {
+      try {
+        final base64String = imagePath.split(',').last;
+        return Image.memory(base64Decode(base64String), height: 220, fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100));
+      } catch (e) {
+        return const Icon(Icons.broken_image, size: 100);
+      }
+    } else {
+      String assetPath = imagePath;
+      if (!assetPath.startsWith('assets/')) {
+        assetPath = 'assets/images/$imagePath';
+      }
+      return Image.asset(assetPath, height: 220, fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100));
+    }
   }
 }

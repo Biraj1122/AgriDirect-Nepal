@@ -1,20 +1,25 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:farmtech_agridirect/cart_model.dart';
+import 'package:farmtech_agridirect/product.dart';
+import 'package:farmtech_agridirect/navigation_screen.dart';
 
 class MyFavouritesScreen extends StatelessWidget {
-  final List<Map<String, dynamic>> favouriteProducts;
   final Function(Map<String, dynamic>) onFavouriteToggle;
 
   const MyFavouritesScreen({
     super.key,
-    required this.favouriteProducts,
     required this.onFavouriteToggle,
   });
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
     return Scaffold(
       backgroundColor: const Color(0xffF7F8F3),
-
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -32,33 +37,55 @@ class MyFavouritesScreen extends StatelessWidget {
           ),
         ),
         centerTitle: false,
-        actions: [
-          if (favouriteProducts.isNotEmpty)
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(right: 16),
-                padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                decoration: BoxDecoration(
-                  color: const Color(0xffE8F5E9),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${favouriteProducts.length} items',
-                  style: const TextStyle(
-                    color: Color(0xFF2E7D32),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
+      ),
+      body: user == null
+          ? const Center(child: Text("Please login to see favourites"))
+          : StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('favorites')
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 60, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text(
+                      "Unable to load favourites",
+                      style: TextStyle(color: Colors.red[700], fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Please try again later",
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                  ],
                 ),
               ),
-            ),
-        ],
-      ),
+            );
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Colors.green));
+          }
 
-      body: favouriteProducts.isEmpty
-          ? _buildEmptyState(context)
-          : _buildFavouritesList(context),
+          final favouriteProducts = snapshot.data?.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return {...data, 'docId': doc.id};
+          }).toList() ?? [];
+
+          if (favouriteProducts.isEmpty) {
+            return _buildEmptyState(context);
+          }
+
+          return _buildFavouritesList(context, favouriteProducts);
+        },
+      ),
     );
   }
 
@@ -100,10 +127,21 @@ class MyFavouritesScreen extends StatelessWidget {
               backgroundColor: const Color(0xFF2E7D32),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
-              padding:
-              const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
             ),
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              // Always redirect to Categories tab in NavigationScreen
+              final user = FirebaseAuth.instance.currentUser;
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(
+                  builder: (_) => NavigationScreen(
+                    userName: user?.displayName ?? user?.email ?? "User",
+                    initialTabIndex: 1, // 1 is Categories tab
+                  ),
+                ),
+                (route) => false,
+              );
+            },
             child: const Text(
               'Browse Products',
               style: TextStyle(color: Colors.white, fontSize: 15),
@@ -114,7 +152,7 @@ class MyFavouritesScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFavouritesList(BuildContext context) {
+  Widget _buildFavouritesList(BuildContext context, List<Map<String, dynamic>> favouriteProducts) {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -132,11 +170,20 @@ class MyFavouritesScreen extends StatelessWidget {
 
   Widget _buildFavouriteCard(
       BuildContext context, Map<String, dynamic> product) {
-    final Color badgeColor = product['badgeColor'] as Color;
+    Color badgeColor = Colors.green;
+    if (product['badgeColor'] != null) {
+      if (product['badgeColor'] is int) {
+        badgeColor = Color(product['badgeColor'] as int);
+      } else if (product['badgeColor'] is Color) {
+        badgeColor = product['badgeColor'] as Color;
+      }
+    }
 
-    final String imagePath = product.containsKey('imagePath')
-        ? 'assets/images/${product['imagePath']}'
-        : product['image']?.toString() ?? '';
+    final String badge = product['badge']?.toString() ?? 'Fresh';
+    final String imagePath =
+        product['imagePath'] ?? product['image'] ?? 'assets/images/logo.png';
+    final String productName =
+    (product['name'] ?? product['title'] ?? 'No Name').toString();
 
     return Container(
       decoration: BoxDecoration(
@@ -144,7 +191,7 @@ class MyFavouritesScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -164,14 +211,7 @@ class MyFavouritesScreen extends StatelessWidget {
                   height: 130,
                   width: double.infinity,
                   color: const Color(0xffF7F8F3),
-                  child: Image.asset(
-                    imagePath,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const Center(
-                      child: Icon(Icons.image_not_supported,
-                          size: 50, color: Colors.grey),
-                    ),
-                  ),
+                  child: _buildProductImage(imagePath),
                 ),
               ),
               Positioned(
@@ -181,11 +221,11 @@ class MyFavouritesScreen extends StatelessWidget {
                   padding:
                   const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: badgeColor.withOpacity(0.15),
+                    color: badgeColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    product['badge'].toString(),
+                    badge,
                     style: TextStyle(
                       fontSize: 9,
                       fontWeight: FontWeight.bold,
@@ -194,7 +234,6 @@ class MyFavouritesScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              // Heart — tapping removes from favourites
               Positioned(
                 top: 6,
                 right: 6,
@@ -203,8 +242,7 @@ class MyFavouritesScreen extends StatelessWidget {
                     onFavouriteToggle(product);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text(
-                            '${product['name']} removed from favourites'),
+                        content: Text('$productName removed from favourites'),
                         backgroundColor: Colors.redAccent,
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(
@@ -221,8 +259,7 @@ class MyFavouritesScreen extends StatelessWidget {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4)
+                            color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)
                       ],
                     ),
                     child: const Icon(
@@ -242,7 +279,7 @@ class MyFavouritesScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    product['name'].toString(),
+                    productName,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
@@ -253,9 +290,9 @@ class MyFavouritesScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    product['farm'].toString(),
-                    style: const TextStyle(
-                        fontSize: 10, color: Color(0xFF9E9E9E)),
+                    (product['farm'] ?? 'Local Farm').toString(),
+                    style:
+                    const TextStyle(fontSize: 10, color: Color(0xFF9E9E9E)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -266,7 +303,7 @@ class MyFavouritesScreen extends StatelessWidget {
                           color: Colors.amber, size: 13),
                       const SizedBox(width: 2),
                       Text(
-                        '${product['rating']}',
+                        '${product['rating'] ?? '4.5'}',
                         style: const TextStyle(
                             fontSize: 10, color: Color(0xFF757575)),
                       ),
@@ -288,7 +325,7 @@ class MyFavouritesScreen extends StatelessWidget {
                             ),
                           ),
                           Text(
-                            '/${product['unit']}',
+                            '/${product['unit'] ?? 'pcs'}',
                             style: const TextStyle(
                                 fontSize: 10, color: Color(0xFF9E9E9E)),
                           ),
@@ -296,10 +333,21 @@ class MyFavouritesScreen extends StatelessWidget {
                       ),
                       GestureDetector(
                         onTap: () {
+                          final cartProduct = Product(
+                            title: productName,
+                            price: product['price']?.toString() ?? '0',
+                            image: imagePath,
+                            unit: product['unit'] ?? 'pcs',
+                            description: product['description'] ?? '',
+                            longDescription: product['longDescription'] ?? '',
+                          );
+
+                          cartModel.add(cartProduct);
+
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content:
-                              Text('${product['name']} added to cart'),
+                              Text('${cartProduct.title} added to cart'),
                               backgroundColor: const Color(0xFF2E7D32),
                               behavior: SnackBarBehavior.floating,
                               shape: RoundedRectangleBorder(
@@ -331,5 +379,45 @@ class MyFavouritesScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildProductImage(String imagePath) {
+    if (imagePath.startsWith('http')) {
+      return Image.network(
+        imagePath,
+        key: ValueKey(imagePath),
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+        ),
+      );
+    } else if (imagePath.startsWith('data:image')) {
+      try {
+        final base64String = imagePath.split(',').last;
+        return Image.memory(
+          base64Decode(base64String),
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Center(
+            child: Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+          ),
+        );
+      } catch (e) {
+        return const Center(
+          child: Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+        );
+      }
+    } else {
+      String assetPath = imagePath;
+      if (!assetPath.startsWith('assets/')) {
+        assetPath = 'assets/images/$imagePath';
+      }
+      return Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 50, color: Colors.grey),
+        ),
+      );
+    }
   }
 }

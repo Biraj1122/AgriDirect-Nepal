@@ -10,6 +10,7 @@ import 'my_addresses_screen.dart';
 import 'order_history_screen.dart';
 import '../notifications_screen.dart';
 import '../payment_methods_screen.dart';
+import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userName;
@@ -37,23 +38,57 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   String? phone;
   String? fullName;
+  
+  late PageController _bannerController;
+  int _currentBannerIndex = 0;
+  late List<String> _bannerImages;
 
   @override
   void initState() {
     super.initState();
     _fetchUserData();
+    _bannerController = PageController();
+    _bannerImages = [
+      "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1000",
+      "https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=1000",
+      "https://images.unsplash.com/photo-1495107333211-6ca9c24ad996?q=80&w=1000",
+    ]..shuffle(); // Shuffle once per session as requested
+    
+    // Auto-animate banner
+    Future.delayed(const Duration(seconds: 3), _animateBanner);
+  }
+
+  void _animateBanner() {
+    if (!mounted || !_bannerController.hasClients) return;
+    _currentBannerIndex = (_currentBannerIndex + 1) % _bannerImages.length;
+    _bannerController.animateToPage(
+      _currentBannerIndex,
+      duration: const Duration(seconds: 1),
+      curve: Curves.easeInOut,
+    );
+    Future.delayed(const Duration(seconds: 5), _animateBanner);
+  }
+
+  @override
+  void dispose() {
+    _bannerController.dispose();
+    super.dispose();
   }
 
   Future<void> _fetchUserData() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      if (doc.exists && mounted) {
-        setState(() {
-          fullName = doc.data()?['fullName'];
-          phone = doc.data()?['phone'];
-        });
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (doc.exists && mounted) {
+          setState(() {
+            fullName = doc.data()?['fullName'];
+            phone = doc.data()?['phone'];
+          });
+        }
       }
+    } catch (e) {
+      debugPrint("Error fetching user data: $e");
     }
   }
 
@@ -80,17 +115,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               /// HEADER
               Container(
-                height: 220,
+                height: 240,
                 width: double.infinity,
-                color: const Color(0xffE8F5E9),
+                decoration: const BoxDecoration(
+                  color: Color(0xffE8F5E9),
+                ),
                 child: Stack(
                   children: [
+                    // Animated Banners
+                    Positioned.fill(
+                      child: PageView.builder(
+                        controller: _bannerController,
+                        itemCount: _bannerImages.length,
+                        itemBuilder: (context, index) {
+                          return Image.network(
+                            _bannerImages[index],
+                            fit: BoxFit.cover,
+                            color: Colors.black.withValues(alpha: 0.2),
+                            colorBlendMode: BlendMode.darken,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              color: Colors.green.shade100,
+                              child: const Icon(Icons.agriculture, size: 50, color: Colors.green),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                     // Back Button
                     Positioned(
                       top: 50,
                       left: 15,
                       child: IconButton(
-                        icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+                        icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
                         onPressed: () => _handleBack(context),
                       ),
                     ),
@@ -98,18 +154,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       top: 50,
                       right: 20,
                       child: IconButton(
-                        icon: const Icon(Icons.settings_outlined),
-                        onPressed: () {},
+                        icon: const Icon(Icons.edit_outlined, color: Colors.white),
+                        onPressed: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EditProfileScreen(
+                                currentName: fullName ?? widget.userName,
+                                currentPhone: phone ?? "Not set",
+                              ),
+                            ),
+                          );
+                          if (result == true) {
+                            _fetchUserData();
+                          }
+                        },
                       ),
                     ),
                     Positioned(
-                      bottom: 40,
+                      bottom: 30,
                       left: 25,
                       child: Row(
                         children: [
-                          const CircleAvatar(
-                            radius: 45,
-                            child: Icon(Icons.person, size: 50),
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                            ),
+                            child: const CircleAvatar(
+                              radius: 40,
+                              backgroundColor: Colors.white,
+                              child: Icon(Icons.person, size: 45, color: Colors.green),
+                            ),
                           ),
                           const SizedBox(width: 15),
                           Column(
@@ -120,9 +196,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 style: const TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  shadows: [Shadow(color: Colors.black, blurRadius: 10)],
                                 ),
                               ),
-                              Text(phone ?? "+977 98XXXXXXXX"),
+                              Text(
+                                phone ?? "Add phone number",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                  shadows: [Shadow(color: Colors.black, blurRadius: 10)],
+                                ),
+                              ),
                             ],
                           ),
                         ],
@@ -190,7 +275,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => MyFavouritesScreen(
-                              favouriteProducts: widget.favouriteProducts,
                               onFavouriteToggle:
                               widget.onFavouriteToggle ?? (item) {},
                             ),
@@ -203,7 +287,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     menuItem(
                       Icons.notifications,
                       "Notifications",
-                      badgeText: "3",
+                      badgeStream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(FirebaseAuth.instance.currentUser?.uid)
+                          .collection('notifications')
+                          .where('isRead', isEqualTo: false)
+                          .snapshots(),
                       onTap: () {
                         Navigator.push(
                           context,
@@ -285,7 +374,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       String title, {
         VoidCallback? onTap,
         bool isLast = false,
-        String? badgeText,
+        Stream<QuerySnapshot>? badgeStream,
       }) {
 
     return Column(
@@ -296,17 +385,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (badgeText != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xffE8F5E9),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(badgeText),
+              if (badgeStream != null)
+                StreamBuilder<QuerySnapshot>(
+                  stream: badgeStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withAlpha(50),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          "${snapshot.data!.docs.length}",
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox();
+                  },
                 ),
               const Icon(Icons.arrow_forward_ios, size: 14),
             ],

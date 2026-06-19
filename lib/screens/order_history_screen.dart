@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'orders_screen.dart';
+import 'order_details_screen.dart';
 
 class OrderHistoryScreen extends StatelessWidget {
   const OrderHistoryScreen({super.key});
@@ -30,18 +32,36 @@ class OrderHistoryScreen extends StatelessWidget {
         stream: FirebaseFirestore.instance
             .collection('orders')
             .where('userId', isEqualTo: user.uid)
-            .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}"));
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Text(
+                  "Error loading history. Please try again.",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.red[700]),
+                ),
+              ),
+            );
           }
 
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Colors.green));
           }
 
-          final orders = snapshot.data?.docs ?? [];
+          // Copy list to make it modifiable before sorting
+          final orders = (snapshot.data?.docs ?? []).toList();
+
+          // Sort orders by createdAt in Dart instead of Firestore
+          orders.sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>;
+            final bData = b.data() as Map<String, dynamic>;
+            final aTime = (aData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            final bTime = (bData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            return bTime.compareTo(aTime); // descending order
+          });
 
           if (orders.isEmpty) {
             return const Center(
@@ -62,8 +82,8 @@ class OrderHistoryScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final order = orders[index].data() as Map<String, dynamic>;
               final date = (order['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now();
-              final status = order['status'] ?? 'Pending';
-              final total = order['total'] ?? 0.0;
+              final status = order['status']?.toString() ?? 'Pending';
+              final total = (order['total'] as num?)?.toDouble() ?? 0.0;
               final items = order['items'] as List<dynamic>? ?? [];
 
               return Card(
@@ -84,7 +104,7 @@ class OrderHistoryScreen extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
-                              color: _getStatusColor(status).withOpacity(0.1),
+                              color: _getStatusColor(status).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
@@ -99,19 +119,53 @@ class OrderHistoryScreen extends StatelessWidget {
                         ],
                       ),
                       const Divider(height: 25),
-                      ...items.take(2).map((item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 5),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.circle, size: 8, color: Colors.green),
-                            const SizedBox(width: 10),
-                            Expanded(child: Text(item['title'] ?? 'Product')),
-                            Text("Rs. ${item['price']}"),
-                          ],
+                      ...items.take(3).map((item) {
+                        final itemData = item as Map<String, dynamic>;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Row(
+                            children: [
+                              Container(
+                                height: 45,
+                                width: 45,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xffF7F8F3),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: _buildProductImage(itemData['image']?.toString() ?? ''),
+                                ),
+                              ),
+                              const SizedBox(width: 15),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      itemData['title']?.toString() ?? 'Product',
+                                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                                    ),
+                                    Text(
+                                      itemData['unit']?.toString() ?? '',
+                                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(
+                                "Rs. ${itemData['price']}",
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                      if (items.length > 3)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2, bottom: 8),
+                          child: Text("+${items.length - 3} more items", style: const TextStyle(color: Colors.grey, fontSize: 12, fontStyle: FontStyle.italic)),
                         ),
-                      )),
-                      if (items.length > 2)
-                        Text("+${items.length - 2} more items", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                       const Divider(height: 25),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -124,30 +178,70 @@ class OrderHistoryScreen extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => OrderScreen(
-                                  orderId: orders[index].id,
-                                  onBackToHome: () {
-                                    Navigator.pop(context);
-                                  },
-                                ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => OrderDetailsScreen(order: order),
+                                  ),
+                                );
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.blue,
+                                side: const BorderSide(color: Colors.blue),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               ),
-                            );
-                          },
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.green,
-                            side: const BorderSide(color: Colors.green),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              child: const Text("View Details"),
+                            ),
                           ),
-                          child: const Text("Track Order"),
-                        ),
+                          if (status != 'Delivered' && status != 'Cancelled') ...[
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => OrderScreen(
+                                        orderId: orders[index].id,
+                                        onBackToHome: () {
+                                          Navigator.pop(context);
+                                        },
+                                      ),
+                                    ),
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                ),
+                                child: const Text("Track Order", style: TextStyle(color: Colors.white)),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
+                      if (_canCancelOrder(order)) ...[
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: () => _cancelOrder(context, orders[index].id),
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text(
+                              "Cancel Order",
+                              style: TextStyle(fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -166,6 +260,104 @@ class OrderHistoryScreen extends StatelessWidget {
       case 'Delivered': return Colors.green;
       case 'Cancelled': return Colors.red;
       default: return Colors.grey;
+    }
+  }
+
+  bool _canCancelOrder(Map<String, dynamic> order) {
+    final status = order['status']?.toString() ?? 'Pending';
+    final deliveryId = order['deliveryId'];
+
+    // Can only cancel if:
+    // 1. Status is not Delivered or Cancelled
+    // 2. No delivery person has accepted (deliveryId is null or empty)
+    return status != 'Delivered' &&
+        status != 'Cancelled' &&
+        (deliveryId == null || deliveryId.toString().isEmpty);
+  }
+
+  Future<void> _cancelOrder(BuildContext context, String orderId) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Cancel Order", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("Are you sure you want to cancel this order? This action cannot be undone."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Keep Order", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Yes, Cancel", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('orders')
+            .doc(orderId)
+            .update({
+          'status': 'Cancelled',
+          'cancelledAt': FieldValue.serverTimestamp(),
+        });
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("Order cancelled successfully"),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error cancelling order: $e")),
+          );
+        }
+      }
+    }
+  }
+
+  Widget _buildProductImage(String imagePath) {
+    if (imagePath.startsWith('http')) {
+      return Image.network(
+        imagePath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
+        ),
+      );
+    } else if (imagePath.startsWith('data:image')) {
+      try {
+        final base64String = imagePath.split(',').last;
+        return Image.memory(
+          base64Decode(base64String),
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Center(
+            child: Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
+          ),
+        );
+      } catch (e) {
+        return const Center(
+          child: Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
+        );
+      }
+    } else {
+      String assetPath = imagePath;
+      if (assetPath.isNotEmpty && !assetPath.startsWith('assets/')) {
+        assetPath = 'assets/images/$imagePath';
+      }
+      return Image.asset(
+        assetPath.isEmpty ? 'assets/images/logo.png' : assetPath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
+        ),
+      );
     }
   }
 }
