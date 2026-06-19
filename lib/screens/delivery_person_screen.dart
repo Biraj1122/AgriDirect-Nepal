@@ -1,6 +1,4 @@
-// delivery_person_screen.dart
-// FIXES APPLIED: Fixed View Route button to show delivery-focused map instead of redirecting to customer screen. Added DeliveryRouteMapScreen for route visualization.
-// LATEST FIX: Customer red dot now properly displays on delivery person's home map when they accept a delivery
+
 
 import 'dart:async';
 import 'dart:io';
@@ -78,7 +76,7 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
     });
   }
 
-  @override
+  @override//fixed
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {

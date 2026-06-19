@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../product.dart';
 import 'product_detail_screen.dart';
@@ -7,7 +8,7 @@ import 'crop_health_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final String userName;
   final VoidCallback onCartTap;
   final VoidCallback onFavoritesTap;
@@ -24,6 +25,44 @@ class HomeScreen extends StatelessWidget {
     required this.favouriteProducts,
     required this.onFavouriteToggle,
   });
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final PageController _featuredPageController = PageController();
+  int _currentFeaturedIndex = 0;
+  Timer? _featuredTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startFeaturedTimer();
+  }
+
+  void _startFeaturedTimer() {
+    _featuredTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_featuredPageController.hasClients) {
+        int nextIndex = (_currentFeaturedIndex + 1) % 4; // Cycle through 4 products
+        _featuredPageController.animateToPage(
+          nextIndex,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeInOut,
+        );
+        setState(() {
+          _currentFeaturedIndex = nextIndex;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _featuredTimer?.cancel();
+    _featuredPageController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +84,7 @@ class HomeScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Hello, $userName",
+                        "Hello, ${widget.userName}",
                         style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 2),
@@ -55,7 +94,7 @@ class HomeScreen extends StatelessWidget {
                   Row(
                     children: [
                       IconButton(
-                        onPressed: onFavoritesTap,
+                        onPressed: widget.onFavoritesTap,
                         icon: const Icon(Icons.favorite_border, color: Colors.red),
                       ),
                       Stack(
@@ -173,6 +212,34 @@ class HomeScreen extends StatelessWidget {
                   },
                 ),
 
+              const SizedBox(height: 20),
+
+              /// FEATURED SLIDING PRODUCTS
+              const Text("Featured Items", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 180,
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance.collection('products').limit(4).snapshots(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final products = snapshot.data!.docs;
+                    return PageView.builder(
+                      controller: _featuredPageController,
+                      onPageChanged: (idx) => setState(() => _currentFeaturedIndex = idx),
+                      itemCount: products.length,
+                      itemBuilder: (context, index) {
+                        final data = products[index].data() as Map<String, dynamic>;
+                        final product = Product.fromMap(data, docId: products[index].id);
+                        return _buildFeaturedCard(context, product);
+                      },
+                    );
+                  },
+                ),
+              ),
+
               const SizedBox(height: 25),
 
               /// CROP HEALTH AI BANNER
@@ -233,13 +300,30 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
+              /// PROMOS & OFFERS
+              const Text("Promos & Offers", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 120,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    _buildPromoCard("10% OFF", "On all organic fertilizers", Colors.orange, Icons.percent),
+                    _buildPromoCard("FREE DELIVERY", "Orders above Rs. 2000", Colors.blue, Icons.local_shipping),
+                    _buildPromoCard("COMBO DEAL", "Get seeds with every tool", Colors.purple, Icons.card_giftcard),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
               /// CATEGORIES
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text("Categories", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
                   TextButton(
-                    onPressed: () => onCategoryTap(""),
+                    onPressed: () => widget.onCategoryTap(""),
                     child: const Text("See all", style: TextStyle(color: Colors.green)),
                   ),
                 ],
@@ -295,57 +379,20 @@ class HomeScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              /// DYNAMIC BANNER (ADMIN ANNOUNCEMENT)
-              StreamBuilder<DocumentSnapshot>(
-                stream: FirebaseFirestore.instance.collection('settings').doc('announcement').snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData || !snapshot.data!.exists) {
-                    return const SizedBox();
-                  }
-                  final data = snapshot.data!.data() as Map<String, dynamic>;
-                  final title = data['title'] ?? 'Special Offer';
-                  final content = data['content'] ?? 'Check out our latest fresh arrivals!';
-
-                  return Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      image: const DecorationImage(
-                        image: AssetImage("assets/images/vegetables.png"),
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        gradient: LinearGradient(
-                          colors: [Colors.black.withValues(alpha: 0.7), Colors.transparent],
-                          begin: Alignment.bottomLeft,
-                        ),
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 5),
-                          Text(content, style: const TextStyle(color: Colors.white, fontSize: 14)),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+              /// PRODUCT GRID (LIMITED TO 4)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text("Fresh Products", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                  TextButton(
+                    onPressed: () => widget.onCategoryTap("All"),
+                    child: const Text("View More", style: TextStyle(color: Colors.green)),
+                  ),
+                ],
               ),
-
-              const SizedBox(height: 25),
-
-              /// PRODUCT GRID
-              const Text("Fresh Products", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
               const SizedBox(height: 15),
               StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('products').snapshots(),
+                stream: FirebaseFirestore.instance.collection('products').limit(4).snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.red, fontSize: 12)));
@@ -385,6 +432,7 @@ class HomeScreen extends StatelessWidget {
                   );
                 },
               ),
+              const SizedBox(height: 30),
             ],
           ),
         ),
@@ -392,8 +440,81 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildFeaturedCard(BuildContext context, Product product) {
+    return GestureDetector(
+      onTap: () {
+        bool isFavourite = widget.favouriteProducts.any((p) => 
+          (p['name'] == product.title || p['title'] == product.title) || 
+          (product.id != null && (p['docId'] == product.id || p['id'] == product.id))
+        );
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductDetailScreen(
+              product: product,
+              isFavourite: isFavourite,
+              onToggleFavourite: widget.onFavouriteToggle,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          image: DecorationImage(
+            image: product.image.startsWith('http') 
+                ? NetworkImage(product.image) 
+                : AssetImage(product.image) as ImageProvider,
+            fit: BoxFit.cover,
+            colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.3), BlendMode.darken),
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
+                child: const Text("FEATURED", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 5),
+              Text(product.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+              Text("Rs. ${product.price}", style: const TextStyle(color: Colors.white, fontSize: 16)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPromoCard(String title, String subtitle, Color color, IconData icon) {
+    return Container(
+      width: 200,
+      margin: const EdgeInsets.only(right: 15),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 28),
+          const Spacer(),
+          Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProductCard(BuildContext context, Product product) {
-    bool isFavourite = favouriteProducts.any((p) => 
+    bool isFavourite = widget.favouriteProducts.any((p) => 
       (p['name'] == product.title || p['title'] == product.title) || 
       (product.id != null && (p['docId'] == product.id || p['id'] == product.id))
     );
@@ -406,7 +527,7 @@ class HomeScreen extends StatelessWidget {
             builder: (_) => ProductDetailScreen(
               product: product,
               isFavourite: isFavourite,
-              onToggleFavourite: onFavouriteToggle,
+              onToggleFavourite: widget.onFavouriteToggle,
             ),
           ),
         );
@@ -447,7 +568,7 @@ class HomeScreen extends StatelessWidget {
                       productMap['badgeColor'] = Colors.green.toARGB32();
                       productMap['farm'] = product.farmName ?? 'Local Farm';
                       productMap['rating'] = 4.5;
-                      onFavouriteToggle(productMap);
+                      widget.onFavouriteToggle(productMap);
                     },
                     child: Icon(
                       isFavourite ? Icons.favorite : Icons.favorite_border,
@@ -515,7 +636,7 @@ class HomeScreen extends StatelessWidget {
 
   Widget categoryItem(BuildContext context, IconData icon, String title) {
     return GestureDetector(
-      onTap: () => onCategoryTap(title),
+      onTap: () => widget.onCategoryTap(title),
       child: Container(
         margin: const EdgeInsets.only(right: 12),
         child: Column(
