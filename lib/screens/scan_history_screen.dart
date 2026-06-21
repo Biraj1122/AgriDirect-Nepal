@@ -24,7 +24,6 @@ class ScanHistoryScreen extends StatelessWidget {
               stream: FirebaseFirestore.instance
                   .collection('research_submissions')
                   .where('userId', isEqualTo: user.uid)
-                  .orderBy('timestamp', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
@@ -45,11 +44,20 @@ class ScanHistoryScreen extends StatelessWidget {
                   );
                 }
 
+                // Sort manually in memory to avoid needing a Firestore index right now
+                final docs = snapshot.data!.docs.toList()
+                  ..sort((a, b) {
+                    final aTime = (a.data() as Map)['timestamp'] as Timestamp?;
+                    final bTime = (b.data() as Map)['timestamp'] as Timestamp?;
+                    if (aTime == null || bTime == null) return 0;
+                    return bTime.compareTo(aTime);
+                  });
+
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: snapshot.data!.docs.length,
+                  itemCount: docs.length,
                   itemBuilder: (context, index) {
-                    final doc = snapshot.data!.docs[index];
+                    final doc = docs[index];
                     final data = doc.data() as Map<String, dynamic>;
                     final date = (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
                     final diagnosis = data['diagnosis'] ?? "Unknown";

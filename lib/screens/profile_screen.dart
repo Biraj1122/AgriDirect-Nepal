@@ -14,7 +14,6 @@ import 'edit_profile_screen.dart';
 import 'my_addresses_screen.dart';
 import 'order_history_screen.dart';
 import 'scan_history_screen.dart';
-import 'ai_settings_screen.dart';
 
 
 
