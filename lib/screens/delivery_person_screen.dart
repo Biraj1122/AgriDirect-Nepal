@@ -13,6 +13,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:latlong2/latlong.dart' hide Path;
+import 'package:cloudinary_public/cloudinary_public.dart';
 
 import '../../login_screen.dart';
 
@@ -903,7 +904,6 @@ class _EarningsTabState extends State<_EarningsTab> {
           if (snapshot.hasData) {
             for (var doc in snapshot.data!.docs) {
               final data = doc.data() as Map<String, dynamic>;
-              final price = (data['total'] ?? 0).toDouble();
               // Assuming delivery person gets a flat fee or percentage?
               // Let's assume they get the 'deliveryFee' if present, otherwise let's say Rs. 100 per delivery for demo
               final earning = (data['deliveryFee'] ?? 100).toDouble();
@@ -1108,41 +1108,66 @@ class _ProfileTabState extends State<_ProfileTab> {
   Future<void> _persistProfile() async {
     setState(() => _isSaving = true);
 
-    final updates = <String, dynamic>{
-      'fullName': _nameController.text.trim(), // Consistent with signup
-      'name': _nameController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'vehicleDetails': _vehicleController.text.trim(),
-      'updatedAt': FieldValue.serverTimestamp()
-    };
+    String? finalProfileUrl = _profileImgPath;
+    String? finalLicenseUrl = _licenseImgPath;
 
-    if (_profileImgPath == null) {
-      updates['profileImageUrl'] = FieldValue.delete();
-    } else {
-      updates['profileImageUrl'] = _profileImgPath;
+    try {
+      final cloudinary = CloudinaryPublic('drt6y7f8v', 'agridirect_unsigned', cache: false);
+
+      if (_profileImgPath != null && !(_profileImgPath!.startsWith('http'))) {
+        CloudinaryResponse response = await cloudinary.uploadFile(
+          CloudinaryFile.fromFile(_profileImgPath!, folder: 'profile_pics'),
+        );
+        finalProfileUrl = response.secureUrl;
+      }
+
+      if (_licenseImgPath != null && !(_licenseImgPath!.startsWith('http'))) {
+        CloudinaryResponse response = await cloudinary.uploadFile(
+          CloudinaryFile.fromFile(_licenseImgPath!, folder: 'licenses'),
+        );
+        finalLicenseUrl = response.secureUrl;
+      }
+
+      final updates = <String, dynamic>{
+        'fullName': _nameController.text.trim(),
+        'name': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'vehicleDetails': _vehicleController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp()
+      };
+
+      if (finalProfileUrl == null) {
+        updates['profileImageUrl'] = FieldValue.delete();
+      } else {
+        updates['profileImageUrl'] = finalProfileUrl;
+      }
+
+      if (finalLicenseUrl == null) {
+        updates['licenseImageUrl'] = FieldValue.delete();
+      } else {
+        updates['licenseImageUrl'] = finalLicenseUrl;
+      }
+
+      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set(
+          updates,
+          SetOptions(merge: true)
+      );
+
+      await FirebaseFirestore.instance.collection('riders').doc(widget.user.uid).set(
+          updates,
+          SetOptions(merge: true)
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile changes saved!")));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload error: $e"), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
-
-    if (_licenseImgPath == null) {
-      updates['licenseImageUrl'] = FieldValue.delete();
-    } else {
-      updates['licenseImageUrl'] = _licenseImgPath;
-    }
-
-    // Save to both collections (generic users and specific riders section)
-    await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set(
-        updates,
-        SetOptions(merge: true)
-    );
-
-    await FirebaseFirestore.instance.collection('riders').doc(widget.user.uid).set(
-        updates,
-        SetOptions(merge: true)
-    );
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile changes saved!")));
-    }
-    setState(() => _isSaving = false);
   }
 
   @override
@@ -1345,6 +1370,7 @@ class _OrderCard extends StatelessWidget {
           : (await FirebaseFirestore.instance.collection('users').doc(riderUid).get()).data();
 
       final riderName = riderData?['fullName'] ?? riderData?['name'] ?? "Rider";
+      final riderPhone = riderData?['phone'] ?? "";
 
       // 1. Verify the order isn't already taken by someone else
       final freshSnap = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
@@ -1365,7 +1391,8 @@ class _OrderCard extends StatelessWidget {
       await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
         'status': next,
         'deliveryId': riderUid,
-        'deliveryName': riderName, // Dynamically fetched name
+        'deliveryName': riderName, 
+        'deliveryPhone': riderPhone, // Added to allow customer to call rider
         'updatedAt': FieldValue.serverTimestamp(),
       });
 

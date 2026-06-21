@@ -2,8 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'reset_password_screen.dart';
 import 'Success/shared_widgets.dart';
 import 'navigation_screen.dart';
 import 'farmer_screen.dart';
@@ -36,8 +34,6 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
   final List<FocusNode> _keyboardFocusNodes = List.generate(6, (_) => FocusNode());
 
   late AnimationController _animController;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
 
   bool _isVerifying = false;
   bool _isResending = false;
@@ -57,12 +53,6 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
     super.initState();
     _animController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 500));
-    _fadeAnim =
-        CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.07),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _animController.forward();
     _startResendTimer();
     
@@ -76,9 +66,15 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
 
   @override
   void dispose() {
-    for (final c in _controllers) c.dispose();
-    for (final f in _focusNodes) f.dispose();
-    for (final f in _keyboardFocusNodes) f.dispose();
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    for (final f in _focusNodes) {
+      f.dispose();
+    }
+    for (final f in _keyboardFocusNodes) {
+      f.dispose();
+    }
     _timer?.cancel();
     _autoCheckTimer?.cancel();
     _animController.dispose();
@@ -206,7 +202,9 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen>
         _isResending = false;
         _errorText = null;
       });
-      for (final controller in _controllers) controller.clear();
+      for (final controller in _controllers) {
+        controller.clear();
+      }
       _focusNodes[0].requestFocus();
       _startResendTimer();
       ScaffoldMessenger.of(context).showSnackBar(

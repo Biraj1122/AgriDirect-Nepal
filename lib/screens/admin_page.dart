@@ -719,7 +719,7 @@ class _AdminPageState extends State<AdminPage> {
                       }
 
                       return DropdownButtonFormField<String>(
-                        value: selectedCategory,
+                        initialValue: selectedCategory,
                         decoration: const InputDecoration(labelText: "Select Category", border: OutlineInputBorder()),
                         items: categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                         onChanged: (v) => setDialogState(() => selectedCategory = v!),
@@ -728,7 +728,7 @@ class _AdminPageState extends State<AdminPage> {
                   ),
                   const SizedBox(height: 15),
                   DropdownButtonFormField<String>(
-                    value: selectedSeason,
+                    initialValue: selectedSeason,
                     decoration: const InputDecoration(labelText: "Growth Season", border: OutlineInputBorder()),
                     items: ["Spring", "Summer", "Monsoon", "Autumn", "Winter", "All Year"]
                         .map((s) => DropdownMenuItem(value: s, child: Text(s)))

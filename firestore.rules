@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Function to check if the user is an admin
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'agrifarmadmin@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Admin')
+      );
+    }
+
+    // Function to check if user is a delivery person
+    function isDeliveryPerson() {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Delivery Person';
+    }
+
+    // User profiles: Users can only manage their own data
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && request.auth.uid == userId
+                    && (
+                      request.resource.data.get('role', 'Customer') == resource.data.get('role', 'Customer') ||
+                      request.auth.token.email == 'agrifarmadmin@gmail.com'
+                    );
+
+      // Allow notifications subcollection access
+      match /notifications/{notiId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // Role-specific collections
+    match /farmers/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /riders/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // E-commerce: Products and Categories
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /categories/{catId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Research & Diagnostics: History of AI scans
+    match /research_submissions/{submissionId} {
+      allow create: if isSignedIn()
+                    && request.resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn()
+                  && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Orders: Secure checkout and tracking
+    match /orders/{orderId} {
+      allow create: if isSignedIn();
+      allow read: if isSignedIn()
+                  && (
+                    resource.data.userId == request.auth.uid ||
+                    resource.data.deliveryId == request.auth.uid ||
+                    isAdmin() ||
+                    (isDeliveryPerson() && (resource.data.get('deliveryId', '') == ''))
+                  );
+      allow update: if isSignedIn()
+                    && (
+                      resource.data.userId == request.auth.uid ||
+                      isAdmin() ||
+                      (isDeliveryPerson() && (resource.data.get('deliveryId', '') == '' || resource.data.deliveryId == request.auth.uid))
+                    );
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
