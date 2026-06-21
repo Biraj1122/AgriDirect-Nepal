@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloudinary_public/cloudinary_public.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String currentName;
@@ -23,6 +27,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late TextEditingController _confirmPasswordController;
   bool _isLoading = false;
   bool _obscurePassword = true;
+  String? _profileImageUrl;
+  File? _imageFile;
+  final _picker = ImagePicker();
 
   @override
   void initState() {
@@ -30,14 +37,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController = TextEditingController(text: widget.currentName);
     _passwordController = TextEditingController();
     _confirmPasswordController = TextEditingController();
+    _fetchCurrentProfileImage();
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
-    super.dispose();
+  Future<void> _fetchCurrentProfileImage() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      if (doc.exists && mounted) {
+        setState(() {
+          _profileImageUrl = doc.data()?['profileImageUrl'];
+        });
+      }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    if (pickedFile != null) {
+      setState(() {
+        _imageFile = File(pickedFile.path);
+      });
+    }
+  }
+
+  Future<String?> _uploadToCloudinary() async {
+    if (_imageFile == null) return _profileImageUrl;
+
+    try {
+      final cloudinary = CloudinaryPublic('drt6y7f8v', 'agridirect_unsigned', cache: false);
+      CloudinaryResponse response = await cloudinary.uploadFile(
+        CloudinaryFile.fromFile(_imageFile!.path, folder: 'profile_pics'),
+      );
+      return response.secureUrl;
+    } catch (e) {
+      debugPrint("Cloudinary Upload Error: $e");
+      return null;
+    }
   }
 
   Future<void> _updateProfile() async {
@@ -48,9 +84,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
+        String? imageUrl = _profileImageUrl;
+        if (_imageFile != null) {
+          imageUrl = await _uploadToCloudinary();
+          if (imageUrl == null) throw "Failed to upload image";
+        }
+
         // Update Name in Firestore
         await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
           'fullName': _nameController.text.trim(),
+          'profileImageUrl': imageUrl,
         });
 
         // Update Firebase Auth Display Name
@@ -103,10 +146,33 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           child: Column(
             children: [
               const SizedBox(height: 20),
-              const CircleAvatar(
-                radius: 50,
-                backgroundColor: Color(0xffE8F5E9),
-                child: Icon(Icons.person, size: 60, color: Colors.green),
+              GestureDetector(
+                onTap: _pickImage,
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundColor: const Color(0xffE8F5E9),
+                      backgroundImage: _imageFile != null
+                          ? FileImage(_imageFile!)
+                          : (_profileImageUrl != null && _profileImageUrl!.isNotEmpty
+                              ? CachedNetworkImageProvider(_profileImageUrl!)
+                              : null) as ImageProvider?,
+                      child: (_imageFile == null && (_profileImageUrl == null || _profileImageUrl!.isEmpty))
+                          ? const Icon(Icons.person, size: 60, color: Colors.green)
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
+                        child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 30),
               TextFormField(

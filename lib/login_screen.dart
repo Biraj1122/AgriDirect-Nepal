@@ -46,6 +46,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final user = userCredential!.user!;
         DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        
+        // Handle new social user creation
+        if (!userDoc.exists) {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'fullName': user.displayName ?? 'New User',
+            'email': user.email,
+            'role': 'Customer', // Default role
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+          userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        }
+
         final userData = userDoc.data() as Map<String, dynamic>?;
 
         if (mounted) {
@@ -68,7 +80,14 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (mounted) {
         Navigator.pop(context); // Pop loading
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Login failed: $e")));
+        String errorMsg = e.toString();
+        if (errorMsg.contains("ApiException: 10")) {
+          errorMsg = "Google Sign-In Error: Please register your SHA-1 key in Firebase Console.";
+        }
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(errorMsg),
+          backgroundColor: Colors.red,
+        ));
       }
     }
   }
@@ -105,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 // Email field
                 TextFormField(
                   controller: emailController,
-                  onChanged: (val) => setState(() {}), // Update UI to show Admin hint
+                  onChanged: (val) => setState(() {}), 
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) return "Please enter email";
                     return null;
@@ -198,7 +217,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           );
 
                           final String normalizedEmail = email.toLowerCase();
-                          // Admin credentials updated to match your screenshot
                           final bool isMasterAdmin = (normalizedEmail == "agrifarmadmin@gmail.com") && password == "Farmadmin@5";
 
                           UserCredential? userCredential;
@@ -209,15 +227,21 @@ class _LoginScreenState extends State<LoginScreen> {
                               password: password,
                             );
                           } on FirebaseAuthException catch (e) {
-                            // If it's the master admin and it failed, give a specific hint
-                            if (isMasterAdmin) {
+                            if (context.mounted) Navigator.pop(context); // Pop loading
+
+                            // If it's NOT the admin, and login fails with these codes, 
+                            // it's likely a Google/Social account.
+                            if (!isMasterAdmin && (e.code == 'wrong-password' || e.code == 'invalid-credential' || e.code == 'user-not-found')) {
+                                _handleSocialSignIn(_socialAuthService.signInWithGoogle());
+                                return;
+                            }
+
+                            if (isMasterAdmin && (e.code == 'wrong-password' || e.code == 'invalid-credential')) {
                               if (context.mounted) {
-                                Navigator.pop(context);
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text("Admin Login Failed: Please check if 'Farmadmin@5' is set as the password in Firebase Console."),
+                                    content: Text("Admin Login Failed: Please check your password in Firebase Console."),
                                     backgroundColor: Colors.red,
-                                    duration: Duration(seconds: 5),
                                   ),
                                 );
                               }
@@ -226,14 +250,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             rethrow;
                           }
 
-                          final User? user = userCredential?.user;
+                          final User? user = userCredential.user;
                           if (user == null) {
                             if (context.mounted) Navigator.pop(context);
                             return;
                           }
 
                           if (isMasterAdmin) {
-                            // Create/Update Admin record in Firestore
                             await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
                               'email': email,
                               'role': 'Admin',
@@ -286,12 +309,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                         } on FirebaseAuthException catch (e) {
                           if (context.mounted) {
-                            Navigator.pop(context);
+                            try { Navigator.pop(context); } catch (_) {}
                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? "Login failed")));
                           }
                         } catch (e) {
                           if (context.mounted) {
-                            Navigator.pop(context);
+                            try { Navigator.pop(context); } catch (_) {}
                             ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("An error occurred: $e")));
                           }
                         }
