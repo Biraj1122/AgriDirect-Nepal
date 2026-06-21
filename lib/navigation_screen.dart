@@ -77,6 +77,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
     } catch (e) {
       debugPrint("Error checking role: $e");
       if (mounted) {
+        // Fallback: assume Customer if role check fails
+        _listenToFavorites();
         setState(() => _isCheckingRole = false);
       }
     }
@@ -97,6 +99,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    // Avoid duplicate subscriptions
+    _favSubscription?.cancel();
+
     _favSubscription = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -106,11 +111,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
       if (mounted) {
         setState(() {
           _favouriteProducts = snapshot.docs.map((doc) {
-            final data = doc.data();
+            final Map<String, dynamic> data = doc.data();
             return {...data, 'docId': doc.id};
           }).toList();
         });
       }
+    }, onError: (e) {
+      debugPrint("Favorites Subscription Error: $e");
     });
   }
 

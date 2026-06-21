@@ -441,12 +441,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildFeaturedCard(BuildContext context, Product product) {
+    bool isFavourite = widget.favouriteProducts.any((p) =>
+        (p['name'] == product.title || p['title'] == product.title) ||
+        (product.id != null && (p['docId'] == product.id || p['id'] == product.id))
+    );
+
     return GestureDetector(
       onTap: () {
-        bool isFavourite = widget.favouriteProducts.any((p) => 
-          (p['name'] == product.title || p['title'] == product.title) || 
-          (product.id != null && (p['docId'] == product.id || p['id'] == product.id))
-        );
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -463,29 +464,56 @@ class _HomeScreenState extends State<HomeScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           image: DecorationImage(
-            image: product.image.startsWith('http') 
-                ? NetworkImage(product.image) 
+            image: product.image.startsWith('http')
+                ? NetworkImage(product.image)
                 : AssetImage(product.image) as ImageProvider,
             fit: BoxFit.cover,
             colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.3), BlendMode.darken),
           ),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.end,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
-                child: const Text("FEATURED", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
+                    child: const Text("FEATURED", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(product.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text("Rs. ${product.price}", style: const TextStyle(color: Colors.white, fontSize: 16)),
+                ],
               ),
-              const SizedBox(height: 5),
-              Text(product.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-              Text("Rs. ${product.price}", style: const TextStyle(color: Colors.white, fontSize: 16)),
-            ],
-          ),
+            ),
+            Positioned(
+              top: 15,
+              right: 15,
+              child: GestureDetector(
+                onTap: () {
+                  final productMap = product.toMap();
+                  productMap['badge'] = 'Featured';
+                  productMap['badgeColor'] = Colors.green.toARGB32();
+                  productMap['farm'] = product.farmName ?? 'Local Farm';
+                  productMap['rating'] = 4.8;
+                  widget.onFavouriteToggle(productMap);
+                },
+                child: CircleAvatar(
+                  backgroundColor: Colors.white.withValues(alpha: 0.8),
+                  radius: 18,
+                  child: Icon(
+                    isFavourite ? Icons.favorite : Icons.favorite_border,
+                    color: Colors.red,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
