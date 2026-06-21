@@ -18,10 +18,12 @@ class AIHelper {
 
     final mockResults = [
       {"label": "Potato: Late Blight", "confidence": 0.94},
-      {"label": "Tomato: Bacterial Spot", "confidence": 0.88},
-      {"label": "Apple: Healthy", "confidence": 0.97},
-      {"label": "Corn: Common Rust", "confidence": 0.76},
+      {"label": "Bitter Gourd: Fruit Fly", "confidence": 0.96},
+      {"label": "Ginger: Rhizome Rot", "confidence": 0.89},
+      {"label": "Cattle: Lumpy Skin", "confidence": 0.91},
+      {"label": "Poultry: Coccidiosis", "confidence": 0.85},
       {"label": "Rice: Brown Spot", "confidence": 0.82},
+      {"label": "Healthy", "confidence": 0.98},
     ];
 
     // Pick a result based on the current time for variety during testing

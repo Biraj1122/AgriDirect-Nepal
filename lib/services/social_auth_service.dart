@@ -18,7 +18,17 @@ class SocialAuthService {
         await _updateUserData(userCredential.user);
         return userCredential;
       } else {
-        final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+        // Force account selection to fix ApiException 10
+        final GoogleSignIn googleSignIn = GoogleSignIn(
+          scopes: ['email', 'profile'],
+        );
+        
+        try {
+          await googleSignIn.signOut();
+        } catch (_) {}
+        
+        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
         if (googleUser == null) return null;
 
         final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
