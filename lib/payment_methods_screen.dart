@@ -56,12 +56,13 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           'paymentStatus': 'Pending',
           'createdAt': FieldValue.serverTimestamp(),
           'items': cartModel.items.map((item) => {
-            'title': item.title,
-            'price': item.price,
-            'image': item.image,
-            'unit': item.unit,
+            'title': item.product.title,
+            'price': item.product.price,
+            'image': item.product.image,
+            'unit': item.product.unit,
+            'quantity': item.quantity,
           }).toList(),
-          'itemsSummary': cartModel.items.map((e) => e.title).join(", "),
+          'itemsSummary': cartModel.items.map((e) => "${e.quantity}x ${e.product.title}").join(", "),
         });
         orderId = docRef.id;
       }
