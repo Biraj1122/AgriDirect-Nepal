@@ -44,7 +44,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _startFeaturedTimer() {
     _featuredTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (_featuredPageController.hasClients) {
-        int nextIndex = (_currentFeaturedIndex + 1) % 4; // Cycle through 4 products
+        int nextIndex = (_currentFeaturedIndex + 1) % 4;
         _featuredPageController.animateToPage(
           nextIndex,
           duration: const Duration(milliseconds: 800),
@@ -76,7 +76,6 @@ class _HomeScreenState extends State<HomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /// HEADER
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -146,7 +145,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 15),
 
-              /// Active Order Status Card
               if (user != null)
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
@@ -214,7 +212,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 20),
 
-              /// FEATURED SLIDING PRODUCTS
               const Text("Featured Items", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
               const SizedBox(height: 10),
               SizedBox(
@@ -242,7 +239,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 25),
 
-              /// CROP HEALTH AI BANNER
               GestureDetector(
                 onTap: () {
                   Navigator.push(
@@ -300,7 +296,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 25),
 
-              /// PROMOS & OFFERS
               const Text("Promos & Offers", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
               const SizedBox(height: 12),
               SizedBox(
@@ -317,7 +312,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 25),
 
-              /// CATEGORIES
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -336,7 +330,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   builder: (context, snapshot) {
                     if (snapshot.hasError) return const SizedBox();
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      // Fallback to defaults if collection is empty
                       return ListView(
                         scrollDirection: Axis.horizontal,
                         children: [
@@ -361,7 +354,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         final name = cat['name'] ?? 'Category';
                         final iconCode = cat['iconCode'] as int?;
 
-                        // SAFE ALTERNATIVE TO BYPASS TREE-SHAKING CONSTRAINTS
                         final displayIcon = iconCode != null
                             ? IconData(iconCode, fontFamily: 'MaterialIcons')
                             : Icons.category;
@@ -379,7 +371,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 25),
 
-              /// PRODUCT GRID (LIMITED TO 4)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -579,7 +570,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ? Image.asset(product.image, height: 120, width: double.infinity, fit: BoxFit.contain)
                       : Image.network(
                           product.image,
-                          key: ValueKey(product.image), // Forces reload on URL change
+                          key: ValueKey(product.image),
                           height: 120,
                           width: double.infinity,
                           fit: BoxFit.cover,

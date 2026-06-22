@@ -61,7 +61,6 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         _activeOrderId = widget.orderId;
         _startTrackingFlow();
       } else {
-        // Find the most recent active order
         final query = await FirebaseFirestore.instance
             .collection('orders')
             .where('userId', isEqualTo: user.uid)
@@ -84,7 +83,6 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
       }
     } catch (e) {
       debugPrint("Order Initialization Error: $e");
-      // If there's an error (like a missing index), fall back to empty state
       if (mounted) {
         setState(() {
           _noActiveOrder = true;
@@ -111,11 +109,9 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         final data = snapshot.data() as Map<String, dynamic>;
         final newStatus = data['status'] ?? status;
         final newRiderName = data['deliveryName'] ?? "Assigning...";
-        final newRiderPhone = data['userPhone'] ?? data['deliveryPhone']; // Check both common fields
+        final newRiderPhone = data['deliveryPhone'] ?? data['userPhone'];
         final newDeliveryId = data['deliveryId'];
 
-        // If the order is now Delivered or Cancelled, and we arrived here via general "Orders" tab
-        // (no specific orderId passed), we should show the empty state as requested.
         if (widget.orderId == null && (newStatus == 'Delivered' || newStatus == 'Cancelled')) {
           setState(() {
             _noActiveOrder = true;
@@ -173,7 +169,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
 
   void _startTrackingSimulation() {
     if (!UserData.hasAddress || UserData.defaultLat == null || UserData.defaultLng == null) return;
-    if (_trackingTimer != null) return; // Already running
+    if (_trackingTimer != null) return;
 
     _riderCardController.forward();
 
@@ -265,7 +261,6 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
       if (widget.onBackToHome != null) {
         widget.onBackToHome!();
       } else {
-        // Find role and redirect
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
@@ -293,7 +288,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   }
 
   Future<void> _makeCall() async {
-    final String phone = riderPhone ?? "+9779861509463"; // Use support number as fallback
+    final String phone = riderPhone ?? "+9779861509463";
     final Uri url = Uri.parse('tel:$phone');
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
@@ -301,9 +296,6 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   }
 
   bool _canCancelOrder() {
-    // Can only cancel if:
-    // 1. Status is not Delivered or Cancelled
-    // 2. No delivery person has accepted (deliveryId is null or empty)
     return status != 'Delivered' &&
            status != 'Cancelled' &&
            (deliveryId == null || deliveryId!.isEmpty);
@@ -344,13 +336,11 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Order cancelled successfully"), backgroundColor: Colors.red),
           );
-          // After cancellation, we might want to refresh the state or navigate back
-          // The stream listener will update the status to "Cancelled"
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error cancelling order: $e")),
+            SnackBar(content: Text("Error: $e")),
           );
         }
       }
@@ -394,7 +384,6 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                   styleString: "https://tiles.openfreemap.org/styles/positron",
                 ),
                 
-                // Show Rider Card ONLY if a rider has accepted
                 if (hasRider)
                   Positioned(
                     top: 20,
@@ -430,7 +419,6 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                     ),
                   ),
 
-                // Show "Waiting for Rider" message if no rider yet
                 if (!hasRider && status != "Delivered" && status != "Cancelled")
                   Positioned(
                     top: 20,
@@ -453,7 +441,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                           SizedBox(width: 15),
                           Expanded(
                             child: Text(
-                              "Waiting for rider to accept your order...",
+                              "Waiting for rider to accept...",
                               style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
                             ),
                           ),
@@ -475,9 +463,9 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                       child: Column(
                         children: [
                           _step(Icons.check_circle, "Order Received", "We have received your order", status != "Cancelled"),
-                          _step(Icons.inventory, "Picked Up", "Rider has picked up your items", status == "Picked Up" || status == "On the way" || status == "Arrived" || status == "Delivered"),
+                          _step(Icons.inventory, "Picked Up", "Rider has picked up items", status == "Picked Up" || status == "On the way" || status == "Arrived" || status == "Delivered"),
                           _step(Icons.local_shipping, "On the way", "Rider is heading to you", status == "On the way" || status == "Arrived" || status == "Delivered"),
-                          _step(Icons.home, "Delivered", "Enjoy your fresh produce!", status == "Arrived" || status == "Delivered", isLast: true),
+                          _step(Icons.home, "Delivered", "Enjoy your produce", status == "Arrived" || status == "Delivered", isLast: true),
                         ],
                       ),
                     ),
@@ -556,7 +544,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
               ),
               const SizedBox(height: 12),
               Text(
-                "You don't have any active orders right now. Let's find something fresh for you!",
+                "You don't have any active orders right now.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 15,

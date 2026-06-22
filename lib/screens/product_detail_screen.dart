@@ -18,11 +18,15 @@ class ProductDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xffF7F8F3),
-
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.black, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           IconButton(
             onPressed: () {
@@ -41,106 +45,110 @@ class ProductDetailScreen extends StatelessWidget {
           const SizedBox(width: 10),
         ],
       ),
-
-      body: Column(                                      // ✅ wrap in Column
+      body: Column(
         children: [
           Expanded(
-            child: SingleChildScrollView(               // ✅ content scrolls
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+            child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
                   Center(
-                    child: _buildProductImage(product.image),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  Text(
-                    product.title,
-                    style: const TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
+                    child: Container(
+                      height: 250,
+                      width: double.infinity,
+                      decoration: const BoxDecoration(
+                        color: Color(0xffF7F8F3),
+                      ),
+                      child: Hero(
+                        tag: product.id ?? product.title,
+                        child: _buildProductImage(product.image),
+                      ),
                     ),
                   ),
-
-                  const SizedBox(height: 10),
-
-                  Text(
-                    "Rs. ${product.price}",
-                    style: const TextStyle(
-                      fontSize: 22,
-                      color: Colors.green,
-                      fontWeight: FontWeight.bold,
+                  Padding(
+                    padding: const EdgeInsets.all(25),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              product.title,
+                              style: const TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              "Rs. ${product.price}",
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          product.unit,
+                          style: const TextStyle(color: Colors.grey, fontSize: 16),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          "About product",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          product.longDescription,
+                          style: const TextStyle(
+                            color: Colors.black54,
+                            fontSize: 15,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 25),
+                        if (product.farmName != null)
+                          _infoRow(Icons.agriculture, "Source", product.farmName!),
+                        if (product.season != null)
+                          _infoRow(Icons.wb_sunny_outlined, "Best Season", product.season!),
+                      ],
                     ),
                   ),
-
-                  const SizedBox(height: 10),
-
-                  Text(
-                    product.unit,
-                    style: const TextStyle(color: Colors.grey),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  const Text(
-                    "Description",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Text(product.description),
-
-                  const SizedBox(height: 15),
-
-                  const Text(
-                    "About this product",
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Text(
-                    product.longDescription,
-                    style: const TextStyle(height: 1.4),
-                  ),
-
-                  const SizedBox(height: 20),
                 ],
               ),
             ),
           ),
-
-          // ✅ button pinned at bottom, never overflows
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            padding: const EdgeInsets.all(25),
             child: SizedBox(
               width: double.infinity,
               height: 55,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                ),
                 onPressed: () {
                   cartModel.add(product);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("Added to cart"),
-                    ),
+                    const SnackBar(content: Text("Added to cart")),
                   );
                 },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                ),
                 child: const Text(
-                  "Add to Cart",
-                  style: TextStyle(color: Colors.white),
+                  "Add to cart",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -150,29 +158,48 @@ class ProductDetailScreen extends StatelessWidget {
     );
   }
 
+  Widget _infoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.green, size: 20),
+          const SizedBox(width: 10),
+          Text("$label: ", style: const TextStyle(color: Colors.grey)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
   Widget _buildProductImage(String imagePath) {
     if (imagePath.startsWith('http')) {
       return Image.network(
-          imagePath,
-          key: ValueKey(imagePath), // Forces reload when URL changes
-          height: 220,
-          fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100));
+        imagePath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported, size: 100, color: Colors.grey),
+      );
     } else if (imagePath.startsWith('data:image')) {
       try {
         final base64String = imagePath.split(',').last;
-        return Image.memory(base64Decode(base64String), height: 220, fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100));
+        return Image.memory(
+          base64Decode(base64String),
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported, size: 100, color: Colors.grey),
+        );
       } catch (e) {
-        return const Icon(Icons.broken_image, size: 100);
+        return const Icon(Icons.image_not_supported, size: 100, color: Colors.grey);
       }
     } else {
       String assetPath = imagePath;
       if (!assetPath.startsWith('assets/')) {
         assetPath = 'assets/images/$imagePath';
       }
-      return Image.asset(assetPath, height: 220, fit: BoxFit.contain,
-          errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 100));
+      return Image.asset(
+        assetPath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Icon(Icons.eco, size: 100, color: Colors.green),
+      );
     }
   }
 }

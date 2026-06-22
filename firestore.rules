@@ -2,58 +2,50 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Function to check if the user is an admin
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == 'agrifarmadmin@gmail.com' ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Admin')
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Admin'
       );
     }
 
-    // Function to check if user is a delivery person
+    function isFarmer() {
+      return isSignedIn() &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Farmer';
+    }
+
     function isDeliveryPerson() {
       return isSignedIn() &&
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Delivery Person';
     }
 
-    // User profiles: Users can only manage their own data
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && request.auth.uid == userId
-                    && (
-                      request.resource.data.get('role', 'Customer') == resource.data.get('role', 'Customer') ||
-                      request.auth.token.email == 'agrifarmadmin@gmail.com'
-                    );
-
-      // Allow notifications subcollection access
-      match /notifications/{notiId} {
-        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isAdmin() || request.auth.uid == userId;
+      match /{allSubcollections=**} {
+        allow read, write: if isAdmin() || request.auth.uid == userId;
       }
     }
 
-    // Role-specific collections
     match /farmers/{userId} {
+      allow read, write: if isAdmin() || request.auth.uid == userId;
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
     match /riders/{userId} {
+      allow read, write: if isAdmin() || request.auth.uid == userId;
       allow read: if isSignedIn();
-      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
-    // E-commerce: Products and Categories
     match /products/{productId} {
       allow read: if true;
       allow write: if isAdmin();
+      allow create: if isFarmer();
+      allow update, delete: if isFarmer() && (resource.data.farmerUid == request.auth.uid);
     }
 
     match /categories/{catId} {
@@ -61,35 +53,41 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Research & Diagnostics: History of AI scans
-    match /research_submissions/{submissionId} {
-      allow create: if isSignedIn()
-                    && request.resource.data.userId == request.auth.uid;
-      allow read: if isSignedIn()
-                  && (resource.data.userId == request.auth.uid || isAdmin());
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    // Orders: Secure checkout and tracking
+    match /research_submissions/{submissionId} {
+      allow read, write: if isAdmin();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
     match /orders/{orderId} {
       allow create: if isSignedIn();
-      allow read: if isSignedIn()
-                  && (
-                    resource.data.userId == request.auth.uid ||
-                    resource.data.deliveryId == request.auth.uid ||
-                    isAdmin() ||
-                    (isDeliveryPerson() && (resource.data.get('deliveryId', '') == ''))
-                  );
-      allow update: if isSignedIn()
-                    && (
-                      resource.data.userId == request.auth.uid ||
-                      isAdmin() ||
-                      (isDeliveryPerson() && (resource.data.get('deliveryId', '') == '' || resource.data.deliveryId == request.auth.uid))
-                    );
+      allow read, write: if isAdmin();
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.deliveryId == request.auth.uid ||
+        resource.data.farmerUid == request.auth.uid ||
+        isFarmer() ||
+        isDeliveryPerson()
+      );
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.farmerUid == request.auth.uid ||
+        (isDeliveryPerson() && (
+          !('deliveryId' in resource.data) ||
+          resource.data.deliveryId == "" ||
+          resource.data.deliveryId == null ||
+          resource.data.deliveryId == request.auth.uid
+        ))
+      );
     }
 
-    // Default deny
     match /{path=**} {
-      allow read, write: if false;
+      allow read, write: if isAdmin();
     }
   }
 }

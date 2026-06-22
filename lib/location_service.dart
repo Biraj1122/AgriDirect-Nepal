@@ -25,11 +25,9 @@ class LocationService {
   }
 
   Future<String> getAddressFromLatLng(double lat, double lng) async {
-    // Return a basic fallback immediately so we don't show "Fetching..." forever
     String fallback = "Location (${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)})";
     
     try {
-      // Nominatim requires a User-Agent. Adding a timeout for reliability.
       final url = "https://nominatim.openstreetmap.org/reverse?format=json&lat=$lat&lon=$lng&zoom=18&addressdetails=1";
       final response = await http.get(Uri.parse(url), headers: {
         'User-Agent': 'AgriDirect-Nepal/1.0'
@@ -47,7 +45,6 @@ class LocationService {
 
     if (kIsWeb) return fallback;
 
-    // Standard geocoding fallback for Mobile (can be more reliable offline)
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(lat, lng);
       if (placemarks.isNotEmpty) {
@@ -61,7 +58,7 @@ class LocationService {
   }
 
   double calculateDistance(double startLat, double startLng, double endLat, double endLng) {
-    return Geolocator.distanceBetween(startLat, startLng, endLat, endLng) / 1000; // in km
+    return Geolocator.distanceBetween(startLat, startLng, endLat, endLng) / 1000;
   }
 
   Future<List<Map<String, dynamic>>> searchLocation(String query) async {

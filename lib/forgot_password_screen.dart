@@ -89,7 +89,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           MaterialPageRoute(
             builder: (context) => VerifyOtpScreen(
               email: emailController.text.trim(),
-              source: OtpSource.forgotPassword,
+              source: OtpSource.resetPassword,
             ),
           ),
         );
