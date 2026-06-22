@@ -178,7 +178,22 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
             return const Center(child: CircularProgressIndicator(color: Colors.green));
           }
 
-          final docs = snapshot.data?.docs ?? [];
+          // Convert to list and sort in-memory to bypass index requirement
+          final docs = (snapshot.data?.docs ?? []).toList();
+          docs.sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>;
+            final bData = b.data() as Map<String, dynamic>;
+            
+            // Default address always first
+            final aDef = aData['isDefault'] ?? false;
+            final bDef = bData['isDefault'] ?? false;
+            if (aDef != bDef) return aDef ? -1 : 1;
+
+            // Then by date
+            final aTime = (aData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            final bTime = (bData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            return bTime.compareTo(aTime);
+          });
 
           if (docs.isEmpty) {
             return Center(
