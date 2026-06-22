@@ -176,11 +176,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
       } else {
         final Map<String, dynamic> favData = Map.from(product);
         
+        // Ensure both 'name' and 'title' are saved so the list can find them
         favData['name'] = name;
         favData['title'] = name;
         
-        final String img = (favData['image'] ?? favData['imageUrl'] ?? '').toString();
+        // Ensure images are mapped correctly
+        final String img = (product['image'] ?? product['imageUrl'] ?? product['imagePath'] ?? '').toString();
         favData['image'] = img;
+        favData['imagePath'] = img;
         favData['imageUrl'] = img;
 
         if (favData['badgeColor'] is Color) {
