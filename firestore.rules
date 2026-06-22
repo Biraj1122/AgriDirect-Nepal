@@ -20,6 +20,10 @@ service cloud.firestore {
       return isSignedIn() && userExists() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Farmer';
     }
 
+    function isDeliveryPerson() {
+      return isSignedIn() && userExists() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Delivery Person';
+    }
+
     // --- USER PROFILES & NOTIFICATIONS ---
     match /users/{userId} {
       allow read: if isSignedIn();
@@ -60,12 +64,21 @@ service cloud.firestore {
       allow update, delete: if isFarmer() && resource.data.farmerUid == request.auth.uid;
     }
 
-    // --- ORDERS (Farmer Access) ---
+    // --- ORDERS ---
     match /orders/{orderId} {
       allow create: if isSignedIn();
-      allow read, update: if isSignedIn() && (
+      allow read: if isSignedIn() && (
         resource.data.userId == request.auth.uid ||
         resource.data.farmerUid == request.auth.uid ||
+        resource.data.deliveryId == request.auth.uid ||
+        (isDeliveryPerson() && (resource.data.deliveryId == null || resource.data.deliveryId == "")) ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.farmerUid == request.auth.uid ||
+        resource.data.deliveryId == request.auth.uid ||
+        (isDeliveryPerson() && (resource.data.deliveryId == null || resource.data.deliveryId == "")) ||
         isAdmin()
       );
     }
