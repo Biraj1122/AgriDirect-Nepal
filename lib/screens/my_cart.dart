@@ -128,7 +128,8 @@ class _CartScreenState extends State<CartScreen> {
                           padding: const EdgeInsets.all(18),
                           itemCount: cartModel.items.length,
                           itemBuilder: (context, index) {
-                            final product = cartModel.items[index];
+                            final cartItem = cartModel.items[index];
+                            final product = cartItem.product;
                             return Container(
                               margin: const EdgeInsets.only(bottom: 12),
                               padding: const EdgeInsets.all(12),
@@ -168,8 +169,24 @@ class _CartScreenState extends State<CartScreen> {
                                       ],
                                     ),
                                   ),
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.remove_circle_outline, color: Colors.green),
+                                        onPressed: () => cartModel.decrement(index),
+                                      ),
+                                      Text(
+                                        "${cartItem.quantity}",
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                                        onPressed: () => cartModel.increment(index),
+                                      ),
+                                    ],
+                                  ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete),
+                                    icon: const Icon(Icons.delete_outline, color: Colors.red),
                                     onPressed: () => cartModel.removeAt(index),
                                   )
                                 ],

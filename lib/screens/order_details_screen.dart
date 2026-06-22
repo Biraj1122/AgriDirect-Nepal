@@ -138,7 +138,7 @@ class OrderDetailsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(item['title'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(item['unit'] ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                Text("${item['unit'] ?? ''} x ${item['quantity'] ?? 1}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
               ],
             ),
           ),
