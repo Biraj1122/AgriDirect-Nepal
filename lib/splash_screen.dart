@@ -34,7 +34,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       duration: const Duration(milliseconds: 2000),
     );
 
-
     _logoScale = Tween<double>(begin: 0.5, end: 1.0).animate(
       CurvedAnimation(
         parent: _mainController,
@@ -86,18 +85,12 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   Future<void> _initApp() async {
     final stopwatch = Stopwatch()..start();
     try {
-      debugPrint("Starting Initialization...");
-      
-      
       await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform,
       ).timeout(const Duration(seconds: 15));
 
-
       await UserData.init();
       
-
-      // Calculate remaining time to reach 4 seconds (4000 milliseconds)
       final int elapsed = stopwatch.elapsedMilliseconds;
       final int remaining = 4000 - elapsed;
 
@@ -107,7 +100,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       
       _navigateToLogin();
     } catch (e) {
-      debugPrint("Startup Error: $e");
       if (mounted) {
         setState(() {
           _errorMessage = e.toString();
@@ -143,7 +135,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final isLargeScreen = size.height > 800; // Typically large 6.7 to 6.9 inch phones
+    final isLargeScreen = size.height > 800;
 
     return Scaffold(
       body: Container(
@@ -164,7 +156,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         ),
         child: Stack(
           children: [
-            // Subtle Background Pattern
             Positioned(
               top: -50,
               right: -50,
@@ -182,13 +173,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               ),
             ),
             
-            // Main Content
             SafeArea(
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Animated Logo
                     SlideTransition(
                       position: _logoSlide,
                       child: ScaleTransition(
@@ -225,7 +214,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     ),
                     SizedBox(height: isLargeScreen ? 40 : 30),
                     
-                    // Animated Title
                     FadeTransition(
                       opacity: _textOpacity,
                       child: Column(
@@ -265,7 +253,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     
                     SizedBox(height: isLargeScreen ? 80 : 60),
                     
-                    // Loading or Error UI
                     if (_errorMessage == null) ...[
                       SizedBox(
                         width: 40,
@@ -324,7 +311,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               ),
             ),
             
-            // Bottom Slogan
             Positioned(
               bottom: 40,
               left: 0,

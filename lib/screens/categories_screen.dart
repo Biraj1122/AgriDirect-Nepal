@@ -8,6 +8,7 @@ import '../my_favourites.dart';
 
 class CategoriesScreen extends StatefulWidget {
   final String initialCategory;
+  final List<Map<String, dynamic>> preLoadedCategories;
   final List<Map<String, dynamic>> externalFavouriteProducts;
   final Function(Map<String, dynamic>) onExternalFavouriteToggle;
   final VoidCallback? onBackToHome;
@@ -15,6 +16,7 @@ class CategoriesScreen extends StatefulWidget {
   const CategoriesScreen({
     super.key,
     this.initialCategory = 'All',
+    this.preLoadedCategories = const [],
     required this.externalFavouriteProducts,
     required this.onExternalFavouriteToggle,
     this.onBackToHome,
@@ -34,7 +36,23 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchCategories();
+    if (widget.preLoadedCategories.isNotEmpty) {
+      _categories = [
+        {'name': 'All', 'icon': Icons.apps_rounded},
+        ...widget.preLoadedCategories
+      ];
+      _isLoadingCategories = false;
+      _setInitialCategoryIndex();
+    } else {
+      _fetchCategories();
+    }
+  }
+
+  void _setInitialCategoryIndex() {
+    final idx = _categories.indexWhere((c) => c['name'] == widget.initialCategory);
+    if (idx != -1) {
+      _selectedCategoryIndex = idx;
+    }
   }
 
   Future<void> _fetchCategories() async {
@@ -46,7 +64,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           final iconCode = data['iconCode'] as int?;
           return {
             'name': data['name'] ?? 'Category',
-            // SAFE ALTERNATIVE TO BYPASS TREE-SHAKING CONSTRAINTS
             'icon': iconCode != null
                 ? IconData(iconCode, fontFamily: 'MaterialIcons')
                 : Icons.category,
@@ -57,18 +74,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           setState(() {
             _categories = [{'name': 'All', 'icon': Icons.apps_rounded}, ...fetched];
             _isLoadingCategories = false;
-            
-            // Set initial category index
-            final categoryIndex = _categories.indexWhere(
-              (category) => category['name'] == widget.initialCategory,
-            );
-            if (categoryIndex != -1) {
-              _selectedCategoryIndex = categoryIndex;
-            }
+            _setInitialCategoryIndex();
           });
         }
       } else {
-        // Fallback
         if (mounted) {
           setState(() {
             _categories = [
@@ -83,13 +92,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               {'name': 'Spices', 'icon': Icons.flare},
             ];
             _isLoadingCategories = false;
-
-            final categoryIndex = _categories.indexWhere(
-              (category) => category['name'] == widget.initialCategory,
-            );
-            if (categoryIndex != -1) {
-              _selectedCategoryIndex = categoryIndex;
-            }
+            _setInitialCategoryIndex();
           });
         }
       }
@@ -120,7 +123,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   void _addToCart(Map<String, dynamic> product) {
     final newProduct = Product.fromMap(product, docId: product['id']);
-
     cartModel.add(newProduct);
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('${newProduct.title} added to cart'),
@@ -142,7 +144,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
-  Widget _buildAppBar(List<Map<String, dynamic>> currentProducts) {
+  Widget _buildAppBar() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
       child: Row(
@@ -156,7 +158,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Categories', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                Text('Fresh from local farms', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                Text('Fresh local produce', style: TextStyle(fontSize: 12, color: Colors.grey)),
               ],
             ),
           ),
@@ -311,21 +313,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     if (image.startsWith('http')) {
       return Image.network(
         image,
-        key: ValueKey(image), // Forces reload when the URL changes in Firestore
+        key: ValueKey(image),
         width: double.infinity,
         fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Center(
-            child: CircularProgressIndicator(
-              value: loadingProgress.expectedTotalBytes != null
-                  ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                  : null,
-              strokeWidth: 2,
-              color: Colors.green.withValues(alpha: 0.5),
-            ),
-          );
-        },
         errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
       );
     } else if (image.startsWith('data:image')) {
@@ -355,10 +345,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return const Center(child: Text("No products found."));
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -380,14 +366,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
             return Column(
               children: [
-                _buildAppBar(allProducts),
+                _buildAppBar(),
                 _buildSearchBar(),
                 _buildCategoryRow(),
                 Expanded(
                   child: snapshot.connectionState == ConnectionState.waiting
                       ? const Center(child: CircularProgressIndicator(color: Colors.green))
                       : (filteredProducts.isEmpty
-                          ? _buildEmptyState()
+                          ? const Center(child: Text("No products found"))
                           : GridView.builder(
                               padding: const EdgeInsets.all(16),
                               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

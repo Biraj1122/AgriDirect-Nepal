@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-
 import '../help_support.dart';
 import '../login_screen.dart';
 import '../my_favourites.dart';
@@ -15,12 +14,9 @@ import 'my_addresses_screen.dart';
 import 'order_history_screen.dart';
 import 'scan_history_screen.dart';
 
-
-
 class ProfileScreen extends StatefulWidget {
   final String userName;
   final VoidCallback? onBackToHome;
-
   final List<Map<String, dynamic>> favouriteProducts;
   final List<Map<String, dynamic>> allProducts;
   final Set<String> favouriteNames;
@@ -58,9 +54,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1000",
       "https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=1000",
       "https://images.unsplash.com/photo-1495107333211-6ca9c24ad996?q=80&w=1000",
-    ]..shuffle(); // Shuffle once per session as requested
+    ]..shuffle();
     
-    // Auto-animate banner
     Future.delayed(const Duration(seconds: 3), _animateBanner);
   }
 
@@ -120,7 +115,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         body: SingleChildScrollView(
           child: Column(
             children: [
-              /// HEADER
               Container(
                 height: 240,
                 width: double.infinity,
@@ -129,7 +123,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 child: Stack(
                   children: [
-                    // Animated Banners
                     Positioned.fill(
                       child: PageView.builder(
                         controller: _bannerController,
@@ -148,7 +141,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         },
                       ),
                     ),
-                    // Back Button
                     Positioned(
                       top: 50,
                       left: 15,
@@ -231,7 +223,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 20),
 
-              /// MENU
               Container(
                 color: Colors.white,
                 child: Column(
@@ -312,7 +303,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => MyFavouritesScreen(
+                            builder: (context) => MyFavouritesScreen(
                               onFavouriteToggle:
                               widget.onFavouriteToggle ?? (item) {},
                             ),
@@ -321,7 +312,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       },
                     ),
 
-                    /// 🔔 FIXED NOTIFICATIONS BUTTON
                     menuItem(
                       Icons.notifications,
                       "Notifications",
@@ -375,7 +365,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
               const SizedBox(height: 20),
 
-              /// LOGOUT
               GestureDetector(
                 onTap: () async {
                   await FirebaseAuth.instance.signOut();
@@ -458,7 +447,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onTap: onTap,
         ),
         if (!isLast) const Divider(height: 1),
-
       ],
     );
   }

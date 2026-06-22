@@ -62,8 +62,9 @@ class MyFavouritesScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      "Please try again later",
-                      style: TextStyle(color: Colors.grey[600]),
+                      snapshot.error.toString(),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
                     ),
                   ],
                 ),
@@ -130,13 +131,12 @@ class MyFavouritesScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
             ),
             onPressed: () {
-              // Always redirect to Categories tab in NavigationScreen
               final user = FirebaseAuth.instance.currentUser;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(
                   builder: (_) => NavigationScreen(
                     userName: user?.displayName ?? user?.email ?? "User",
-                    initialTabIndex: 1, // 1 is Categories tab
+                    initialTabIndex: 1,
                   ),
                 ),
                 (route) => false,

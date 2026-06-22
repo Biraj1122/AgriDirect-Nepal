@@ -172,7 +172,7 @@ class _DashboardTab extends StatelessWidget {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Welcome back 👋", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                    Text("Welcome back", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
                     const SizedBox(height: 2),
                     Text(farmerName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
                     if (farmLocation.isNotEmpty)
@@ -273,10 +273,22 @@ class _DashboardTab extends StatelessWidget {
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).snapshots(),
               builder: (context, productSnap) {
+                if (productSnap.hasError) {
+                  return Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text("Load Error: ${productSnap.error}", style: const TextStyle(color: Colors.red, fontSize: 10)),
+                  );
+                }
                 final productCount = productSnap.hasData ? productSnap.data!.docs.length : 0;
                 return StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: uid).snapshots(),
                   builder: (context, orderSnap) {
+                    if (orderSnap.hasError) {
+                      return Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text("Load Error: ${orderSnap.error}", style: const TextStyle(color: Colors.red, fontSize: 10)),
+                      );
+                    }
                     final orders = orderSnap.hasData ? orderSnap.data!.docs : [];
                     final pendingOrders = orders.where((o) => (o.data() as Map)['status'] == 'Pending').length;
                     final deliveredOrders = orders.where((o) => (o.data() as Map)['status'] == 'Delivered').length;
@@ -295,8 +307,6 @@ class _DashboardTab extends StatelessWidget {
               },
             ),
             const SizedBox(height: 25),
-
-            /// DYNAMIC BANNER (ADMIN ANNOUNCEMENT)
             StreamBuilder<DocumentSnapshot>(
               stream: FirebaseFirestore.instance.collection('settings').doc('announcement').snapshots(),
               builder: (context, snapshot) {
@@ -407,7 +417,6 @@ class _ProductsTab extends StatelessWidget {
                 Text(doc == null ? "Add Product" : "Edit Product", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 20),
                 
-                // --- IMAGE PREVIEW AREA ---
                 Container(
                   height: 140,
                   width: double.infinity,
@@ -429,13 +438,13 @@ class _ProductsTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 
-                _buildInput(urlCtrl, "Direct Image URL (e.g. .jpg, .png)", Icons.link, 
+                _buildInput(urlCtrl, "Direct Image URL", Icons.link, 
                   onChanged: (v) => setS(() {}),
                   suffix: urlCtrl.text.isNotEmpty 
                     ? IconButton(icon: const Icon(Icons.clear, size: 18), onPressed: () => setS(() => urlCtrl.clear())) 
                     : null
                 ),
-                const Text("Tip: Right-click Google Image and 'Copy image address'", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                const Text("Tip: Use direct links for better results", style: TextStyle(fontSize: 10, color: Colors.grey)),
                 const SizedBox(height: 10),
                 Center(
                   child: TextButton.icon(
@@ -467,7 +476,6 @@ class _ProductsTab extends StatelessWidget {
                   Expanded(child: _buildInput(stockCtrl, "Stock Qty", Icons.inventory_2_outlined, type: TextInputType.number)),
                 ]),
                 const SizedBox(height: 12),
-                // ... (rest of the dropdowns remain the same)
                 StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance.collection('categories').snapshots(),
                   builder: (context, snapshot) {
@@ -476,7 +484,6 @@ class _ProductsTab extends StatelessWidget {
                       categories = snapshot.data!.docs.map((d) => (d.data() as Map<String, dynamic>)['name'] as String).toList();
                     }
                     
-                    // Ensure selectedCategory is in the list or default to the first one
                     if (!categories.contains(selectedCategory)) {
                       selectedCategory = categories.isNotEmpty ? categories.first : 'Vegetables';
                     }
@@ -553,14 +560,14 @@ class _ProductsTab extends StatelessWidget {
                           'farmerUid': uid,
                           'farmName': farmName,
                           'name': nameCtrl.text.trim(),
-                          'title': nameCtrl.text.trim(), // Standardize with Admin
+                          'title': nameCtrl.text.trim(),
                           'description': descCtrl.text.trim(),
                           'category': selectedCategory,
                           'price': double.tryParse(priceCtrl.text) ?? 0.0,
                           'stock': int.tryParse(stockCtrl.text) ?? 0,
                           'unit': selectedUnit,
                           'imageUrl': finalImageUrl,
-                          'image': finalImageUrl, // Standardize with Admin
+                          'image': finalImageUrl,
                           'updatedAt': FieldValue.serverTimestamp(),
                         };
 
@@ -572,11 +579,10 @@ class _ProductsTab extends StatelessWidget {
                         }
 
                         if (context.mounted) {
-                          // Use a small delay to ensure Firestore has processed before closing
                           Future.delayed(const Duration(milliseconds: 500), () {
                             if (context.mounted) {
-                              Navigator.of(context, rootNavigator: true).pop(); // Dismiss loading
-                              Navigator.pop(ctx); // Dismiss bottom sheet
+                              Navigator.of(context, rootNavigator: true).pop();
+                              Navigator.pop(ctx);
                             }
                           });
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -586,7 +592,7 @@ class _ProductsTab extends StatelessWidget {
                       } catch (e) {
                         debugPrint("Error saving product: $e");
                         if (context.mounted) {
-                          Navigator.of(context, rootNavigator: true).pop(); // Ensure dialog is dismissed
+                          Navigator.of(context, rootNavigator: true).pop();
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text("Failed to save product: ${e.toString()}")),
                           );
@@ -753,7 +759,14 @@ class _DeliveryTabState extends State<_DeliveryTab> {
                   ? FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).snapshots()
                   : FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).where('status', isEqualTo: _filter).snapshots(),
               builder: (context, snap) {
-                if (snap.hasError) return Center(child: Text("Error: ${snap.error}"));
+                if (snap.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Text("Error: ${snap.error}", textAlign: TextAlign.center, style: const TextStyle(color: Colors.red)),
+                    ),
+                  );
+                }
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
                 final docs = snap.data!.docs;
                 if (docs.isEmpty) return const _EmptyState(icon: Icons.local_shipping_outlined, message: "No orders found\nfor this status.");
@@ -772,12 +785,11 @@ class _DeliveryTabState extends State<_DeliveryTab> {
                           'updatedAt': FieldValue.serverTimestamp(),
                         });
                         
-                        // Notify the Customer
                         final userId = data['userId'];
                         if (userId != null) {
                           await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
                             'title': 'Order Status: $newStatus',
-                            'body': 'Farmer updated your order #${doc.id.substring(0, 6)} to $newStatus.',
+                            'body': 'Farmer updated your order status.',
                             'time': DateTime.now().toString(),
                             'createdAt': FieldValue.serverTimestamp(),
                             'type': 'delivery',
@@ -825,7 +837,7 @@ class _StockTab extends StatelessWidget {
               controller: ctrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                labelText: "New Stock Quantity (${data['unit'] ?? 'kg'})",
+                labelText: "New Stock Quantity",
                 prefixIcon: const Icon(Icons.inventory_2_outlined),
                 filled: true,
                 fillColor: Colors.grey.shade100,
@@ -877,7 +889,7 @@ class _StockTab extends StatelessWidget {
                 if (snap.hasError) return Center(child: Text("Error: ${snap.error}"));
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
                 final docs = snap.data!.docs;
-                if (docs.isEmpty) return const _EmptyState(icon: Icons.inventory_2_outlined, message: "No products to track.\nAdd products first.");
+                if (docs.isEmpty) return const _EmptyState(icon: Icons.inventory_2_outlined, message: "No products to track.");
 
                 final lowStock = docs.where((d) {
                   final data = d.data() as Map<String, dynamic>;
@@ -899,7 +911,7 @@ class _StockTab extends StatelessWidget {
                           children: [
                             const Icon(Icons.warning_amber_rounded, color: Colors.orange),
                             const SizedBox(width: 10),
-                            Expanded(child: Text("${lowStock.length} product(s) running low on stock!", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w600))),
+                            Expanded(child: Text("${lowStock.length} product(s) low on stock", style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.w600))),
                           ],
                         ),
                       ),
@@ -918,7 +930,7 @@ class _StockTab extends StatelessWidget {
                         child: ListTile(
                           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                           title: Text(data['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                          subtitle: Text("Current Stock: $stock ${data['unit'] ?? 'kg'}"),
+                          subtitle: Text("Stock: $stock"),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -999,7 +1011,7 @@ class _ProductCard extends StatelessWidget {
                           : Image.network(
                               product.image,
                               fit: BoxFit.cover,
-                              key: ValueKey(product.image), // Force reload if URL changes
+                              key: ValueKey(product.image),
                               errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey),
                             ),
                     )

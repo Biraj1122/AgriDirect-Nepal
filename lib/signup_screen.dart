@@ -19,7 +19,6 @@ class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController confirmPasswordController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
 
-  // Farmer-specific controllers
   final TextEditingController farmNameController = TextEditingController();
   final TextEditingController farmLocationController = TextEditingController();
 
@@ -28,7 +27,6 @@ class _SignupScreenState extends State<SignupScreen> {
 
   bool hidePassword = true;
   bool hideConfirmPassword = true;
-  bool _confirmTouched = false;
 
   bool isValidEmailOrUsername(String input) {
     if (input.contains('@')) {
@@ -72,8 +70,6 @@ class _SignupScreenState extends State<SignupScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 20),
-
-                // Header Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -87,13 +83,9 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 20),
-
                 Image.asset("assets/images/logo.png", height: 140),
-
                 const SizedBox(height: 10),
-
                 const Text(
                   "Create Account",
                   style: TextStyle(
@@ -102,17 +94,12 @@ class _SignupScreenState extends State<SignupScreen> {
                     color: Colors.green,
                   ),
                 ),
-
                 const SizedBox(height: 8),
-
                 Text(
                   "Fresh from the farm to your home",
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                 ),
-
                 const SizedBox(height: 25),
-
-                /// ROLE SELECTION DROPDOWN
                 DropdownButtonFormField<String>(
                   initialValue: selectedRole,
                   decoration: InputDecoration(
@@ -137,135 +124,47 @@ class _SignupScreenState extends State<SignupScreen> {
                     });
                   },
                 ),
-
                 const SizedBox(height: 18),
-
-                // Full Name
                 buildTextField(
                   controller: firstNameController,
                   hintText: "Full Name",
                   icon: Icons.person_outline,
                 ),
-
                 const SizedBox(height: 18),
-
-                // --- FARMER-SPECIFIC FIELDS ---
                 if (selectedRole == 'Farmer') ...[
-                  // Farm Name
-                  TextFormField(
+                  buildTextField(
                     controller: farmNameController,
-                    validator: (value) {
-                      if (selectedRole == 'Farmer' &&
-                          (value == null || value.trim().isEmpty)) {
-                        return "Please enter your farm name";
-                      }
-                      return null;
-                    },
-                    decoration: InputDecoration(
-                      hintText: "Farm Name",
-                      prefixIcon: const Icon(Icons.agriculture_outlined),
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(5),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
+                    hintText: "Farm Name",
+                    icon: Icons.agriculture_outlined,
                   ),
                   const SizedBox(height: 18),
-
-                  // Farm Location
-                  TextFormField(
+                  buildTextField(
                     controller: farmLocationController,
-                    validator: (value) {
-                      if (selectedRole == 'Farmer' &&
-                          (value == null || value.trim().isEmpty)) {
-                        return "Please enter your farm location";
-                      }
-                      return null;
-                    },
-                    decoration: InputDecoration(
-                      hintText: "Farm Location (e.g. Chitwan, Nepal)",
-                      prefixIcon: const Icon(Icons.location_on_outlined),
-                      filled: true,
-                      fillColor: Colors.grey.shade100,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(5),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
+                    hintText: "Farm Location",
+                    icon: Icons.location_on_outlined,
                   ),
                   const SizedBox(height: 18),
                 ],
-
-                /// EMAIL
-                TextFormField(
+                buildTextField(
                   controller: emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return "Please enter email or username";
-                    }
-                    if (!isValidEmailOrUsername(value.trim())) {
-                      return "Enter valid email or username";
-                    }
-                    return null;
-                  },
-                  decoration: InputDecoration(
-                    hintText: "Email or Gmail Username",
-                    prefixIcon: const Icon(Icons.email_outlined),
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(5),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+                  hintText: "Email",
+                  icon: Icons.email_outlined,
+                  type: TextInputType.emailAddress,
                 ),
-
                 const SizedBox(height: 18),
-
-                /// PHONE
-                TextFormField(
+                buildTextField(
                   controller: phoneController,
-                  keyboardType: TextInputType.phone,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return "Please enter phone number";
-                    }
-                    if (!isValidNepaliPhone(value)) {
-                      return "Enter valid Nepali number (98xxxxxxxx or 97xxxxxxxx)";
-                    }
-                    return null;
-                  },
-                  decoration: InputDecoration(
-                    hintText: "Phone Number",
-                    prefixIcon: const Icon(Icons.phone_outlined),
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(5),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
+                  hintText: "Phone Number",
+                  icon: Icons.phone_android_outlined,
+                  type: TextInputType.phone,
                 ),
-
                 const SizedBox(height: 18),
-
-                /// PASSWORD
                 TextFormField(
                   controller: passwordController,
                   obscureText: hidePassword,
-                  onChanged: (_) {
-                    if (_confirmTouched) setState(() {});
-                  },
                   validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return "Please enter password";
-                    }
-                    if (!isValidPassword(value)) {
-                      return "Password must be 8+ chars with Upper,\nlower, number & symbol";
-                    }
+                    if (value == null || value.isEmpty) return "Password required";
+                    if (!isValidPassword(value)) return "Too weak";
                     return null;
                   },
                   decoration: InputDecoration(
@@ -283,21 +182,12 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 18),
-
-                /// CONFIRM PASSWORD
                 TextFormField(
                   controller: confirmPasswordController,
                   obscureText: hideConfirmPassword,
-                  onChanged: (_) => setState(() => _confirmTouched = true),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Please confirm password";
-                    }
-                    if (_confirmTouched && value != passwordController.text) {
-                      return "Passwords do not match";
-                    }
+                    if (value != passwordController.text) return "Passwords must match";
                     return null;
                   },
                   decoration: InputDecoration(
@@ -317,10 +207,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 35),
-
-                /// SIGNUP BUTTON
                 SizedBox(
                   width: double.infinity,
                   height: 52,
@@ -333,29 +220,22 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     onPressed: () async {
                       if (_formKey.currentState!.validate()) {
-                        final messenger = ScaffoldMessenger.of(context);
                         final navigator = Navigator.of(context);
-                        
                         String email = emailController.text.trim();
                         if (!email.contains('@')) {
                           email = "$email@gmail.com";
                         }
-
                         try {
                           showDialog(
                             context: context,
                             barrierDismissible: false,
-                            builder: (context) =>
-                            const Center(child: CircularProgressIndicator()),
+                            builder: (context) => const Center(child: CircularProgressIndicator()),
                           );
-
                           UserCredential userCredential =
                           await FirebaseAuth.instance.createUserWithEmailAndPassword(
                             email: email,
                             password: passwordController.text.trim(),
                           );
-
-                          // Build Firestore document — includes farmer fields if applicable
                           final Map<String, dynamic> userData = {
                             'uid': userCredential.user!.uid,
                             'fullName': firstNameController.text.trim(),
@@ -364,70 +244,58 @@ class _SignupScreenState extends State<SignupScreen> {
                             'role': selectedRole,
                             'createdAt': FieldValue.serverTimestamp(),
                           };
-
                           if (selectedRole == 'Farmer') {
                             userData['farmName'] = farmNameController.text.trim();
                             userData['farmLocation'] = farmLocationController.text.trim();
-                            
-                            // Save to dedicated farmers collection
-                            await FirebaseFirestore.instance
-                                .collection('farmers')
-                                .doc(userCredential.user!.uid)
-                                .set(userData);
-                          } else if (selectedRole == 'Delivery Person') {
-                            // Save to dedicated riders collection
-                            await FirebaseFirestore.instance
-                                .collection('riders')
-                                .doc(userCredential.user!.uid)
-                                .set(userData);
                           }
-
                           await FirebaseFirestore.instance
                               .collection('users')
                               .doc(userCredential.user!.uid)
                               .set(userData);
-
                           await userCredential.user
                               ?.updateDisplayName(firstNameController.text.trim());
-
-                          // --- SEND VERIFICATION EMAIL ---
                           await userCredential.user?.sendEmailVerification();
-
                           if (!mounted) return;
-                          
-                          navigator.pop(); // Pop loading
-                          
-                          // --- NAVIGATE TO OTP ---
-                          navigator.pushReplacement(
+                          navigator.pop();
+                          navigator.push(
                             MaterialPageRoute(
-                                builder: (context) => VerifyOtpScreen(
-                                  email: email,
-                                  source: OtpSource.signup,
-                                  userData: userData,
-                                )),
-                          );
-                        } on FirebaseAuthException catch (e) {
-                          if (!mounted) return;
-                          navigator.pop(); // Pop loading
-                          messenger.showSnackBar(
-                            SnackBar(content: Text(e.message ?? "Registration failed")),
+                              builder: (_) => VerifyOtpScreen(
+                                email: email,
+                                source: OtpSource.signup,
+                                userData: userData,
+                              ),
+                            ),
                           );
                         } catch (e) {
-                          if (!mounted) return;
-                          navigator.pop(); // Pop loading
-                          messenger.showSnackBar(
-                            SnackBar(content: Text("An error occurred: $e")),
-                          );
+                          if (mounted) {
+                            navigator.pop();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Error: $e")),
+                            );
+                          }
                         }
                       }
                     },
                     child: const Text(
-                      "Sign up",
+                      "Sign Up",
                       style: TextStyle(color: Colors.white, fontSize: 16),
                     ),
                   ),
                 ),
-
+                const SizedBox(height: 25),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text("Already have an account?"),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text(
+                        "Login",
+                        style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 30),
               ],
             ),
@@ -441,11 +309,13 @@ class _SignupScreenState extends State<SignupScreen> {
     required TextEditingController controller,
     required String hintText,
     required IconData icon,
+    TextInputType type = TextInputType.text,
   }) {
     return TextFormField(
       controller: controller,
+      keyboardType: type,
       validator: (value) {
-        if (value == null || value.trim().isEmpty) return "Field cannot be empty";
+        if (value == null || value.isEmpty) return "Required";
         return null;
       },
       decoration: InputDecoration(
