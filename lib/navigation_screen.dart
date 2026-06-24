@@ -154,14 +154,18 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final String name = (product['name'] ?? product['title'] ?? '').toString().trim();
     if (name.isEmpty) return;
 
+    // Use a more flexible check to find existing favorite
     final existing = _favouriteProducts.firstWhere(
-      (p) => (p['name'] == name || p['title'] == name) || 
-             (product['docId'] != null && p['docId'] == product['docId']) ||
-             (product['id'] != null && p['docId'] == product['id']),
+      (p) {
+        final pName = (p['name'] ?? p['title'] ?? '').toString().trim();
+        return pName == name || 
+               (product['docId'] != null && p['docId'] == product['docId']) ||
+               (product['id'] != null && p['docId'] == product['id']);
+      },
       orElse: () => {},
     );
 
-    final String favId = (existing['docId'] ?? product['docId'] ?? product['id'] ?? name).toString().trim();
+    final String favId = (existing['docId'] ?? product['docId'] ?? product['id'] ?? name.replaceAll(' ', '_')).toString().trim();
 
     final favRef = FirebaseFirestore.instance
         .collection('users')
