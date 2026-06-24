@@ -150,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   stream: FirebaseFirestore.instance
                       .collection('orders')
                       .where('userId', isEqualTo: user.uid)
-                      .where('status', whereIn: ['Picked Up', 'On the way', 'Arrived'])
+                      .where('status', whereIn: ['Pending Farmer', 'Farmer Accepted', 'Picked Up', 'On the way', 'Arrived'])
                       .orderBy('createdAt', descending: true)
                       .limit(1)
                       .snapshots(),
@@ -217,7 +217,7 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(
                 height: 180,
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('products').limit(4).snapshots(),
+                  stream: FirebaseFirestore.instance.collection('master_catalog').limit(4).snapshots(),
                   builder: (context, snapshot) {
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                       return const Center(child: CircularProgressIndicator());
@@ -368,64 +368,104 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               ),
-
-              const SizedBox(height: 25),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Fresh Products", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-                  TextButton(
-                    onPressed: () => widget.onCategoryTap("All"),
-                    child: const Text("View More", style: TextStyle(color: Colors.green)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance.collection('products').limit(4).snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.red, fontSize: 12)));
-                  }
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 20),
-                        child: Text("No products available", style: TextStyle(color: Colors.grey)),
-                      ),
-                    );
-                  }
-
-                  final products = snapshot.data!.docs;
-
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: products.length,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      childAspectRatio: 0.75,
-                      crossAxisSpacing: 15,
-                      mainAxisSpacing: 15,
-                    ),
-                    itemBuilder: (context, index) {
-                      final doc = products[index];
-                      final data = doc.data() as Map<String, dynamic>;
-                      
-                      final product = Product.fromMap(data, docId: doc.id);
-
-                      return _buildProductCard(context, product);
-                    },
-                  );
-                },
-              ),
               const SizedBox(height: 30),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHorizontalProductCard(BuildContext context, Product product) {
+    bool isFavourite = widget.favouriteProducts.any((p) => 
+      (p['name'] == product.title || p['title'] == product.title) || 
+      (product.id != null && (p['docId'] == product.id || p['id'] == product.id))
+    );
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductDetailScreen(
+              product: product,
+              isFavourite: isFavourite,
+              onToggleFavourite: widget.onFavouriteToggle,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        width: 160,
+        margin: const EdgeInsets.only(right: 18, bottom: 5),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 10, offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+                  child: product.image.startsWith('assets/')
+                      ? Image.asset(product.image, height: 120, width: 160, fit: BoxFit.contain)
+                      : Image.network(
+                          product.image,
+                          height: 120,
+                          width: 160,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.image_not_supported)),
+                        ),
+                ),
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: GestureDetector(
+                    onTap: () {
+                      final productMap = product.toMap();
+                      productMap['badge'] = 'Fresh';
+                      productMap['badgeColor'] = Colors.green.toARGB32();
+                      productMap['farm'] = product.farmName ?? 'Local Farm';
+                      productMap['rating'] = 4.5;
+                      widget.onFavouriteToggle(productMap);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                      child: Icon(isFavourite ? Icons.favorite : Icons.favorite_border, color: Colors.red, size: 18),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(product.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  Text(product.unit, style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                  const SizedBox(height: 6),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Rs. ${product.price}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 15)),
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.add, color: Colors.white, size: 16),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -532,107 +572,14 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildProductCard(BuildContext context, Product product) {
-    bool isFavourite = widget.favouriteProducts.any((p) => 
-      (p['name'] == product.title || p['title'] == product.title) || 
-      (product.id != null && (p['docId'] == product.id || p['id'] == product.id))
-    );
-
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ProductDetailScreen(
-              product: product,
-              isFavourite: isFavourite,
-              onToggleFavourite: widget.onFavouriteToggle,
-            ),
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 5)),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                  child: product.image.startsWith('assets/')
-                      ? Image.asset(product.image, height: 120, width: double.infinity, fit: BoxFit.contain)
-                      : Image.network(
-                          product.image,
-                          key: ValueKey(product.image),
-                          height: 120,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => const Icon(Icons.image_not_supported),
-                        ),
-                ),
-                Positioned(
-                  top: 10,
-                  right: 10,
-                  child: GestureDetector(
-                    onTap: () {
-                      final productMap = product.toMap();
-                      productMap['badge'] = 'Fresh';
-                      productMap['badgeColor'] = Colors.green.toARGB32();
-                      productMap['farm'] = product.farmName ?? 'Local Farm';
-                      productMap['rating'] = 4.5;
-                      widget.onFavouriteToggle(productMap);
-                    },
-                    child: Icon(
-                      isFavourite ? Icons.favorite : Icons.favorite_border,
-                      color: Colors.red,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(product.title, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(product.unit, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                      if (product.season != null)
-                        Text(
-                          product.season!,
-                          style: TextStyle(
-                            color: product.season == 'All Year' ? Colors.blue : Colors.orange,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  Text("Rs. ${product.price}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   String _getStatusMessage(String status) {
     switch (status) {
+      case 'Pending Farmer':
+        return "Routing to nearest farm...";
+      case 'Farmer Accepted':
+        return "Farm is preparing items...";
       case 'Picked Up':
-        return "Rider picked up from farmer";
+        return "Rider picked up from farm";
       case 'On the way':
         return "Rider is on the way to you";
       case 'Arrived':

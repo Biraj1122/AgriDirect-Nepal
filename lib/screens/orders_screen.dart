@@ -347,6 +347,23 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     }
   }
 
+  String _getStatusMessage(String status) {
+    switch (status) {
+      case 'Pending Farmer':
+        return "Routing order to nearest farm...";
+      case 'Farmer Accepted':
+        return "Farm is preparing your items...";
+      case 'Picked Up':
+        return "Rider picked up from farm";
+      case 'On the way':
+        return "Rider is on the way to you";
+      case 'Arrived':
+        return "Order almost delivered!";
+      default:
+        return "Order in progress";
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -463,6 +480,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                       child: Column(
                         children: [
                           _step(Icons.check_circle, "Order Received", "We have received your order", status != "Cancelled"),
+                          _step(Icons.agriculture, "Farm Accepted", "Nearest farm is preparing", status == "Farmer Accepted" || status == "Picked Up" || status == "On the way" || status == "Arrived" || status == "Delivered"),
                           _step(Icons.inventory, "Picked Up", "Rider has picked up items", status == "Picked Up" || status == "On the way" || status == "Arrived" || status == "Delivered"),
                           _step(Icons.local_shipping, "On the way", "Rider is heading to you", status == "On the way" || status == "Arrived" || status == "Delivered"),
                           _step(Icons.home, "Delivered", "Enjoy your produce", status == "Arrived" || status == "Delivered", isLast: true),
