@@ -1,22 +1,18 @@
-
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:latlong2/latlong.dart' hide Path;
-
+import 'package:cloudinary_public/cloudinary_public.dart';
+import '../location_service.dart';
 import '../../login_screen.dart';
 
-// THEME CONFIGURATION
 const _kGreen = Color(0xFF2E7D32);
 const _kBg = Color(0xFFF4F6F0);
 
@@ -76,7 +72,7 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
     });
   }
 
-  @override//fixed
+  @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -102,7 +98,6 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
   }
 }
 
-// ====================== BOTTOM NAVIGATION BAR ======================
 class _BottomNav extends StatelessWidget {
   final int currentTab;
   final ValueChanged<int> onTap;
@@ -151,7 +146,6 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
-// ====================== TAB 1: HOME DRIVING MAP ======================
 class _HomeMapTab extends StatefulWidget {
   final User user;
   const _HomeMapTab({required this.user});
@@ -160,19 +154,38 @@ class _HomeMapTab extends StatefulWidget {
   State<_HomeMapTab> createState() => _HomeMapTabState();
 }
 
-class _HomeMapTabState extends State<_HomeMapTab> {
-  final MapController _mapController = MapController();
+class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin {
+  MapLibreMapController? _mapController;
+  final LocationService _locationService = LocationService();
+  final TextEditingController _searchController = TextEditingController();
+
   static const LatLng _kDefaultCenter = LatLng(27.7172, 85.3240);
 
   LatLng? _driverPos;
   LatLng? _customPickupPoint;
-  List<Marker> _customerMarkers = [];
   StreamSubscription<Position>? _positionSub;
   StreamSubscription<QuerySnapshot>? _orderSub;
+  
+  final List<Symbol> _customerSymbols = [];
+
+  String _currentAddress = "Fetching location...";
+  bool _isMoving = false;
+  List<Map<String, dynamic>> _searchResults = [];
+  bool _isSearching = false;
+
+  late AnimationController _pinController;
+  late Animation<double> _pinAnimation;
 
   @override
   void initState() {
     super.initState();
+    _pinController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _pinAnimation = Tween<double>(begin: 0, end: -15).animate(
+      CurvedAnimation(parent: _pinController, curve: Curves.easeOut),
+    );
     _startLocationTracking();
     _listenToActiveOrders();
     _loadCustomPickupPoint();
@@ -191,16 +204,13 @@ class _HomeMapTabState extends State<_HomeMapTab> {
   }
 
   Future<void> _startLocationTracking() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
-
-    LocationPermission perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-    if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+    bool granted = await _locationService.requestPermission();
+    if (!granted) return;
 
     try {
       final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
       _updateDriverPosition(pos);
+      _updateAddress(LatLng(pos.latitude, pos.longitude));
     } catch (_) {}
 
     _positionSub = Geolocator.getPositionStream(
@@ -216,53 +226,174 @@ class _HomeMapTabState extends State<_HomeMapTab> {
     FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({'lat': pos.latitude, 'lng': pos.longitude}).catchError((_) {});
   }
 
+  Future<void> _updateAddress(LatLng position) async {
+    String address = await _locationService.getAddressFromLatLng(
+      position.latitude,
+      position.longitude,
+    );
+    if (mounted) {
+      setState(() {
+        _currentAddress = address;
+      });
+    }
+  }
+
   void _listenToActiveOrders() {
-    // FIXED: Updated to listen for orders that are assigned to THIS delivery person
-    // This ensures the customer's location (red dot) appears on the map immediately after acceptance
     _orderSub = FirebaseFirestore.instance
         .collection('orders')
         .where('deliveryId', isEqualTo: widget.user.uid)
         .where('status', whereIn: ['Picked Up', 'On the way'])
         .snapshots()
         .listen((snap) {
-      if (!mounted) return;
+      if (!mounted || _mapController == null) return;
 
-      final markers = <Marker>[];
-
-      for (final doc in snap.docs) {
-        final data = doc.data();
-        final lat = (data['customerLat'] as num?)?.toDouble();
-        final lng = (data['customerLng'] as num?)?.toDouble();
-
-        // FIXED: Now properly extracts and validates customer location
-        if (lat != null && lng != null) {
-          markers.add(
-            Marker(
-              point: LatLng(lat, lng),
-              width: 45,
-              height: 45,
-              child: const Icon(Icons.location_pin, color: Colors.redAccent, size: 38),
-            ),
-          );
-        }
-      }
-
-      // FIXED: Update markers immediately so red dots appear as soon as order is accepted
-      setState(() => _customerMarkers = markers);
+      _updateMarkersOnMap(snap.docs);
     });
   }
 
-  void _handleMapLongPress(dynamic tapPosition, LatLng point) async {
+  Future<void> _updateMarkersOnMap(List<QueryDocumentSnapshot> docs) async {
+    if (_mapController == null) return;
+
+    for (var s in _customerSymbols) {
+      await _mapController!.removeSymbol(s);
+    }
+    _customerSymbols.clear();
+
+    for (final doc in docs) {
+      final data = doc.data() as Map<String, dynamic>;
+      final lat = (data['customerLat'] as num?)?.toDouble();
+      final lng = (data['customerLng'] as num?)?.toDouble();
+
+      if (lat != null && lng != null) {
+        final symbol = await _mapController!.addSymbol(
+          SymbolOptions(
+            geometry: LatLng(lat, lng),
+            iconImage: "marker-15",
+            iconColor: "#FF5252",
+            iconSize: 2.0,
+          ),
+        );
+        _customerSymbols.add(symbol);
+      }
+    }
+
+    if (_customPickupPoint != null) {
+      final symbol = await _mapController!.addSymbol(
+        SymbolOptions(
+          geometry: _customPickupPoint!,
+          iconImage: "harbor-15",
+          iconColor: "#FFA000",
+          iconSize: 2.0,
+          textField: "Pickup",
+          textSize: 10,
+          textOffset: const Offset(0, 1.5),
+        ),
+      );
+      _customerSymbols.add(symbol);
+    }
+  }
+
+  void _onMapCreated(MapLibreMapController controller) {
+    _mapController = controller;
+    FirebaseFirestore.instance
+        .collection('orders')
+        .where('deliveryId', isEqualTo: widget.user.uid)
+        .where('status', whereIn: ['Picked Up', 'On the way'])
+        .get()
+        .then((snap) => _updateMarkersOnMap(snap.docs));
+  }
+
+  void _onCameraIdle() {
+    setState(() => _isMoving = false);
+    _pinController.reverse();
+    if (_mapController != null) {
+      _updateAddress(_mapController!.cameraPosition!.target);
+    }
+  }
+
+  void _handleSearch(String query) async {
+    if (query.length < 3) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    setState(() => _isSearching = true);
+    final results = await _locationService.searchLocation(query);
+    if (mounted) {
+      setState(() {
+        _searchResults = results;
+        _isSearching = false;
+      });
+    }
+  }
+
+  void _selectSearchResult(Map<String, dynamic> result) {
+    final lat = result['lat'] as double;
+    final lng = result['lng'] as double;
+    final address = result['display_name'] as String;
+
+    _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: LatLng(lat, lng), zoom: 16, tilt: 45),
+      ),
+    );
+
+    setState(() {
+      _currentAddress = address;
+      _searchResults = [];
+      _searchController.text = "";
+    });
+    FocusScope.of(context).unfocus();
+  }
+
+  void _confirmPickupLocation() async {
+    if (_mapController == null) return;
+    final point = _mapController!.cameraPosition!.target;
+    
     setState(() {
       _customPickupPoint = point;
     });
+
+    FirebaseFirestore.instance
+        .collection('orders')
+        .where('deliveryId', isEqualTo: widget.user.uid)
+        .where('status', whereIn: ['Picked Up', 'On the way'])
+        .get()
+        .then((snap) => _updateMarkersOnMap(snap.docs));
+
     await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
       'pickupLat': point.latitude,
       'pickupLng': point.longitude,
     });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("New product pickup location saved on map!")),
+        const SnackBar(content: Text("Pickup location saved")),
+      );
+    }
+  }
+
+  void _handleMapLongPress(LatLng point) async {
+    setState(() {
+      _customPickupPoint = point;
+    });
+
+    FirebaseFirestore.instance
+        .collection('orders')
+        .where('deliveryId', isEqualTo: widget.user.uid)
+        .where('status', whereIn: ['Picked Up', 'On the way'])
+        .get()
+        .then((snap) => _updateMarkersOnMap(snap.docs));
+
+    await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
+      'pickupLat': point.latitude,
+      'pickupLng': point.longitude,
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Pickup location saved")),
       );
     }
   }
@@ -271,6 +402,8 @@ class _HomeMapTabState extends State<_HomeMapTab> {
   void dispose() {
     _positionSub?.cancel();
     _orderSub?.cancel();
+    _searchController.dispose();
+    _pinController.dispose();
     super.dispose();
   }
 
@@ -279,74 +412,150 @@ class _HomeMapTabState extends State<_HomeMapTab> {
     return Scaffold(
       body: Stack(
         children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _driverPos ?? _kDefaultCenter,
-              initialZoom: 14.5,
-              onLongPress: _handleMapLongPress,
+          MapLibreMap(
+            initialCameraPosition: CameraPosition(
+              target: _driverPos ?? _kDefaultCenter,
+              zoom: 14.5,
+              tilt: 45,
             ),
-            children: [
-              TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.example.farmtech_agridirect'),
-              // FIXED: Customer red dots now show properly when delivery is accepted
-              MarkerLayer(markers: _customerMarkers),
-              if (_driverPos != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _driverPos!,
-                      width: 26,
-                      height: 26,
-                      child: Container(
-                        decoration: BoxDecoration(color: Colors.blueAccent, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
+            onMapCreated: _onMapCreated,
+            myLocationEnabled: true,
+            onCameraMove: (pos) {
+              if (!_isMoving) {
+                setState(() => _isMoving = true);
+                _pinController.forward();
+              }
+            },
+            onCameraIdle: _onCameraIdle,
+            onMapLongClick: (point, latlng) => _handleMapLongPress(latlng),
+            styleString: "https://tiles.openfreemap.org/styles/positron",
+          ),
+          
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: Column(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, offset: const Offset(0, 5))],
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: _handleSearch,
+                      decoration: InputDecoration(
+                        hintText: "Search pickup/delivery point...",
+                        prefixIcon: const Icon(Icons.search, color: Colors.green),
+                        suffixIcon: _isSearching 
+                          ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
+                          : null,
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(vertical: 15),
                       ),
                     ),
-                  ],
-                ),
-              if (_customPickupPoint != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _customPickupPoint!,
-                      width: 40,
-                      height: 40,
-                      child: const Icon(Icons.store, color: Colors.orange, size: 36),
+                  ),
+                  if (_searchResults.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(top: 10),
+                      constraints: const BoxConstraints(maxHeight: 250),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)]),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: _searchResults.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (ctx, i) {
+                          final res = _searchResults[i];
+                          return ListTile(
+                            leading: const Icon(Icons.location_on_outlined, color: Colors.green),
+                            title: Text(res['display_name'], maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
+                            onTap: () => _selectSearchResult(res),
+                          );
+                        },
+                      ),
                     ),
-                  ],
-                ),
-            ],
-          ),
-          Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)]),
-              child: Row(
-                children: [
-                  const Icon(Icons.navigation, color: _kGreen),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text("Tip: Long-press anywhere on map to add product pickup point.", style: TextStyle(fontSize: 12, color: Colors.black87))),
                 ],
               ),
             ),
           ),
+
+          Center(
+            child: AnimatedBuilder(
+              animation: _pinAnimation,
+              builder: (context, child) {
+                return Transform.translate(
+                  offset: Offset(0, _pinAnimation.value - 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8)),
+                        child: const Text("Set Pickup", style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                      ),
+                      const Icon(Icons.location_on, size: 40, color: Colors.green),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+
+          Positioned(
+            bottom: 0, left: 0, right: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -10))],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+                  const SizedBox(height: 15),
+                  Row(
+                    children: [
+                      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.location_on, color: Colors.green, size: 20)),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(_isMoving ? "Updating map..." : _currentAddress, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: _isMoving ? null : _confirmPickupLocation,
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                      child: const Text("SAVE PICKUP POINT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          Positioned(
+            bottom: 200,
+            right: 20,
+            child: FloatingActionButton(
+              backgroundColor: Colors.white,
+              mini: true,
+              onPressed: () {
+                if (_driverPos != null) _mapController?.animateCamera(CameraUpdate.newLatLng(_driverPos!));
+              },
+              child: const Icon(Icons.my_location, color: Colors.green),
+            ),
+          ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: _kGreen,
-        mini: true,
-        onPressed: () {
-          if (_driverPos != null) _mapController.move(_driverPos!, 14.5);
-        },
-        child: const Icon(Icons.my_location, color: Colors.white),
       ),
     );
   }
 }
 
-// ====================== TAB 2: SHIPMENTS & HISTORIC RECORDS ======================
 class _ShipmentsTab extends StatefulWidget {
   final User user;
   const _ShipmentsTab({required this.user});
@@ -394,7 +603,7 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('orders')
-          .where('status', whereIn: ['Processing', 'Shipped', 'Picked Up', 'On the way'])
+          .where('status', whereIn: ['Farmer Accepted', 'Shipped', 'Picked Up', 'On the way'])
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: _kGreen));
@@ -406,7 +615,7 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
         }).toList();
 
         if (myOrders.isEmpty && available.isEmpty) {
-          return const Center(child: Text("No active delivery requests found.", style: TextStyle(color: Colors.grey)));
+          return const Center(child: Text("No active requests found", style: TextStyle(color: Colors.grey)));
         }
 
         return ListView(
@@ -417,7 +626,7 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
               ...myOrders.map((doc) => _OrderCard(doc: doc, user: widget.user)),
             ],
             if (available.isNotEmpty) ...[
-              _headerSection("Available Hub Open Orders", available.length),
+              _headerSection("Available Hub Orders", available.length),
               ...available.map((doc) => _OrderCard(doc: doc, user: widget.user)),
             ],
           ],
@@ -438,7 +647,7 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
         final historyDocs = snapshot.data!.docs;
 
         if (historyDocs.isEmpty) {
-          return const Center(child: Text("No completed orders yet.", style: TextStyle(color: Colors.grey)));
+          return const Center(child: Text("No completed orders", style: TextStyle(color: Colors.grey)));
         }
 
         return ListView.builder(
@@ -462,7 +671,7 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 4),
-                    Text(data['deliveryAddress'] ?? data['address'] ?? 'No Address Data', style: const TextStyle(fontSize: 12)),
+                    Text(data['deliveryAddress'] ?? 'No Address', style: const TextStyle(fontSize: 12)),
                     const SizedBox(height: 6),
                     Row(
                       children: [
@@ -477,19 +686,11 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
                             style: TextStyle(color: isCOD ? Colors.red : Colors.blue, fontSize: 10, fontWeight: FontWeight.bold),
                           ),
                         ),
-                        if (isCOD) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-                            child: const Text("PENDING", style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
-                          )
-                        ]
                       ],
                     ),
                   ],
                 ),
-                trailing: Text("Rs. ${data['total'] != null ? (data['total'] as num).toStringAsFixed(2) : '0.00'}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen)),
+                trailing: Text("Rs. ${data['total'] ?? '0'}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen)),
                 onTap: () {
                   if (!isCOD) {
                     _showReceipt(context, shortId, data);
@@ -516,8 +717,6 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
             const SizedBox(height: 10),
             Text("Customer: ${data['userName'] ?? 'N/A'}"),
             Text("Total: Rs. ${data['total'] ?? 0}"),
-            const SizedBox(height: 10),
-            const Center(child: Icon(Icons.receipt_long, size: 64, color: Colors.grey)),
           ],
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))],
@@ -533,7 +732,6 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
   }
 }
 
-// ====================== DELIVERY ROUTE MAP SCREEN (NEW) ======================
 class DeliveryRouteMapScreen extends StatefulWidget {
   final String orderId;
   final Map<String, dynamic> orderData;
@@ -550,26 +748,36 @@ class DeliveryRouteMapScreen extends StatefulWidget {
   State<DeliveryRouteMapScreen> createState() => _DeliveryRouteMapScreenState();
 }
 
-class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> {
-  final MapController _mapController = MapController();
+class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> with TickerProviderStateMixin {
+  MapLibreMapController? _mapController;
   LatLng? _driverPos;
   StreamSubscription<Position>? _positionSub;
 
   static const LatLng _kDefaultCenter = LatLng(27.7172, 85.3240);
+  
+  bool _isMoving = false;
+  String _currentAddress = "Fetching destination...";
+  final LocationService _locationService = LocationService();
+
+  late AnimationController _pinController;
+  late Animation<double> _pinAnimation;
 
   @override
   void initState() {
     super.initState();
+    _pinController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _pinAnimation = Tween<double>(begin: 0, end: -15).animate(
+      CurvedAnimation(parent: _pinController, curve: Curves.easeOut),
+    );
     _startLocationTracking();
   }
 
   Future<void> _startLocationTracking() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) return;
-
-    LocationPermission perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-    if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+    bool granted = await _locationService.requestPermission();
+    if (!granted) return;
 
     try {
       final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
@@ -587,153 +795,182 @@ class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> {
     setState(() => _driverPos = latlng);
   }
 
+  void _onMapCreated(MapLibreMapController controller) async {
+    _mapController = controller;
+    
+    final customerLat = (widget.orderData['customerLat'] as num?)?.toDouble();
+    final customerLng = (widget.orderData['customerLng'] as num?)?.toDouble();
+    
+    if (customerLat != null && customerLng != null) {
+      await _mapController!.addSymbol(
+        SymbolOptions(
+          geometry: LatLng(customerLat, customerLng),
+          iconImage: "marker-15",
+          iconColor: "#FF5252",
+          iconSize: 2.0,
+        ),
+      );
+      _updateAddress(LatLng(customerLat, customerLng));
+    }
+  }
+
+  Future<void> _updateAddress(LatLng position) async {
+    String address = await _locationService.getAddressFromLatLng(
+      position.latitude,
+      position.longitude,
+    );
+    if (mounted) {
+      setState(() {
+        _currentAddress = address;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _positionSub?.cancel();
+    _pinController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final customerLat = (widget.orderData['customerLat'] as num?)?.toDouble();
-    final customerLng = (widget.orderData['customerLng'] as num?)?.toDouble();
     final status = widget.orderData['status'] ?? 'Processing';
-    final address = widget.orderData['deliveryAddress'] ?? widget.orderData['address'] ?? 'No Address Data';
     final shortId = widget.orderId.substring(0, min(6, widget.orderId.length));
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 1,
-        leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.black), onPressed: () => Navigator.pop(context)),
-        title: const Text("Delivery Route", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
-      ),
       body: Stack(
         children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _driverPos ?? _kDefaultCenter,
-              initialZoom: 14.5,
+          MapLibreMap(
+            onMapCreated: _onMapCreated,
+            initialCameraPosition: CameraPosition(
+              target: _driverPos ?? _kDefaultCenter,
+              zoom: 14.5,
+              tilt: 45,
             ),
-            children: [
-              TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'com.example.farmtech_agridirect'),
-              // Driver location marker
-              if (_driverPos != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _driverPos!,
-                      width: 26,
-                      height: 26,
-                      child: Container(
-                        decoration: BoxDecoration(color: Colors.blueAccent, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
-                      ),
-                    ),
-                  ],
-                ),
-              // Customer destination marker
-              if (customerLat != null && customerLng != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: LatLng(customerLat, customerLng),
-                      width: 45,
-                      height: 45,
-                      child: const Icon(Icons.location_pin, color: Colors.redAccent, size: 38),
-                    ),
-                  ],
-                ),
-            ],
+            myLocationEnabled: true,
+            onCameraMove: (pos) {
+              if (!_isMoving) {
+                setState(() => _isMoving = true);
+                _pinController.forward();
+              }
+            },
+            onCameraIdle: () {
+              setState(() => _isMoving = false);
+              _pinController.reverse();
+            },
+            styleString: "https://tiles.openfreemap.org/styles/positron",
           ),
-          // Rider info card at top
+
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: CircleAvatar(
+                backgroundColor: Colors.white,
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.black),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+            ),
+          ),
+
           Positioned(
-            top: 16,
-            left: 16,
-            right: 16,
+            top: 80, left: 16, right: 16,
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 15, offset: const Offset(0, 5))],
               ),
               child: Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: const BoxDecoration(color: _kGreen, shape: BoxShape.circle),
-                    child: const Icon(Icons.person, color: Colors.white, size: 20),
-                  ),
+                  const CircleAvatar(backgroundColor: _kGreen, child: Icon(Icons.delivery_dining, color: Colors.white)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Text("Rider: ${widget.deliveryPersonName}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                         Text(status, style: const TextStyle(color: Colors.grey, fontSize: 11)),
                       ],
                     ),
                   ),
-                  IconButton(icon: const Icon(Icons.phone, color: _kGreen), onPressed: () {}),
                 ],
               ),
             ),
           ),
-          // Order details card at bottom
+
+          Center(
+            child: AnimatedBuilder(
+              animation: _pinAnimation,
+              builder: (context, child) {
+                return Transform.translate(
+                  offset: Offset(0, _pinAnimation.value - 20),
+                  child: const Icon(Icons.location_on, size: 45, color: Colors.redAccent),
+                );
+              },
+            ),
+          ),
+
           Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
+            bottom: 0, left: 0, right: 0,
             child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
               decoration: const BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
-                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -10))],
               ),
-              padding: const EdgeInsets.all(16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Order #$shortId", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 8),
+                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+                  const SizedBox(height: 15),
+                  const Text("DESTINATION", style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  const SizedBox(height: 10),
                   Row(
                     children: [
-                      const Icon(Icons.location_on, color: Colors.grey, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(address, style: const TextStyle(fontSize: 12, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.flag, color: Colors.redAccent, size: 20)),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(_currentAddress, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis)),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
+                    height: 52,
                     child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: _kGreen),
+                      style: ElevatedButton.styleFrom(backgroundColor: _kGreen, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                       onPressed: () => Navigator.pop(context),
-                      child: const Text("Back to Shipments", style: TextStyle(color: Colors.white)),
+                      child: Text("ORDER #$shortId - BACK", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],
               ),
             ),
           ),
+
+          Positioned(
+            bottom: 230, right: 20,
+            child: FloatingActionButton(
+              backgroundColor: Colors.white,
+              mini: true,
+              onPressed: () {
+                if (_driverPos != null) _mapController?.animateCamera(CameraUpdate.newLatLng(_driverPos!));
+              },
+              child: const Icon(Icons.my_location, color: Colors.green),
+            ),
+          ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: _kGreen,
-        mini: true,
-        onPressed: () {
-          if (_driverPos != null) _mapController.move(_driverPos!, 14.5);
-        },
-        child: const Icon(Icons.my_location, color: Colors.white),
       ),
     );
   }
 }
 
-// ====================== TAB 3: CUSTOMER & PRODUCT DETAILS ======================
 class _NotificationsTab extends StatelessWidget {
   final User user;
   const _NotificationsTab({required this.user});
@@ -750,7 +987,7 @@ class _NotificationsTab extends StatelessWidget {
             .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text("No current order details assigned.", style: TextStyle(color: Colors.grey))));
+            return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text("No order details assigned", style: TextStyle(color: Colors.grey))));
           }
 
           final alerts = snapshot.data!.docs;
@@ -761,7 +998,7 @@ class _NotificationsTab extends StatelessWidget {
               final data = alerts[idx].data() as Map<String, dynamic>;
               final name = data['customerName'] ?? data['userName'] ?? 'Customer';
               final phone = data['customerPhone'] ?? data['userPhone'] ?? 'No Number';
-              final itemsSummary = data['itemsSummary'] ?? 'Standard Package Item';
+              final itemsSummary = data['itemsSummary'] ?? 'Items';
 
               return Card(
                   color: Colors.white,
@@ -780,17 +1017,17 @@ class _NotificationsTab extends StatelessWidget {
                           ],
                         ),
                         const Divider(height: 16),
-                        Row(children: [const Icon(Icons.person, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Customer Name: $name")]),
+                        Row(children: [const Icon(Icons.person, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Customer: $name")]),
                         const SizedBox(height: 6),
-                        Row(children: [const Icon(Icons.phone, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Phone Number: $phone")]),
+                        Row(children: [const Icon(Icons.phone, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Phone: $phone")]),
                         const SizedBox(height: 6),
-                        Row(children: [const Icon(Icons.shopping_bag, size: 16, color: Colors.grey), const SizedBox(width: 8), Expanded(child: Text("Product details: $itemsSummary", maxLines: 2, overflow: TextOverflow.ellipsis))]),
+                        Row(children: [const Icon(Icons.shopping_bag, size: 16, color: Colors.grey), const SizedBox(width: 8), Expanded(child: Text("Details: $itemsSummary", maxLines: 2, overflow: TextOverflow.ellipsis))]),
                         const SizedBox(height: 10),
                         Container(
                           width: double.infinity,
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(color: _kBg, borderRadius: BorderRadius.circular(8)),
-                          child: Text("Drop Location: ${data['deliveryAddress'] ?? data['address'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                          child: Text("Drop: ${data['deliveryAddress'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
                         )
                       ],
                     ),
@@ -804,7 +1041,6 @@ class _NotificationsTab extends StatelessWidget {
   }
 }
 
-// ====================== TAB 4: WALLET & QR MANAGEMENT ======================
 class _EarningsTab extends StatefulWidget {
   final User user;
   const _EarningsTab({required this.user});
@@ -839,7 +1075,7 @@ class _EarningsTabState extends State<_EarningsTab> {
           children: [
             ListTile(
               leading: const Icon(Icons.image, color: _kGreen),
-              title: const Text("Upload / Change QR Photo"),
+              title: const Text("Upload QR Photo"),
               onTap: () {
                 Navigator.pop(context);
                 _pickQrCodeImage();
@@ -848,7 +1084,7 @@ class _EarningsTabState extends State<_EarningsTab> {
             if (_qrCodeImgPath != null)
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.redAccent),
-                title: const Text("Delete Current QR Photo"),
+                title: const Text("Delete QR Photo"),
                 onTap: () {
                   Navigator.pop(context);
                   _deleteQrCodeImage();
@@ -871,7 +1107,7 @@ class _EarningsTabState extends State<_EarningsTab> {
         'paymentQrCode': pickedFile.path,
       }, SetOptions(merge: true));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Payment QR Code updated successfully!")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("QR updated")));
       }
     }
   }
@@ -884,7 +1120,7 @@ class _EarningsTabState extends State<_EarningsTab> {
       'paymentQrCode': FieldValue.delete(),
     });
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Payment QR Code removed.")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("QR removed")));
     }
   }
 
@@ -903,9 +1139,6 @@ class _EarningsTabState extends State<_EarningsTab> {
           if (snapshot.hasData) {
             for (var doc in snapshot.data!.docs) {
               final data = doc.data() as Map<String, dynamic>;
-              final price = (data['total'] ?? 0).toDouble();
-              // Assuming delivery person gets a flat fee or percentage?
-              // Let's assume they get the 'deliveryFee' if present, otherwise let's say Rs. 100 per delivery for demo
               final earning = (data['deliveryFee'] ?? 100).toDouble();
               totalEarnings += earning;
               recentEarnings.add({
@@ -929,18 +1162,18 @@ class _EarningsTabState extends State<_EarningsTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("MY WALLET BALANCE", style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
+                      const Text("WALLET BALANCE", style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
                       Text("Rs. ${totalEarnings.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 4),
-                      const Text("Total Earned This Month", style: TextStyle(color: Colors.white60, fontSize: 10)),
+                      const Text("Total Earned", style: TextStyle(color: Colors.white60, fontSize: 10)),
                     ],
                   ),
                 ),
                 const SizedBox(height: 20),
-                const Text("Accepted Payment Modes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const Text("Payment Modes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 12),
-                _paymentModeRow("Cash On Delivery (COD)", Icons.payments, Colors.amber.shade900),
+                _paymentModeRow("COD", Icons.payments, Colors.amber.shade900),
                 const SizedBox(height: 12),
                 GestureDetector(
                   onTap: _showImageOptions,
@@ -953,7 +1186,7 @@ class _EarningsTabState extends State<_EarningsTab> {
                           children: [
                             Icon(Icons.qr_code_scanner, color: Colors.blue.shade800),
                             const SizedBox(width: 12),
-                            const Text("Tap here to update/manage QR Code", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            const Text("Manage QR Code", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                           ],
                         ),
                         if (_qrCodeImgPath != null) ...[
@@ -974,11 +1207,11 @@ class _EarningsTabState extends State<_EarningsTab> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text("Recent Shipments Income", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                const Text("Recent Income", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                 if (recentEarnings.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Text("No earnings yet.", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    child: Text("No earnings", style: TextStyle(color: Colors.grey, fontSize: 12)),
                   )
                 else
                   ...recentEarnings.reversed.take(10).map((e) => _paymentHistoryRow("Delivery complete #${e['id']}", "Rs. ${e['amount']}")),
@@ -1012,7 +1245,6 @@ class _EarningsTabState extends State<_EarningsTab> {
   }
 }
 
-// ====================== TAB 5: EDITABLE PROFILE HUB ======================
 class _ProfileTab extends StatefulWidget {
   final User user;
   const _ProfileTab({required this.user});
@@ -1061,7 +1293,7 @@ class _ProfileTabState extends State<_ProfileTab> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_library, color: _kGreen),
-              title: Text("Choose New ${isProfile ? 'Profile Picture' : 'License Image'}"),
+              title: Text("Choose ${isProfile ? 'Profile' : 'License'} Photo"),
               onTap: () {
                 Navigator.pop(context);
                 _pickImage(isProfile);
@@ -1070,7 +1302,7 @@ class _ProfileTabState extends State<_ProfileTab> {
             if (isProfile ? _profileImgPath != null : _licenseImgPath != null)
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.redAccent),
-                title: Text("Delete Current ${isProfile ? 'Profile Picture' : 'License Image'}"),
+                title: Text("Delete Photo"),
                 onTap: () {
                   Navigator.pop(context);
                   _deleteImage(isProfile);
@@ -1108,41 +1340,66 @@ class _ProfileTabState extends State<_ProfileTab> {
   Future<void> _persistProfile() async {
     setState(() => _isSaving = true);
 
-    final updates = <String, dynamic>{
-      'fullName': _nameController.text.trim(), // Consistent with signup
-      'name': _nameController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'vehicleDetails': _vehicleController.text.trim(),
-      'updatedAt': FieldValue.serverTimestamp()
-    };
+    String? finalProfileUrl = _profileImgPath;
+    String? finalLicenseUrl = _licenseImgPath;
 
-    if (_profileImgPath == null) {
-      updates['profileImageUrl'] = FieldValue.delete();
-    } else {
-      updates['profileImageUrl'] = _profileImgPath;
+    try {
+      final cloudinary = CloudinaryPublic('drt6y7f8v', 'agridirect_unsigned', cache: false);
+
+      if (_profileImgPath != null && !(_profileImgPath!.startsWith('http'))) {
+        CloudinaryResponse response = await cloudinary.uploadFile(
+          CloudinaryFile.fromFile(_profileImgPath!, folder: 'profile_pics'),
+        );
+        finalProfileUrl = response.secureUrl;
+      }
+
+      if (_licenseImgPath != null && !(_licenseImgPath!.startsWith('http'))) {
+        CloudinaryResponse response = await cloudinary.uploadFile(
+          CloudinaryFile.fromFile(_licenseImgPath!, folder: 'licenses'),
+        );
+        finalLicenseUrl = response.secureUrl;
+      }
+
+      final updates = <String, dynamic>{
+        'fullName': _nameController.text.trim(),
+        'name': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'vehicleDetails': _vehicleController.text.trim(),
+        'updatedAt': FieldValue.serverTimestamp()
+      };
+
+      if (finalProfileUrl == null) {
+        updates['profileImageUrl'] = FieldValue.delete();
+      } else {
+        updates['profileImageUrl'] = finalProfileUrl;
+      }
+
+      if (finalLicenseUrl == null) {
+        updates['licenseImageUrl'] = FieldValue.delete();
+      } else {
+        updates['licenseImageUrl'] = finalLicenseUrl;
+      }
+
+      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set(
+          updates,
+          SetOptions(merge: true)
+      );
+
+      await FirebaseFirestore.instance.collection('riders').doc(widget.user.uid).set(
+          updates,
+          SetOptions(merge: true)
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile saved")));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
-
-    if (_licenseImgPath == null) {
-      updates['licenseImageUrl'] = FieldValue.delete();
-    } else {
-      updates['licenseImageUrl'] = _licenseImgPath;
-    }
-
-    // Save to both collections (generic users and specific riders section)
-    await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set(
-        updates,
-        SetOptions(merge: true)
-    );
-
-    await FirebaseFirestore.instance.collection('riders').doc(widget.user.uid).set(
-        updates,
-        SetOptions(merge: true)
-    );
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile changes saved!")));
-    }
-    setState(() => _isSaving = false);
   }
 
   @override
@@ -1180,11 +1437,11 @@ class _ProfileTabState extends State<_ProfileTab> {
             ),
           ),
           const SizedBox(height: 16),
-          const Text("Rider Profile Details", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
+          const Text("Rider Profile", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
           const SizedBox(height: 20),
           _buildField("Full Name", _nameController, Icons.badge),
-          _buildField("Phone Number", _phoneController, Icons.phone),
-          _buildField("Vehicle Spec / Plate No.", _vehicleController, Icons.motorcycle),
+          _buildField("Phone", _phoneController, Icons.phone),
+          _buildField("Vehicle Details", _vehicleController, Icons.motorcycle),
           const SizedBox(height: 16),
           const Text("License Document", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
           const SizedBox(height: 8),
@@ -1207,7 +1464,7 @@ class _ProfileTabState extends State<_ProfileTab> {
                         : Image.file(File(_licenseImgPath!), fit: BoxFit.cover),
                   ),
                 )
-                    : Column(mainAxisAlignment: MainAxisAlignment.center, children: const [Icon(Icons.assignment, color: Colors.grey), SizedBox(height: 4), Text("Tap here to manage License Image", style: TextStyle(fontSize: 12, color: Colors.grey))]),
+                    : Column(mainAxisAlignment: MainAxisAlignment.center, children: const [Icon(Icons.assignment, color: Colors.grey), SizedBox(height: 4), Text("Manage License Image", style: TextStyle(fontSize: 12, color: Colors.grey))]),
               ),
             ),
           ),
@@ -1242,7 +1499,6 @@ class _ProfileTabState extends State<_ProfileTab> {
   }
 }
 
-// ====================== UNIVERSAL REUSABLE ORDER COMPONENT ======================
 class _OrderCard extends StatelessWidget {
   final QueryDocumentSnapshot doc;
   final User user;
@@ -1254,7 +1510,7 @@ class _OrderCard extends StatelessWidget {
     final status = data['status'] ?? 'Processing';
     final shortId = doc.id.substring(0, min(6, doc.id.length));
     final total = data['totalPrice'] ?? data['total'] ?? 0;
-    final address = data['deliveryAddress'] ?? data['address'] ?? 'No Address Data';
+    final address = data['deliveryAddress'] ?? 'No Address';
 
     return Card(
       color: Colors.white,
@@ -1309,12 +1565,12 @@ class _OrderCard extends StatelessWidget {
 
   String _nextLabel(String status) {
     if (status == 'Processing' || status == 'Shipped') return "Accept Request";
-    if (status == 'Picked Up') return "Start Delivery Route";
+    if (status == 'Picked Up') return "Start Delivery";
     return "Mark Delivered";
   }
 
   void _showDeliveryRoute(BuildContext context, String orderId, Map<String, dynamic> orderData) {
-    final deliveryPersonName = orderData['deliveryName'] ?? 'Delivery Person';
+    final deliveryPersonName = orderData['deliveryName'] ?? 'Rider';
 
     Navigator.push(
       context,
@@ -1337,16 +1593,14 @@ class _OrderCard extends StatelessWidget {
     }
 
     try {
-      // Fetch the actual name from the Rider's Firestore profile (from the riders collection)
       final riderDoc = await FirebaseFirestore.instance.collection('riders').doc(riderUid).get();
-      // Fallback to users collection if not found in riders
       final riderData = riderDoc.exists
           ? riderDoc.data()
           : (await FirebaseFirestore.instance.collection('users').doc(riderUid).get()).data();
 
       final riderName = riderData?['fullName'] ?? riderData?['name'] ?? "Rider";
+      final riderPhone = riderData?['phone'] ?? "";
 
-      // 1. Verify the order isn't already taken by someone else
       final freshSnap = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
       final freshData = freshSnap.data();
       if (freshData != null &&
@@ -1355,17 +1609,17 @@ class _OrderCard extends StatelessWidget {
           freshData['deliveryId'] != riderUid) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Sorry, this order was just accepted by another rider."), backgroundColor: Colors.red),
+            const SnackBar(content: Text("Order already accepted by another rider"), backgroundColor: Colors.red),
           );
         }
         return;
       }
 
-      // 2. Perform the update
       await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
         'status': next,
         'deliveryId': riderUid,
-        'deliveryName': riderName, // Dynamically fetched name
+        'deliveryName': riderName, 
+        'deliveryPhone': riderPhone,
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
@@ -1373,18 +1627,18 @@ class _OrderCard extends StatelessWidget {
       final customerId = data['userId'];
 
       if (customerId != null) {
-        String title = 'Order Status Updated';
-        String body = 'Your order #$shortId status is now $next';
+        String title = 'Order Update';
+        String body = 'Order #$shortId status is $next';
 
         if (next == 'Picked Up') {
-          title = '📦 Order Picked Up';
-          body = 'Rider has picked up your package #$shortId.';
+          title = 'Order Picked Up';
+          body = 'Rider has picked up package #$shortId';
         } else if (next == 'On the way') {
-          title = '🚴 On The Way';
-          body = 'Rider is coming to your location with package #$shortId.';
+          title = 'On The Way';
+          body = 'Rider is coming with package #$shortId';
         } else if (next == 'Delivered') {
-          title = '✅ Delivered';
-          body = 'Package #$shortId has been dropped off. Thank you!';
+          title = 'Delivered';
+          body = 'Package #$shortId has been dropped off';
         }
 
         await FirebaseFirestore.instance.collection('users').doc(customerId).collection('notifications').add({
@@ -1400,7 +1654,7 @@ class _OrderCard extends StatelessWidget {
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Success: Status is now $next"), backgroundColor: _kGreen)
+            SnackBar(content: Text("Status is now $next"), backgroundColor: _kGreen)
         );
       }
     } catch (e) {
@@ -1413,7 +1667,6 @@ class _OrderCard extends StatelessWidget {
   }
 }
 
-// ====================== UTILITY CUSTOM CANVAS DASHED PAINTER ======================
 class _DashedBorderPainter extends CustomPainter {
   final Color color;
   final double radius;
@@ -1427,7 +1680,6 @@ class _DashedBorderPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
 
-    // Use smooth manual segment calculations compatible with cross-platform linter rules
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
     final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
     final path = Path()..addRRect(rrect);

@@ -14,87 +14,41 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
   String _selectedCategory = "All";
   bool _isNepali = false;
 
-  final List<String> _categories = ["All", "Potato", "Tomato", "Rice", "Maize"];
+  final List<String> _categories = ["All", "Vegetables", "Fruits", "Livestock", "Grains"];
 
-  final List<Map<String, dynamic>> _diseases = [
-    {
-      "name": "Potato: Late Blight",
-      "crop": "Potato",
-      "symptoms": "Water-soaked spots on leaves, white fungal growth on undersides, rapid browning and shriveling.",
-      "remedy": "Apply Mancozeb or Ridomil Gold. Ensure proper spacing for ventilation. Remove infected plants immediately.",
-      "organic": "Spray with copper-based fungicides or use a mixture of baking soda and water.",
-      "image": "assets/images/potato.png"
-    },
-    {
-      "name": "Potato: Early Blight",
-      "crop": "Potato",
-      "symptoms": "Small, dark brown spots with concentric rings (target-like) on older leaves.",
-      "remedy": "Foliar spray of Chlorothalonil. Maintain soil fertility.",
-      "organic": "Crop rotation and removing crop debris after harvest.",
-      "image": "assets/images/potato.png"
-    },
-    {
-      "name": "Tomato: Bacterial Spot",
-      "crop": "Tomato",
-      "symptoms": "Small, dark, water-soaked spots on leaves and fruit. Spots may have a yellow halo.",
-      "remedy": "Copper-based bactericides. Avoid overhead irrigation.",
-      "organic": "Use certified disease-free seeds. Practice 3-year crop rotation.",
-      "image": "assets/images/tomato.png"
-    },
-    {
-      "name": "Tomato: Leaf Mold",
-      "crop": "Tomato",
-      "symptoms": "Pale greenish-yellow spots on upper leaf surfaces; olive-green velvety fungal growth on undersides.",
-      "remedy": "Increase ventilation in greenhouses. Use resistant varieties.",
-      "organic": "Reduce humidity and keep foliage dry.",
-      "image": "assets/images/tomato.png"
-    },
-    {
-      "name": "Rice: Brown Spot",
-      "crop": "Rice",
-      "symptoms": "Small, circular to oval brown spots with gray or whitish centers.",
-      "remedy": "Apply potash fertilizer. Use seed treatment with Thiram.",
-      "organic": "Ensure proper drainage and balanced soil nutrition.",
-      "image": "assets/images/brown rice.png"
-    },
-    {
-      "name": "Rice: Leaf Blast",
-      "crop": "Rice",
-      "symptoms": "Spindle-shaped spots with white to gray centers and brown borders.",
-      "remedy": "Apply Tricyclazole or Carbendazim. Avoid excessive Nitrogen.",
-      "organic": "Use resistant cultivars and burn infected straw.",
-      "image": "assets/images/brown rice.png"
-    },
-    {
-      "name": "Maize: Common Rust",
-      "crop": "Maize",
-      "symptoms": "Cinnamon-brown pustules on both leaf surfaces. Pustules turn black as the plant matures.",
-      "remedy": "Fungicide sprays like Pyraclostrobin if detected early.",
-      "organic": "Plant resistant hybrids. Early planting can sometimes bypass peak rust season.",
-      "image": "assets/images/maize.png"
-    },
-    {
-      "name": "Maize: Northern Leaf Blight",
-      "crop": "Maize",
-      "symptoms": "Long, cigar-shaped grayish-green or tan lesions.",
-      "remedy": "Apply strobilurin or azoxystrobin fungicides.",
-      "organic": "Deep plowing to bury crop residue and rotation with non-host crops.",
-      "image": "assets/images/maize.png"
-    },
-  ];
+  String _getCategory(String key) {
+    final k = key.toLowerCase();
+    if (k.contains("poultry") || k.contains("cattle") || k.contains("goat") || k.contains("egg")) return "Livestock";
+    if (k.contains("apple") || k.contains("mango") || k.contains("banana")) return "Fruits";
+    if (k.contains("rice") || k.contains("maize")) return "Grains";
+    if (k.contains("bitter gourd") || k.contains("ginger") || k.contains("turmeric") || k.contains("cabbage") || k.contains("cauliflower")) return "Vegetables";
+    return "Grains"; // Default to Grains or another valid category instead of "Others" to avoid empty results if "Others" is not in _categories
+  }
 
   @override
   Widget build(BuildContext context) {
-    List<Map<String, dynamic>> filteredDiseases = _diseases.where((d) {
-      final matchesSearch = d['name'].toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesCat = _selectedCategory == "All" || d['crop'] == _selectedCategory;
+    // Filter and prepare the list
+    final List<MapEntry<String, Map<String, String>>> diseaseEntries = AppTranslations.diseaseData.entries.where((e) {
+      final String key = e.key;
+      if (key == "Healthy" || key == "Healthy Leaf") return false;
+      
+      final Map<String, String> data = e.value;
+      final String category = _getCategory(key);
+      
+      final String query = _searchQuery.toLowerCase();
+      final bool matchesSearch = key.toLowerCase().contains(query) ||
+          (data['name_ne'] ?? "").contains(_searchQuery) ||
+          (data['name_en'] ?? "").toLowerCase().contains(query);
+          
+      final bool matchesCat = _selectedCategory == "All" || category == _selectedCategory;
+      
       return matchesSearch && matchesCat;
     }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7F5),
       appBar: AppBar(
-        title: const Text("Disease Library", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: const Text("Agri-Vet Library", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.green),
@@ -106,6 +60,7 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
                 value: _isNepali,
                 onChanged: (val) => setState(() => _isNepali = val),
                 activeThumbColor: Colors.green,
+                activeTrackColor: Colors.green.withValues(alpha: 0.5),
               ),
               const Text("ने", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               const SizedBox(width: 8),
@@ -117,12 +72,15 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
         children: [
           _buildSearchAndFilter(),
           Expanded(
-            child: filteredDiseases.isEmpty
+            child: diseaseEntries.isEmpty
                 ? _buildEmptyState()
                 : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filteredDiseases.length,
-                    itemBuilder: (context, index) => _buildDiseaseCard(filteredDiseases[index]),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    itemCount: diseaseEntries.length,
+                    itemBuilder: (context, index) {
+                      final entry = diseaseEntries[index];
+                      return _buildDiseaseCard(entry.key, _getCategory(entry.key));
+                    },
                   ),
           ),
         ],
@@ -140,7 +98,7 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
             controller: _searchController,
             onChanged: (val) => setState(() => _searchQuery = val),
             decoration: InputDecoration(
-              hintText: "Search diseases (e.g. Blight)",
+              hintText: _isNepali ? "खोज्नुहोस् (उदा. धान, गाई, अदुवा)" : "Search (e.g. Rice, Cattle, Ginger)",
               prefixIcon: const Icon(Icons.search, color: Colors.green),
               filled: true,
               fillColor: Colors.grey.shade100,
@@ -160,7 +118,7 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
-                    label: Text(cat),
+                    label: Text(_isNepali ? _translateCategory(cat) : cat),
                     selected: isSelected,
                     onSelected: (val) => setState(() => _selectedCategory = cat),
                     selectedColor: Colors.green,
@@ -176,66 +134,144 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
     );
   }
 
-  Widget _buildDiseaseCard(Map<String, dynamic> disease) {
-    final displayName = _isNepali 
-        ? AppTranslations.translate(disease['name'], 'name_ne') 
-        : disease['name'];
-    final displaySymptoms = _isNepali 
-        ? AppTranslations.translate(disease['name'], 'symptoms_ne') 
-        : disease['symptoms'];
+  String _translateCategory(String cat) {
+    switch (cat) {
+      case "All": return "सबै";
+      case "Vegetables": return "तरकारी";
+      case "Fruits": return "फलफूल";
+      case "Livestock": return "पशुपन्छी";
+      case "Grains": return "अन्नबाली";
+      default: return cat;
+    }
+  }
+
+  Widget _buildDiseaseCard(String key, String category) {
+    final displayName = AppTranslations.translate(key, 'name_ne', isNepali: _isNepali);
+    final displaySymptoms = AppTranslations.translate(key, 'symptoms_ne', isNepali: _isNepali);
 
     return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 1,
       child: InkWell(
-        onTap: () => _showDiseaseDetails(disease),
-        borderRadius: BorderRadius.circular(16),
+        onTap: () => _showDiseaseDetails(key),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
               Container(
-                width: 80,
-                height: 80,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(disease['image'], fit: BoxFit.cover),
-                ),
+                child: Icon(_getIconForCategory(category), color: Colors.green),
               ),
               const SizedBox(width: 15),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(displayName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     const SizedBox(height: 4),
                     Text(
                       displaySymptoms,
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        const Icon(Icons.info_outline, size: 14, color: Colors.green),
-                        const SizedBox(width: 4),
-                        Text(_isNepali ? "उपचार हेर्नुहोस्" : "View Solution", style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold)),
-                      ],
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: Colors.grey),
+              const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  IconData _getIconForCategory(String cat) {
+    switch (cat) {
+      case "Vegetables": return Icons.grass;
+      case "Fruits": return Icons.apple;
+      case "Livestock": return Icons.pets;
+      case "Grains": return Icons.agriculture;
+      default: return Icons.eco;
+    }
+  }
+
+  void _showDiseaseDetails(String key) {
+    final displayName = AppTranslations.translate(key, 'name_ne', isNepali: _isNepali);
+    final displaySymptoms = AppTranslations.translate(key, 'symptoms_ne', isNepali: _isNepali);
+    final displayRemedy = AppTranslations.translate(key, 'remedy_ne', isNepali: _isNepali);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: ListView(
+            controller: scrollController,
+            padding: const EdgeInsets.all(24),
+            children: [
+              Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 20),
+              Text(displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.green)),
+              const Divider(height: 30),
+              _buildInfoSection(_isNepali ? "मुख्य लक्षणहरू" : "Main Symptoms", displaySymptoms, Icons.warning_amber_rounded, Colors.orange),
+              const SizedBox(height: 20),
+              _buildInfoSection(_isNepali ? "उपचार विधि" : "Remedy / Treatment", displayRemedy, Icons.medical_services_outlined, Colors.blue),
+              const SizedBox(height: 30),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text(_isNepali ? "बन्द गर्नुहोस्" : "Close", style: const TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoSection(String title, String content, IconData icon, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(15),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color.withValues(alpha: 0.1)),
+          ),
+          child: Text(content, style: const TextStyle(fontSize: 14, height: 1.5)),
+        ),
+      ],
     );
   }
 
@@ -246,102 +282,9 @@ class _DiseaseLibraryScreenState extends State<DiseaseLibraryScreen> {
         children: [
           Icon(Icons.search_off, size: 64, color: Colors.grey.shade300),
           const SizedBox(height: 16),
-          Text("No diseases found matching your criteria.", style: TextStyle(color: Colors.grey.shade600)),
+          Text(_isNepali ? "कुनै नतिजा भेटिएन।" : "No matching records found.", style: TextStyle(color: Colors.grey.shade600)),
         ],
       ),
-    );
-  }
-
-  void _showDiseaseDetails(Map<String, dynamic> disease) {
-    final displayName = _isNepali 
-        ? AppTranslations.translate(disease['name'], 'name_ne') 
-        : disease['name'];
-    final displaySymptoms = _isNepali 
-        ? AppTranslations.translate(disease['name'], 'symptoms_ne') 
-        : disease['symptoms'];
-    final displayRemedy = _isNepali 
-        ? AppTranslations.translate(disease['name'], 'remedy_ne') 
-        : disease['remedy'];
-    final displayOrganic = _isNepali 
-        ? AppTranslations.translate(disease['name'], 'organic_ne') 
-        : disease['organic'];
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (_, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-              Expanded(
-                child: ListView(
-                  controller: scrollController,
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    Row(
-                      children: [
-                        Chip(label: Text(disease['crop']), backgroundColor: Colors.green.withValues(alpha: 0.1), labelStyle: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                        const Spacer(),
-                        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
-                      ],
-                    ),
-                    Text(displayName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 20),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.asset(disease['image'], height: 200, width: double.infinity, fit: BoxFit.cover),
-                    ),
-                    const SizedBox(height: 25),
-                    _buildSectionHeader(Icons.warning_amber_rounded, _isNepali ? "लक्षणहरू" : "Symptoms", Colors.orange),
-                    const SizedBox(height: 8),
-                    Text(displaySymptoms, style: const TextStyle(fontSize: 15, height: 1.5)),
-                    const SizedBox(height: 25),
-                    _buildSectionHeader(Icons.medication, _isNepali ? "रासायनिक उपचार" : "Chemical Treatment", Colors.blue),
-                    const SizedBox(height: 8),
-                    Text(displayRemedy, style: const TextStyle(fontSize: 15, height: 1.5)),
-                    const SizedBox(height: 25),
-                    _buildSectionHeader(Icons.eco, _isNepali ? "जैविक उपचार" : "Organic Remedy", Colors.green),
-                    const SizedBox(height: 8),
-                    Text(displayOrganic, style: const TextStyle(fontSize: 15, height: 1.5)),
-                    const SizedBox(height: 40),
-                    ElevatedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.check, color: Colors.white),
-                      label: Text(_isNepali ? "बुझें" : "Got it", style: const TextStyle(color: Colors.white)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(IconData icon, String title, Color color) {
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(width: 8),
-        Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-      ],
     );
   }
 }

@@ -27,6 +27,7 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
     final double? lng = (result['lng'] as num?)?.toDouble();
 
     if (lat == null || lng == null) return;
+    if (!mounted) return;
 
     // Show dialog to pick label
     String selectedLabel = 'Home';
@@ -58,7 +59,7 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
       
       final bool setAsDefault = existingDocs.docs.isEmpty;
 
-      final docRef = await FirebaseFirestore.instance
+      await FirebaseFirestore.instance
           .collection('users')
           .doc(user!.uid)
           .collection('addresses')
@@ -177,7 +178,22 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
             return const Center(child: CircularProgressIndicator(color: Colors.green));
           }
 
-          final docs = snapshot.data?.docs ?? [];
+          // Convert to list and sort in-memory to bypass index requirement
+          final docs = (snapshot.data?.docs ?? []).toList();
+          docs.sort((a, b) {
+            final aData = a.data() as Map<String, dynamic>;
+            final bData = b.data() as Map<String, dynamic>;
+            
+            // Default address always first
+            final aDef = aData['isDefault'] ?? false;
+            final bDef = bData['isDefault'] ?? false;
+            if (aDef != bDef) return aDef ? -1 : 1;
+
+            // Then by date
+            final aTime = (aData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            final bTime = (bData['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            return bTime.compareTo(aTime);
+          });
 
           if (docs.isEmpty) {
             return Center(
@@ -225,7 +241,7 @@ class _MyAddressesScreenState extends State<MyAddressesScreen> {
                           if (isDefault)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(5)),
+                              decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(5)),
                               child: const Text("DEFAULT", style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
                             ),
                           IconButton(

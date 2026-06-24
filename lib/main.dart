@@ -14,8 +14,6 @@ void main() {
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // On Web, persistence often causes "INTERNAL ASSERTION FAILED" errors.
-    // We disable it on Web for stability, while keeping it for mobile.
     if (kIsWeb) {
       FirebaseFirestore.instance.settings = const Settings(
         persistenceEnabled: false,
@@ -27,7 +25,6 @@ void main() {
       );
     }
 
-    // Global Error Handling
     FlutterError.onError = (FlutterErrorDetails details) {
       FlutterError.presentError(details);
       debugPrint("Flutter Error: ${details.exception}");
@@ -54,7 +51,6 @@ class AgriDirectApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
       ),
       builder: (context, child) {
-        // Custom Error Screen for the entire app
         ErrorWidget.builder = (FlutterErrorDetails details) {
           return Scaffold(
             body: Center(
@@ -65,7 +61,7 @@ class AgriDirectApp extends StatelessWidget {
                   children: [
                     const Icon(Icons.error_outline, color: Colors.red, size: 50),
                     const SizedBox(height: 20),
-                    const Text("Something went wrong!", 
+                    const Text("Something went wrong", 
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     Text(details.exception.toString(), textAlign: TextAlign.center),

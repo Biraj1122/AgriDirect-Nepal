@@ -528,8 +528,8 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
     }
   ];
 
-  final CollectionReference products = FirebaseFirestore.instance.collection('products');
-  debugPrint("Beginning products seeding. Target products: ${nepalProducts.length}");
+  final CollectionReference products = FirebaseFirestore.instance.collection('master_catalog');
+  debugPrint("Beginning catalog seeding. Target products: ${nepalProducts.length}");
 
   for (var product in nepalProducts) {
     bool catMatch = selectedCategories == null || selectedCategories.contains(product['category']);
@@ -539,10 +539,10 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
       try {
         product['addedAt'] = FieldValue.serverTimestamp();
         product['updatedAt'] = FieldValue.serverTimestamp();
-        product['stock'] = 100;
+        // product['stock'] = 100; // Stock should now be per-farmer
         product['rating'] = 4.8;
         product['image'] = product['imageUrl'];
-        product['farmerUid'] = user.uid; // Use actual Admin UID instead of 'admin'
+        // product['farmerUid'] = user.uid; // Master catalog items are not tied to a farmer
         
         String docId = product['name'].toString().replaceAll(' ', '_').toLowerCase();
         

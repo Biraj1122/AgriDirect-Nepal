@@ -38,7 +38,7 @@ class OrderDetailsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
               ),
               child: Column(
                 children: [
@@ -138,7 +138,7 @@ class OrderDetailsScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(item['title'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(item['unit'] ?? '', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                Text("${item['unit'] ?? ''} x ${item['quantity'] ?? 1}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
               ],
             ),
           ),

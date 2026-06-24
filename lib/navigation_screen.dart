@@ -33,6 +33,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   bool _isCheckingRole = true;
 
   List<Map<String, dynamic>> _favouriteProducts = [];
+  List<Map<String, dynamic>> _categories = [];
   StreamSubscription? _favSubscription;
 
   @override
@@ -40,6 +41,29 @@ class _NavigationScreenState extends State<NavigationScreen> {
     super.initState();
     currentIndex = widget.initialTabIndex;
     _checkRole();
+    _fetchCategories();
+  }
+
+  Future<void> _fetchCategories() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('categories').get();
+      if (snapshot.docs.isNotEmpty && mounted) {
+        setState(() {
+          _categories = snapshot.docs.map((doc) {
+            final data = doc.data();
+            final iconCode = data['iconCode'] as int?;
+            return {
+              'name': data['name'] ?? 'Category',
+              'icon': iconCode != null
+                  ? IconData(iconCode, fontFamily: 'MaterialIcons')
+                  : Icons.category,
+            };
+          }).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint("Error pre-fetching categories: $e");
+    }
   }
 
   Future<void> _checkRole() async {
@@ -69,14 +93,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
           Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => target));
           return;
         }
-
-        // Only start listeners if we are indeed a Customer
         _listenToFavorites();
         setState(() => _isCheckingRole = false);
       }
     } catch (e) {
       debugPrint("Error checking role: $e");
       if (mounted) {
+        _listenToFavorites();
         setState(() => _isCheckingRole = false);
       }
     }
@@ -97,6 +120,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    _favSubscription?.cancel();
+
     _favSubscription = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -106,11 +131,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
       if (mounted) {
         setState(() {
           _favouriteProducts = snapshot.docs.map((doc) {
-            final data = doc.data();
+            final Map<String, dynamic> data = doc.data();
             return {...data, 'docId': doc.id};
           }).toList();
         });
       }
+    }, onError: (e) {
+      debugPrint("Favorites Subscription Error: $e");
     });
   }
 
@@ -124,19 +151,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // 1. Identify the product name/title for consistent matching
     final String name = (product['name'] ?? product['title'] ?? '').toString().trim();
     if (name.isEmpty) return;
 
-    // 2. Determine the Document ID. Check if it already exists in our local list first
+    // Use a more flexible check to find existing favorite
     final existing = _favouriteProducts.firstWhere(
-      (p) => (p['name'] == name || p['title'] == name) || 
-             (product['docId'] != null && p['docId'] == product['docId']) ||
-             (product['id'] != null && p['docId'] == product['id']),
+      (p) {
+        final pName = (p['name'] ?? p['title'] ?? '').toString().trim();
+        return pName == name || 
+               (product['docId'] != null && p['docId'] == product['docId']) ||
+               (product['id'] != null && p['docId'] == product['id']);
+      },
       orElse: () => {},
     );
 
-    final String favId = (existing['docId'] ?? product['docId'] ?? product['id'] ?? name).toString().trim();
+    final String favId = (existing['docId'] ?? product['docId'] ?? product['id'] ?? name.replaceAll(' ', '_')).toString().trim();
 
     final favRef = FirebaseFirestore.instance
         .collection('users')
@@ -149,18 +178,18 @@ class _NavigationScreenState extends State<NavigationScreen> {
       if (doc.exists) {
         await favRef.delete();
       } else {
-        // Convert to Firestore-friendly map
         final Map<String, dynamic> favData = Map.from(product);
         
-        // Ensure standardized fields for cross-role compatibility
+        // Ensure both 'name' and 'title' are saved so the list can find them
         favData['name'] = name;
         favData['title'] = name;
         
-        final String img = (favData['image'] ?? favData['imageUrl'] ?? '').toString();
+        // Ensure images are mapped correctly
+        final String img = (product['image'] ?? product['imageUrl'] ?? product['imagePath'] ?? '').toString();
         favData['image'] = img;
+        favData['imagePath'] = img;
         favData['imageUrl'] = img;
 
-        // Fix potential color object crash
         if (favData['badgeColor'] is Color) {
           favData['badgeColor'] = (favData['badgeColor'] as Color).toARGB32();
         }
@@ -192,7 +221,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
             children: [
               CircularProgressIndicator(color: Colors.green),
               SizedBox(height: 15),
-              Text("Securing your session...", style: TextStyle(color: Colors.grey)),
+              Text("Securing session...", style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),
@@ -226,6 +255,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
       CategoriesScreen(
         key: ValueKey(selectedCategory),
         initialCategory: selectedCategory,
+        preLoadedCategories: _categories,
         externalFavouriteProducts: _favouriteProducts,
         onExternalFavouriteToggle: _toggleFavourite,
         onBackToHome: () => changeTab(0),
