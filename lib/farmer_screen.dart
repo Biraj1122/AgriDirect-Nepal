@@ -445,10 +445,9 @@ class _OrderAcceptanceTile extends StatelessWidget {
   }
 }
 
-class _OrderTile extends StatelessWidget {
-  final String orderId;
-  final Map<String, dynamic> data;
-  const _OrderTile({required this.orderId, required this.data});
+class _StockTab extends StatelessWidget {
+  final String uid;
+  const _StockTab({required this.uid});
 
   @override
   Widget build(BuildContext context) {
@@ -464,7 +463,7 @@ class _OrderTile extends StatelessWidget {
             itemBuilder: (context, i) {
               final data = docs[i].data() as Map<String, dynamic>;
               return ListTile(
-                title: Text(data['name']),
+                title: Text(data['name'] ?? 'Product'),
                 subtitle: Text("Current Stock: ${data['stock'] ?? 0}"),
               );
             },
