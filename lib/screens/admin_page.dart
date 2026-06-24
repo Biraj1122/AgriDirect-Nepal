@@ -319,7 +319,7 @@ class _AdminPageState extends State<AdminPage> {
         }
 
         return StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('products').snapshots(),
+          stream: FirebaseFirestore.instance.collection('master_catalog').snapshots(),
           builder: (context, prodSnap) {
             int totalProducts = prodSnap.data?.docs.length ?? 0;
 
@@ -429,7 +429,7 @@ class _AdminPageState extends State<AdminPage> {
 
   Widget _buildProductsList() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('products').snapshots(),
+      stream: FirebaseFirestore.instance.collection('master_catalog').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final docs = snapshot.data!.docs;
@@ -441,7 +441,7 @@ class _AdminPageState extends State<AdminPage> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("Total Products: ${docs.length}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text("Total Products in Catalog: ${docs.length}", style: const TextStyle(fontWeight: FontWeight.bold)),
                   ElevatedButton.icon(onPressed: () => _showAddProductDialog(context), icon: const Icon(Icons.add), label: const Text("Add Product")),
                 ],
               ),
@@ -456,8 +456,8 @@ class _AdminPageState extends State<AdminPage> {
                     child: ListTile(
                       leading: Image.network(data['imageUrl'] ?? data['image'] ?? '', width: 50, errorBuilder: (_, __, ___) => const Icon(Icons.image)),
                       title: Text(data['name'] ?? data['title'] ?? 'N/A'),
-                      subtitle: Text("Rs. ${data['price']} | Stock: ${data['stock'] ?? 0}"),
-                      trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => FirebaseFirestore.instance.collection('products').doc(docs[index].id).delete()),
+                      subtitle: Text("Category: ${data['category']} | Price: Rs. ${data['price']}"),
+                      trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => FirebaseFirestore.instance.collection('master_catalog').doc(docs[index].id).delete()),
                     ),
                   );
                 },

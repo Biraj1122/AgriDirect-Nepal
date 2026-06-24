@@ -603,7 +603,7 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('orders')
-          .where('status', whereIn: ['Processing', 'Shipped', 'Picked Up', 'On the way'])
+          .where('status', whereIn: ['Farmer Accepted', 'Shipped', 'Picked Up', 'On the way'])
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: _kGreen));
