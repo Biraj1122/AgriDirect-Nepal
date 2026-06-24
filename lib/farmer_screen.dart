@@ -155,8 +155,73 @@ class _DashboardTab extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 25),
-            const Text("Quick Summary", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 15),
+            StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance.collection('settings').doc('announcement').snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return const SizedBox();
+                }
+                final data = snapshot.data!.data() as Map<String, dynamic>;
+                final title = data['title'] ?? 'Special Announcement';
+                final content = data['content'] ?? 'Important updates from the admin team.';
+
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    image: const DecorationImage(
+                      image: AssetImage("assets/images/vegetables.png"),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: LinearGradient(
+                        colors: [Colors.black.withAlpha(180), Colors.transparent],
+                        begin: Alignment.bottomLeft,
+                        end: Alignment.topRight,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 5),
+                        Text(content, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          const Text("Active Delivery Requests", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
+            const SizedBox(height: 12),
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('orders')
+                  .where('farmerUid', isEqualTo: uid)
+                  .where('status', isEqualTo: 'Pending Farmer')
+                  .snapshots(),
+              builder: (context, snap) {
+                if (snap.hasError) return Text("Error: ${snap.error}");
+                if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
+                final docs = snap.data!.docs;
+                if (docs.isEmpty) return const SizedBox();
+                return Column(
+                  children: docs.map((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    return _OrderAcceptanceTile(orderId: doc.id, data: data);
+                  }).toList(),
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            const Text("Recent Orders", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
+            const SizedBox(height: 12),
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: uid).snapshots(),
               builder: (context, snapshot) {
@@ -318,9 +383,72 @@ class _DeliveryTab extends StatelessWidget {
   }
 }
 
-class _StockTab extends StatelessWidget {
-  final String uid;
-  const _StockTab({required this.uid});
+class _OrderAcceptanceTile extends StatelessWidget {
+  final String orderId;
+  final Map<String, dynamic> data;
+  const _OrderAcceptanceTile({required this.orderId, required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.green.shade200),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(data['itemsSummary'] ?? 'New Order', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text("Total: Rs. ${data['total'] ?? 0}", style: const TextStyle(color: Colors.green, fontSize: 13)),
+                  Text("Customer: ${data['userName']}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                ],
+              ),
+              const Text("NEW REQUEST", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 10)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            height: 40,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              onPressed: () async {
+                await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+                  'status': 'Farmer Accepted',
+                  'updatedAt': FieldValue.serverTimestamp(),
+                });
+                
+                final userId = data['userId'];
+                if (userId != null) {
+                  await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
+                    'title': 'Farmer Accepted Your Order',
+                    'body': 'A farm has accepted your order and is preparing it.',
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'isRead': false,
+                  });
+                }
+              },
+              child: const Text("Accept & Prepare", style: TextStyle(color: Colors.white)),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class _OrderTile extends StatelessWidget {
+  final String orderId;
+  final Map<String, dynamic> data;
+  const _OrderTile({required this.orderId, required this.data});
 
   @override
   Widget build(BuildContext context) {
