@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'dart:developer' as developer;
+import 'dart:developer';
 
 import '../login_screen.dart';
 import '../utils/db_seeder.dart';
