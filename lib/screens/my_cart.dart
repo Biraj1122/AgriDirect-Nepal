@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../cart_model.dart';
-import '../payment_methods_screen.dart';
-import '../farm_osm_screen.dart';
-import '../user_data.dart';
+import '../models/cart_model.dart';
+import 'profile/payment_methods_screen.dart';
+import 'misc/farm_osm_screen.dart';
+import '../models/user_data.dart';
 
 class CartScreen extends StatefulWidget {
   final VoidCallback? onBackTap;
