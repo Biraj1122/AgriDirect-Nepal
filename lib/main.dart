@@ -51,7 +51,8 @@ class AgriDirectApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
       ),
       builder: (context, child) {
-        ErrorWidget.builder = (FlutterErrorDetails details) {
+        ErrorWidget.builder = (FlutterErrorDetails details)
+        {
           return Scaffold(
             body: Center(
               child: SingleChildScrollView(
