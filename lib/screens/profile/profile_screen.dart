@@ -1,0 +1,453 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:farmtech_agridirect/screens/misc/help_support.dart';
+import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
+import 'package:farmtech_agridirect/screens/profile/my_favourites.dart';
+import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
+import 'package:farmtech_agridirect/screens/profile/payment_methods_screen.dart';
+import 'package:farmtech_agridirect/screens/about_us.dart';
+import 'package:farmtech_agridirect/screens/ai/ai_settings_screen.dart';
+import 'package:farmtech_agridirect/screens/profile/edit_profile_screen.dart';
+import 'package:farmtech_agridirect/screens/profile/my_addresses_screen.dart';
+import 'package:farmtech_agridirect/screens/orders/order_history_screen.dart';
+import 'package:farmtech_agridirect/screens/ai/scan_history_screen.dart';
+
+class ProfileScreen extends StatefulWidget {
+  final String userName;
+  final VoidCallback? onBackToHome;
+  final List<Map<String, dynamic>> favouriteProducts;
+  final List<Map<String, dynamic>> allProducts;
+  final Set<String> favouriteNames;
+  final Function(Map<String, dynamic>)? onFavouriteToggle;
+
+  const ProfileScreen({
+    super.key,
+    required this.userName,
+    this.onBackToHome,
+    this.favouriteProducts = const [],
+    this.allProducts = const [],
+    this.favouriteNames = const {},
+    this.onFavouriteToggle,
+  });
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  String? phone;
+  String? fullName;
+  String? profileImageUrl;
+  
+  late PageController _bannerController;
+  int _currentBannerIndex = 0;
+  late List<String> _bannerImages;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserData();
+    _bannerController = PageController();
+    _bannerImages = [
+      "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1000",
+      "https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=1000",
+      "https://images.unsplash.com/photo-1495107333211-6ca9c24ad996?q=80&w=1000",
+    ]..shuffle();
+    
+    Future.delayed(const Duration(seconds: 3), _animateBanner);
+  }
+
+  void _animateBanner() {
+    if (!mounted || !_bannerController.hasClients) return;
+    _currentBannerIndex = (_currentBannerIndex + 1) % _bannerImages.length;
+    _bannerController.animateToPage(
+      _currentBannerIndex,
+      duration: const Duration(seconds: 1),
+      curve: Curves.easeInOut,
+    );
+    Future.delayed(const Duration(seconds: 5), _animateBanner);
+  }
+
+  @override
+  void dispose() {
+    _bannerController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchUserData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+        if (doc.exists && mounted) {
+          setState(() {
+            fullName = doc.data()?['fullName'];
+            phone = doc.data()?['phone'];
+            profileImageUrl = doc.data()?['profileImageUrl'];
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching user data: $e");
+    }
+  }
+
+  void _handleBack(BuildContext context) {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    } else if (widget.onBackToHome != null) {
+      widget.onBackToHome!();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        _handleBack(context);
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xffF7F8F3),
+        body: SingleChildScrollView(
+          child: Column(
+            children: [
+              Container(
+                height: 240,
+                width: double.infinity,
+                decoration: const BoxDecoration(
+                  color: Color(0xffE8F5E9),
+                ),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: PageView.builder(
+                        controller: _bannerController,
+                        itemCount: _bannerImages.length,
+                        itemBuilder: (context, index) {
+                          return Image.network(
+                            _bannerImages[index],
+                            fit: BoxFit.cover,
+                            color: Colors.black.withValues(alpha: 0.2),
+                            colorBlendMode: BlendMode.darken,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              color: Colors.green.shade100,
+                              child: const Icon(Icons.agriculture, size: 50, color: Colors.green),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    Positioned(
+                      top: 50,
+                      left: 15,
+                      child: IconButton(
+                        icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                        onPressed: () => _handleBack(context),
+                      ),
+                    ),
+                    Positioned(
+                      top: 50,
+                      right: 20,
+                      child: IconButton(
+                        icon: const Icon(Icons.edit_outlined, color: Colors.white),
+                        onPressed: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => EditProfileScreen(
+                                currentName: fullName ?? widget.userName,
+                                currentPhone: phone ?? "Not set",
+                              ),
+                            ),
+                          );
+                          if (result == true) {
+                            _fetchUserData();
+                          }
+                        },
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 30,
+                      left: 25,
+                      child: Row(
+                        children: [
+                          Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                            ),
+                            child: CircleAvatar(
+                              radius: 40,
+                              backgroundColor: Colors.white,
+                              backgroundImage: profileImageUrl != null && profileImageUrl!.isNotEmpty
+                                  ? CachedNetworkImageProvider(profileImageUrl!)
+                                  : null,
+                              child: profileImageUrl == null || profileImageUrl!.isEmpty
+                                  ? const Icon(Icons.person, size: 45, color: Colors.green)
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(width: 15),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                fullName ?? widget.userName,
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  shadows: [Shadow(color: Colors.black, blurRadius: 10)],
+                                ),
+                              ),
+                              Text(
+                                phone ?? "Add phone number",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500,
+                                  shadows: [Shadow(color: Colors.black, blurRadius: 10)],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              Container(
+                color: Colors.white,
+                child: Column(
+                  children: [
+                    menuItem(
+                      Icons.location_on_outlined,
+                      "My Addresses",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MyAddressesScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.history,
+                      "Order History",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const OrderHistoryScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.medical_services_outlined,
+                      "Scan History",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ScanHistoryScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.auto_awesome,
+                      "AI Settings",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AISettingsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.payment_outlined,
+                      "Payment Methods",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PaymentMethodsScreen(
+                              subtotal: 0,
+                              deliveryFee: 0,
+                              total: 0,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.favorite_border,
+                      "My Favorites",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => MyFavouritesScreen(
+                              onFavouriteToggle:
+                              widget.onFavouriteToggle ?? (item) {},
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.notifications,
+                      "Notifications",
+                      badgeStream: FirebaseAuth.instance.currentUser?.uid != null
+                          ? FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(FirebaseAuth.instance.currentUser!.uid)
+                              .collection('notifications')
+                              .where('isRead', isEqualTo: false)
+                              .snapshots()
+                          : null,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.help_outline,
+                      "Help & Support",
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const HelpSupportScreen(),
+                          ),
+                        );
+                      },
+                    ),
+
+                    menuItem(
+                      Icons.info_outline,
+                      "About Us",
+                      isLast: true,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AboutUsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              GestureDetector(
+                onTap: () async {
+                  await FirebaseAuth.instance.signOut();
+                  if (context.mounted) {
+                    Navigator.pushAndRemoveUntil(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      (r) => false,
+                    );
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(15),
+                  color: Colors.white,
+                  child: const Row(
+                    children: [
+                      Icon(Icons.logout, color: Colors.red),
+                      SizedBox(width: 10),
+                      Text(
+                        "Logout",
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget menuItem(
+      IconData icon,
+      String title, {
+        VoidCallback? onTap,
+        bool isLast = false,
+        Stream<QuerySnapshot>? badgeStream,
+      }) {
+
+    return Column(
+      children: [
+        ListTile(
+          leading: Icon(icon),
+          title: Text(title),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (badgeStream != null)
+                StreamBuilder<QuerySnapshot>(
+                  stream: badgeStream,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          "${snapshot.data!.docs.length}",
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox();
+                  },
+                ),
+              const Icon(Icons.arrow_forward_ios, size: 14),
+            ],
+          ),
+          onTap: onTap,
+        ),
+        if (!isLast) const Divider(height: 1),
+      ],
+    );
+  }
+}

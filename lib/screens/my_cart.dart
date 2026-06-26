@@ -1,8 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../cart_model.dart';
-import '../payment_methods_screen.dart';
-import '../farm_osm_screen.dart';
-import '../user_data.dart';
+import '../models/cart_model.dart';
+import 'profile/payment_methods_screen.dart';
+import 'misc/farm_osm_screen.dart';
+import '../models/user_data.dart';
 
 class CartScreen extends StatefulWidget {
   final VoidCallback? onBackTap;
@@ -127,7 +128,8 @@ class _CartScreenState extends State<CartScreen> {
                           padding: const EdgeInsets.all(18),
                           itemCount: cartModel.items.length,
                           itemBuilder: (context, index) {
-                            final product = cartModel.items[index];
+                            final cartItem = cartModel.items[index];
+                            final product = cartItem.product;
                             return Container(
                               margin: const EdgeInsets.only(bottom: 12),
                               padding: const EdgeInsets.all(12),
@@ -137,10 +139,10 @@ class _CartScreenState extends State<CartScreen> {
                               ),
                               child: Row(
                                 children: [
-                                  Image.asset(
-                                    product.image,
+                                  SizedBox(
                                     height: 70,
                                     width: 70,
+                                    child: _buildProductImage(product.image),
                                   ),
                                   const SizedBox(width: 15),
                                   Expanded(
@@ -167,8 +169,24 @@ class _CartScreenState extends State<CartScreen> {
                                       ],
                                     ),
                                   ),
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.remove_circle_outline, color: Colors.green),
+                                        onPressed: () => cartModel.decrement(index),
+                                      ),
+                                      Text(
+                                        "${cartItem.quantity}",
+                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                                        onPressed: () => cartModel.increment(index),
+                                      ),
+                                    ],
+                                  ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete),
+                                    icon: const Icon(Icons.delete_outline, color: Colors.red),
                                     onPressed: () => cartModel.removeAt(index),
                                   )
                                 ],
@@ -237,6 +255,42 @@ class _CartScreenState extends State<CartScreen> {
         },
       ),
     );
+  }
+
+  Widget _buildProductImage(String imagePath) {
+    if (imagePath.startsWith('http')) {
+      return Image.network(
+        imagePath,
+        key: ValueKey(imagePath), // Forces reload when URL changes in Firestore
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+        ),
+      );
+    } else if (imagePath.startsWith('data:image')) {
+      try {
+        final base64String = imagePath.split(',').last;
+        return Image.memory(
+          base64Decode(base64String),
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) => const Center(
+            child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+          ),
+        );
+      } catch (e) {
+        return const Center(
+          child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+        );
+      }
+    } else {
+      return Image.asset(
+        imagePath,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => const Center(
+          child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
+        ),
+      );
+    }
   }
 
   Widget _row(String title, double value, {bool bold = false}) {
