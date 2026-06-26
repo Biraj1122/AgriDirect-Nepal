@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'dart:developer' as developer;
 import 'auth/login_screen.dart';
 import '../utils/db_seeder.dart';
 
@@ -14,12 +16,14 @@ class AdminPage extends StatefulWidget {
 
 class _AdminPageState extends State<AdminPage> {
   int _currentIndex = 0;
-  final String? adminEmail = FirebaseAuth.instance.currentUser?.email;
   bool _isCheckingRole = true;
+  String? adminEmail;
+  bool _showPendingOnly = false;
 
   @override
   void initState() {
     super.initState();
+    adminEmail = FirebaseAuth.instance.currentUser?.email;
     _checkRole();
   }
 
@@ -34,35 +38,25 @@ class _AdminPageState extends State<AdminPage> {
       if (user.email != 'agrifarmadmin@gmail.com') {
         final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
         final role = doc.data()?['role'];
-
         if (role != 'Admin') {
           _logout();
           return;
         }
       }
-      
-      if (mounted) {
-        setState(() {
-          _isCheckingRole = false;
-        });
-      }
+      if (mounted) setState(() => _isCheckingRole = false);
     } catch (e) {
-      debugPrint("Admin check error: $e");
-      if (mounted) {
-        setState(() {
-          _isCheckingRole = false;
-        });
-      }
+      developer.log("Admin check error: $e");
+      if (mounted) setState(() => _isCheckingRole = false);
     }
   }
 
   void _logout() {
+    FirebaseAuth.instance.signOut();
     if (mounted) {
-      FirebaseAuth.instance.signOut();
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
+            (route) => false,
       );
     }
   }
@@ -71,12 +65,10 @@ class _AdminPageState extends State<AdminPage> {
   Widget build(BuildContext context) {
     if (_isCheckingRole) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(color: Colors.green),
-        ),
+        body: Center(child: CircularProgressIndicator(color: Colors.green)),
       );
     }
-    
+
     bool isWide = MediaQuery.of(context).size.width > 900;
 
     return Scaffold(
@@ -88,11 +80,10 @@ class _AdminPageState extends State<AdminPage> {
         iconTheme: const IconThemeData(color: Colors.green),
         actions: [
           TextButton.icon(
-            onPressed: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen())),
+            onPressed: _logout,
             icon: const Icon(Icons.logout, color: Colors.red),
             label: const Text("Logout", style: TextStyle(color: Colors.red)),
           ),
-          const SizedBox(width: 20),
         ],
       ),
       drawer: isWide ? null : _buildSidePanel(),
@@ -108,16 +99,21 @@ class _AdminPageState extends State<AdminPage> {
                 _buildProductsList(),
                 _buildUsersList(),
                 _buildAnnouncementManager(),
-                _buildCategoriesManager(),
                 _buildResearchManager(),
+                _buildRevenueAnalyticsPage(),
               ],
             ),
           ),
         ],
       ),
-      bottomNavigationBar: isWide ? null : BottomNavigationBar(
+      bottomNavigationBar: isWide || _currentIndex >= 5
+          ? null
+          : BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (index) => setState(() {
+          _currentIndex = index;
+          _showPendingOnly = false;
+        }),
         selectedItemColor: Colors.green,
         unselectedItemColor: Colors.grey,
         type: BottomNavigationBarType.fixed,
@@ -161,8 +157,7 @@ class _AdminPageState extends State<AdminPage> {
           _panelItem(2, Icons.inventory_2, "Products & Inventory"),
           _panelItem(3, Icons.people, "User Database"),
           _panelItem(4, Icons.campaign, "Announcements"),
-          _panelItem(5, Icons.category, "Categories"),
-          _panelItem(6, Icons.health_and_safety, "Research Data"),
+          _panelItem(5, Icons.health_and_safety, "Research Data"),
           const Divider(),
           const Padding(
             padding: EdgeInsets.all(15.0),
@@ -186,6 +181,11 @@ class _AdminPageState extends State<AdminPage> {
             title: const Text("Seed Database"),
             onTap: () => _handleSeedDatabase(context),
           ),
+          ListTile(
+            leading: const Icon(Icons.analytics, color: Colors.green),
+            title: const Text("Revenue Analytics"),
+            onTap: () => setState(() => _currentIndex = 6),
+          ),
           const Spacer(),
           const Text("AgriDirect v1.0", style: TextStyle(color: Colors.grey, fontSize: 10)),
           const SizedBox(height: 20),
@@ -200,71 +200,73 @@ class _AdminPageState extends State<AdminPage> {
       selected: selected,
       selectedTileColor: Colors.green.withValues(alpha: 0.1),
       leading: Icon(icon, color: selected ? Colors.green : Colors.grey),
-      title: Text(label, style: TextStyle(color: selected ? Colors.green : Colors.black, fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+      title: Text(label, style: TextStyle(color: selected ? Colors.green : Colors.black)),
       onTap: () => setState(() => _currentIndex = index),
     );
   }
 
   Widget _buildSidePanel() {
     return Drawer(
-      child: Column(
-        children: [
-          UserAccountsDrawerHeader(
-            accountName: const Text("Admin Control Panel", style: TextStyle(fontWeight: FontWeight.bold)),
-            accountEmail: Text(adminEmail ?? "Not Logged In"),
-            currentAccountPicture: const CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Icon(Icons.admin_panel_settings, size: 40, color: Colors.green),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          children: [
+            UserAccountsDrawerHeader(
+              accountName: const Text("Admin Control Panel", style: TextStyle(fontWeight: FontWeight.bold)),
+              accountEmail: Text(adminEmail ?? "Not Logged In"),
+              currentAccountPicture: const CircleAvatar(
+                backgroundColor: Colors.white,
+                child: Icon(Icons.admin_panel_settings, size: 40, color: Colors.green),
+              ),
+              decoration: const BoxDecoration(color: Colors.green),
             ),
-            decoration: const BoxDecoration(color: Colors.green),
-          ),
-          _panelItem(0, Icons.dashboard, "Main Dashboard"),
-          _panelItem(1, Icons.shopping_bag, "Order Management"),
-          _panelItem(2, Icons.inventory_2, "Inventory / Products"),
-          ListTile(
-            leading: const Icon(Icons.category, color: Colors.green),
-            title: const Text("Manage Categories"),
-            onTap: () {
-              setState(() => _currentIndex = 5);
-              Navigator.pop(context);
-            },
-          ),
-          _panelItem(3, Icons.people, "User Registry"),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.image, color: Colors.green),
-            title: const Text("Manage Announcements"),
-            onTap: () {
-              setState(() => _currentIndex = 4);
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.campaign, color: Colors.orange),
-            title: const Text("Send Notification"),
-            onTap: () {
-              Navigator.pop(context);
-              _showPushNotificationDialog(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.storage, color: Colors.blue),
-            title: const Text("Seed Database"),
-            onTap: () {
-              Navigator.pop(context);
-              _handleSeedDatabase(context);
-            },
-          ),
-          const Spacer(),
-          ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text("Logout Admin", style: TextStyle(color: Colors.red)),
-            onTap: () {
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
-            },
-          ),
-          const SizedBox(height: 20),
-        ],
+            _panelItem(0, Icons.dashboard, "Main Dashboard"),
+            _panelItem(1, Icons.shopping_bag, "Order Management"),
+            _panelItem(2, Icons.inventory_2, "Inventory / Products"),
+            _panelItem(3, Icons.people, "User Registry"),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.image, color: Colors.green),
+              title: const Text("Manage Announcements"),
+              onTap: () {
+                setState(() => _currentIndex = 4);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.campaign, color: Colors.orange),
+              title: const Text("Send Notification"),
+              onTap: () {
+                Navigator.pop(context);
+                _showPushNotificationDialog(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.storage, color: Colors.blue),
+              title: const Text("Seed Database"),
+              onTap: () {
+                Navigator.pop(context);
+                _handleSeedDatabase(context);
+              },
+            ),
+            _panelItem(5, Icons.health_and_safety, "Research Data"),
+            ListTile(
+              leading: const Icon(Icons.analytics, color: Colors.green),
+              title: const Text("Revenue Analytics"),
+              onTap: () {
+                setState(() => _currentIndex = 6);
+                Navigator.pop(context);
+              },
+            ),
+            const SizedBox(height: 40),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text("Logout Admin", style: TextStyle(color: Colors.red)),
+              onTap: _logout,
+            ),
+            const SizedBox(height: 30),
+          ],
+        ),
       ),
     );
   }
@@ -273,24 +275,7 @@ class _AdminPageState extends State<AdminPage> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('orders').snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 40),
-                  const SizedBox(height: 10),
-                  Text("Database Error: ${snapshot.error}",
-                       textAlign: TextAlign.center,
-                       style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
-          );
-        }
-
+        if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator(color: Colors.green));
         }
@@ -302,20 +287,12 @@ class _AdminPageState extends State<AdminPage> {
 
         for (var doc in docs) {
           final data = doc.data() as Map<String, dynamic>;
-
           var rawPrice = data['totalPrice'] ?? data['total'] ?? 0;
-          double price = 0;
-          if (rawPrice is num) {
-            price = rawPrice.toDouble();
-          } else if (rawPrice is String) {
-            price = double.tryParse(rawPrice) ?? 0;
-          }
+          double price = rawPrice is num ? rawPrice.toDouble() : double.tryParse(rawPrice.toString()) ?? 0;
           totalRevenue += price;
 
           String status = (data['status'] ?? '').toString().toLowerCase();
-          if (status == 'pending' || status == 'processing') {
-            pendingDeliveries++;
-          }
+          if (status == 'pending' || status == 'processing') pendingDeliveries++;
         }
 
         return StreamBuilder<QuerySnapshot>(
@@ -337,13 +314,13 @@ class _AdminPageState extends State<AdminPage> {
                         spacing: 15,
                         runSpacing: 15,
                         children: [
-                          _dashboardCard("Total Revenue", "Rs. ${totalRevenue.toStringAsFixed(0)}", Icons.account_balance_wallet, Colors.green, cardWidth),
-                          _dashboardCard("Total Orders", "$totalOrders", Icons.shopping_bag, Colors.blue, cardWidth),
-                          _dashboardCard("Total Products", "$totalProducts", Icons.inventory_2, Colors.orange, cardWidth),
-                          _dashboardCard("Pending Shipments", "$pendingDeliveries", Icons.local_shipping, Colors.purple, cardWidth),
+                          GestureDetector(onTap: () => setState(() => _currentIndex = 6), child: _dashboardCard("Total Revenue", "Rs. ${totalRevenue.toStringAsFixed(0)}", Icons.account_balance_wallet, Colors.green, cardWidth)),
+                          GestureDetector(onTap: () => setState(() => _currentIndex = 1), child: _dashboardCard("Total Orders", "$totalOrders", Icons.shopping_bag, Colors.blue, cardWidth)),
+                          GestureDetector(onTap: () => setState(() => _currentIndex = 2), child: _dashboardCard("Total Products", "$totalProducts", Icons.inventory_2, Colors.orange, cardWidth)),
+                          GestureDetector(onTap: () => setState(() { _currentIndex = 1; _showPendingOnly = true; }), child: _dashboardCard("Pending Shipments", "$pendingDeliveries", Icons.local_shipping, Colors.purple, cardWidth)),
                         ],
                       );
-                    }
+                    },
                   ),
                   const SizedBox(height: 40),
                   const Text("Recent System Activity", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
@@ -351,23 +328,23 @@ class _AdminPageState extends State<AdminPage> {
                   Container(
                     width: double.infinity,
                     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-                    child: docs.isEmpty 
-                      ? const Padding(padding: EdgeInsets.all(30), child: Center(child: Text("No orders found in database")))
-                      : ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: docs.length > 5 ? 5 : docs.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final data = docs[index].data() as Map<String, dynamic>;
-                            return ListTile(
-                              leading: const CircleAvatar(backgroundColor: Color(0xffF7F8F3), child: Icon(Icons.receipt_long, color: Colors.green, size: 20)),
-                              title: Text("Order #${docs[index].id.substring(0, 6)}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                              subtitle: Text("Status: ${data['status'] ?? 'Pending'}"),
-                              trailing: Text("Rs. ${data['total'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                            );
-                          },
-                        ),
+                    child: docs.isEmpty
+                        ? const Padding(padding: EdgeInsets.all(30), child: Center(child: Text("No orders found in database")))
+                        : ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: docs.length > 5 ? 5 : docs.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final data = docs[index].data() as Map<String, dynamic>;
+                        return ListTile(
+                          leading: const CircleAvatar(backgroundColor: Color(0xffF7F8F3), child: Icon(Icons.receipt_long, color: Colors.green, size: 20)),
+                          title: Text("Order #${docs[index].id.substring(0, 6)}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text("Status: ${data['status'] ?? 'Pending'}"),
+                          trailing: Text("Rs. ${data['total'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -379,18 +356,25 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   Widget _dashboardCard(String title, String value, IconData icon, Color color, double width) {
-    return Container(
-      width: width,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)]),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 30),
-          const SizedBox(height: 15),
-          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-        ],
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Container(
+        width: width,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color, size: 30),
+            const SizedBox(height: 15),
+            Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            Text(title, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          ],
+        ),
       ),
     );
   }
@@ -400,7 +384,14 @@ class _AdminPageState extends State<AdminPage> {
       stream: FirebaseFirestore.instance.collection('orders').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final docs = snapshot.data!.docs;
+        var docs = snapshot.data!.docs;
+
+        if (_showPendingOnly) {
+          docs = docs.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return (data['status'] ?? '').toString().toLowerCase() == 'pending';
+          }).toList();
+        }
 
         return ListView.builder(
           padding: const EdgeInsets.all(20),
@@ -425,6 +416,10 @@ class _AdminPageState extends State<AdminPage> {
         );
       },
     );
+  }
+
+  void _updateOrderStatus(String id, String status) async {
+    await FirebaseFirestore.instance.collection('orders').doc(id).update({'status': status});
   }
 
   Widget _buildProductsList() {
@@ -495,27 +490,256 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  void _updateOrderStatus(String id, String status) async {
-    await FirebaseFirestore.instance.collection('orders').doc(id).update({'status': status});
-    final orderDoc = await FirebaseFirestore.instance.collection('orders').doc(id).get();
-    final userId = orderDoc.data()?['userId'];
-    if (userId != null) {
-      await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
-        'title': 'Order Status Updated',
-        'body': 'Your order status is now $status',
-        'createdAt': FieldValue.serverTimestamp(),
-        'isRead': false,
-      });
-    }
+  Widget _buildAnnouncementManager() {
+    final titleController = TextEditingController();
+    final contentController = TextEditingController();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(25),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Manage Announcements", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+            child: Column(
+              children: [
+                TextField(controller: titleController, decoration: const InputDecoration(labelText: "Banner Title")),
+                TextField(controller: contentController, decoration: const InputDecoration(labelText: "Banner Content"), maxLines: 3),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await FirebaseFirestore.instance.collection('settings').doc('announcement').set({
+                        'title': titleController.text,
+                        'content': contentController.text,
+                        'updatedAt': FieldValue.serverTimestamp(),
+                      });
+                      titleController.clear();
+                      contentController.clear();
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    child: const Text("Update App Banner", style: TextStyle(color: Colors.white)),
+                  ),
+                )
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildResearchManager() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('research_submissions').snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snapshot.data!.docs;
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(20),
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final data = docs[index].data() as Map<String, dynamic>;
+            return Card(
+              child: ListTile(
+                title: Text(data['cropName'] ?? 'Unknown Crop'),
+                subtitle: Text("Diagnosis: ${data['diagnosis'] ?? 'N/A'}"),
+                trailing: const Icon(Icons.science_outlined),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildRevenueAnalyticsPage() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('orders').snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+
+        final docs = snapshot.data!.docs;
+        Map<String, double> revenueByDate = {};
+        double totalRevenue = 0;
+
+        for (var doc in docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          var rawPrice = data['totalPrice'] ?? data['total'] ?? 0;
+          double price = rawPrice is num ? rawPrice.toDouble() : double.tryParse(rawPrice.toString()) ?? 0;
+          totalRevenue += price;
+
+          String dateKey = "Today";
+          if (data['createdAt'] != null) {
+            try {
+              DateTime date = (data['createdAt'] as Timestamp).toDate();
+              dateKey = "${date.day}/${date.month}";
+            } catch (e) {
+              dateKey = "No Date";
+            }
+          }
+          revenueByDate[dateKey] = (revenueByDate[dateKey] ?? 0) + price;
+        }
+
+        List<FlSpot> spots = [];
+        int index = 0;
+        revenueByDate.forEach((date, revenue) {
+          spots.add(FlSpot(index.toDouble(), revenue));
+          index++;
+        });
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(25),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () => setState(() => _currentIndex = 0),
+                child: Row(
+                  children: [
+                    const Icon(Icons.arrow_back, color: Colors.green),
+                    const SizedBox(width: 8),
+                    const Text("Back to Dashboard", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text("Revenue Analytics", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(25),
+                decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(15)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Total Revenue", style: TextStyle(color: Colors.white, fontSize: 14)),
+                    Text("Rs. ${totalRevenue.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+              if (spots.isNotEmpty)
+                Container(
+                  height: 300,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+                  child: LineChart(
+                    LineChartData(
+                      lineBarsData: [LineChartBarData(spots: spots, isCurved: true, color: Colors.green, barWidth: 3)],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _showAddProductDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final categoryController = TextEditingController();
+    final priceController = TextEditingController();
+    final imageUrlController = TextEditingController();
+    final stockController = TextEditingController();
+    bool isSaving = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("New Product"),
-        content: const Text("Product form is available in the Farmer tab."),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text("New Product"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: "Product Name"),
+                ),
+                TextField(
+                  controller: categoryController,
+                  decoration: const InputDecoration(labelText: "Category"),
+                ),
+                TextField(
+                  controller: priceController,
+                  decoration: const InputDecoration(labelText: "Price (Rs.)"),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: stockController,
+                  decoration: const InputDecoration(labelText: "Stock (optional)"),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: imageUrlController,
+                  decoration: const InputDecoration(labelText: "Image URL"),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                if (nameController.text.trim().isEmpty ||
+                    priceController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Name and price are required")),
+                  );
+                  return;
+                }
+
+                setDialogState(() => isSaving = true);
+
+                try {
+                  await FirebaseFirestore.instance.collection('master_catalog').add({
+                    'name': nameController.text.trim(),
+                    'category': categoryController.text.trim(),
+                    'price': double.tryParse(priceController.text.trim()) ?? 0,
+                    'stock': int.tryParse(stockController.text.trim()) ?? 0,
+                    'imageUrl': imageUrlController.text.trim(),
+                    'createdAt': FieldValue.serverTimestamp(),
+                  });
+
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Product added successfully")),
+                    );
+                  }
+                } catch (e) {
+                  setDialogState(() => isSaving = false);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Error adding product: $e")),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              child: isSaving
+                  ? const SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+                  : const Text("Add Product", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -593,17 +817,8 @@ class _AdminPageState extends State<AdminPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 50,
-                  height: 5,
-                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10)),
-                ),
-              ),
-              const SizedBox(height: 20),
               const Text("User Details", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
               const Divider(),
-              const SizedBox(height: 15),
               _detailRow(Icons.person, "Full Name", user['fullName'] ?? 'N/A'),
               _detailRow(Icons.email, "Email", user['email'] ?? 'N/A'),
               _detailRow(Icons.phone, "Phone", user['phone'] ?? 'N/A'),
@@ -616,199 +831,15 @@ class _AdminPageState extends State<AdminPage> {
                 Container(
                   height: 300,
                   width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.grey.shade300),
+                  child: MapLibreMap(
+                    initialCameraPosition: CameraPosition(target: LatLng(lat, lng), zoom: 14.5),
+                    styleString: "https://tiles.openfreemap.org/styles/positron",
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(15),
-                    child: MapLibreMap(
-                      initialCameraPosition: CameraPosition(
-                        target: LatLng(lat, lng),
-                        zoom: 14.5,
-                      ),
-                      styleString: "https://tiles.openfreemap.org/styles/positron",
-                      onMapCreated: (controller) {
-                        controller.addSymbol(SymbolOptions(
-                          geometry: LatLng(lat, lng),
-                          iconImage: "marker-15",
-                          iconColor: "#FF0000",
-                          iconSize: 2.0,
-                        ));
-                      },
-                    ),
-                  ),
-                )
-              else
-                Container(
-                  height: 100,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: const Center(child: Text("No location coordinates saved")),
                 ),
-              const SizedBox(height: 30),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildCategoriesManager() {
-    final nameController = TextEditingController();
-
-    final List<Map<String, dynamic>> availableIcons = [
-      {'name': 'Eco', 'icon': Icons.eco_outlined},
-      {'name': 'Fruit', 'icon': Icons.apple_outlined},
-      {'name': 'Dairy', 'icon': Icons.local_drink_outlined},
-      {'name': 'Herbs', 'icon': Icons.grass},
-      {'name': 'Organic', 'icon': Icons.energy_savings_leaf},
-      {'name': 'Meat', 'icon': Icons.kebab_dining},
-      {'name': 'Grain', 'icon': Icons.grain},
-      {'name': 'Fast Food', 'icon': Icons.fastfood},
-    ];
-
-    IconData selectedIcon = Icons.eco_outlined;
-
-    return Padding(
-      padding: const EdgeInsets.all(25),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Manage Categories", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-            child: Column(
-              children: [
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: "Category Name", border: OutlineInputBorder())),
-                const SizedBox(height: 15),
-                const Align(alignment: Alignment.centerLeft, child: Text("Pick Icon", style: TextStyle(color: Colors.grey))),
-                const SizedBox(height: 10),
-                StatefulBuilder(
-                  builder: (context, setInnerS) => Wrap(
-                    spacing: 10,
-                    children: availableIcons.map((ico) => IconButton(
-                      icon: Icon(ico['icon'], color: selectedIcon == ico['icon'] ? Colors.green : Colors.grey),
-                      onPressed: () => setInnerS(() => selectedIcon = ico['icon']),
-                    )).toList(),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      if (nameController.text.isEmpty) return;
-                      await FirebaseFirestore.instance.collection('categories').add({
-                        'name': nameController.text.trim(),
-                        'iconCode': selectedIcon.codePoint,
-                      });
-                      nameController.clear();
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                    child: const Text("Create Category", style: TextStyle(color: Colors.white)),
-                  ),
-                )
-              ],
-            ),
-          ),
-          const SizedBox(height: 30),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('categories').snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                return ListView.builder(
-                  itemCount: snapshot.data!.docs.length,
-                  itemBuilder: (context, index) {
-                    final data = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-                    return ListTile(
-                      leading: Icon(IconData(data['iconCode'], fontFamily: 'MaterialIcons'), color: Colors.green),
-                      title: Text(data['name']),
-                      trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => FirebaseFirestore.instance.collection('categories').doc(snapshot.data!.docs[index].id).delete()),
-                    );
-                  },
-                );
-              },
-            ),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAnnouncementManager() {
-    final titleController = TextEditingController();
-    final contentController = TextEditingController();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(25),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Manage Announcements", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-            child: Column(
-              children: [
-                TextField(controller: titleController, decoration: const InputDecoration(labelText: "Banner Title")),
-                TextField(controller: contentController, decoration: const InputDecoration(labelText: "Banner Content"), maxLines: 3),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      await FirebaseFirestore.instance.collection('settings').doc('announcement').set({
-                        'title': titleController.text,
-                        'content': contentController.text,
-                        'updatedAt': FieldValue.serverTimestamp(),
-                      });
-                      titleController.clear();
-                      contentController.clear();
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                    child: const Text("Update App Banner", style: TextStyle(color: Colors.white)),
-                  ),
-                )
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResearchManager() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('research_submissions').snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final docs = snapshot.data!.docs;
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(20),
-          itemCount: docs.length,
-          itemBuilder: (context, index) {
-            final data = docs[index].data() as Map<String, dynamic>;
-            return Card(
-              child: ListTile(
-                title: Text(data['cropName'] ?? 'Unknown Crop'),
-                subtitle: Text("Diagnosis: ${data['diagnosis'] ?? 'N/A'}"),
-                trailing: const Icon(Icons.science_outlined),
-              ),
-            );
-          },
-        );
-      },
     );
   }
 
