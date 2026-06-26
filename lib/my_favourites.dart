@@ -115,7 +115,7 @@ class MyFavouritesScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -135,7 +135,7 @@ class MyFavouritesScreen extends StatelessWidget {
                   right: 5,
                   top: 5,
                   child: Container(
-                    decoration: const BoxDecoration(color: Colors.white, shape: BoxCircle()),
+                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                     child: IconButton(
                       icon: const Icon(Icons.favorite, color: Colors.red, size: 20),
                       onPressed: () => onFavouriteToggle(product),
