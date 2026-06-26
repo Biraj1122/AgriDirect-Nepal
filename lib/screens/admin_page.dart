@@ -100,7 +100,6 @@ class _AdminPageState extends State<AdminPage> {
                 _buildProductsList(),
                 _buildUsersList(),
                 _buildAnnouncementManager(),
-                _buildCategoriesManager(),
                 _buildResearchManager(),
                 _buildRevenueAnalyticsPage(),
               ],
@@ -159,8 +158,7 @@ class _AdminPageState extends State<AdminPage> {
           _panelItem(2, Icons.inventory_2, "Products & Inventory"),
           _panelItem(3, Icons.people, "User Database"),
           _panelItem(4, Icons.campaign, "Announcements"),
-          _panelItem(5, Icons.category, "Categories"),
-          _panelItem(6, Icons.health_and_safety, "Research Data"),
+          _panelItem(5, Icons.health_and_safety, "Research Data"),
           const Divider(),
           const Padding(
             padding: EdgeInsets.all(15.0),
@@ -187,7 +185,7 @@ class _AdminPageState extends State<AdminPage> {
           ListTile(
             leading: const Icon(Icons.analytics, color: Colors.green),
             title: const Text("Revenue Analytics"),
-            onTap: () => setState(() => _currentIndex = 7),
+            onTap: () => setState(() => _currentIndex = 6),
           ),
           const Spacer(),
           const Text("AgriDirect v1.0", style: TextStyle(color: Colors.grey, fontSize: 10)),
@@ -208,7 +206,6 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  // ==================== FIXED DRAWER (Hamburger Menu) ====================
   Widget _buildSidePanel() {
     return Drawer(
       child: SingleChildScrollView(
@@ -227,14 +224,6 @@ class _AdminPageState extends State<AdminPage> {
             _panelItem(0, Icons.dashboard, "Main Dashboard"),
             _panelItem(1, Icons.shopping_bag, "Order Management"),
             _panelItem(2, Icons.inventory_2, "Inventory / Products"),
-            ListTile(
-              leading: const Icon(Icons.category, color: Colors.green),
-              title: const Text("Manage Categories"),
-              onTap: () {
-                setState(() => _currentIndex = 5);
-                Navigator.pop(context);
-              },
-            ),
             _panelItem(3, Icons.people, "User Registry"),
             const Divider(),
             ListTile(
@@ -261,11 +250,12 @@ class _AdminPageState extends State<AdminPage> {
                 _handleSeedDatabase(context);
               },
             ),
+            _panelItem(5, Icons.health_and_safety, "Research Data"),
             ListTile(
               leading: const Icon(Icons.analytics, color: Colors.green),
               title: const Text("Revenue Analytics"),
               onTap: () {
-                setState(() => _currentIndex = 7);
+                setState(() => _currentIndex = 6);
                 Navigator.pop(context);
               },
             ),
@@ -282,7 +272,6 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  // ==================== DASHBOARD & OTHER SCREENS (Unchanged) ====================
   Widget _buildDashboard() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('orders').snapshots(),
@@ -326,7 +315,7 @@ class _AdminPageState extends State<AdminPage> {
                         spacing: 15,
                         runSpacing: 15,
                         children: [
-                          GestureDetector(onTap: () => setState(() => _currentIndex = 7), child: _dashboardCard("Total Revenue", "Rs. ${totalRevenue.toStringAsFixed(0)}", Icons.account_balance_wallet, Colors.green, cardWidth)),
+                          GestureDetector(onTap: () => setState(() => _currentIndex = 6), child: _dashboardCard("Total Revenue", "Rs. ${totalRevenue.toStringAsFixed(0)}", Icons.account_balance_wallet, Colors.green, cardWidth)),
                           GestureDetector(onTap: () => setState(() => _currentIndex = 1), child: _dashboardCard("Total Orders", "$totalOrders", Icons.shopping_bag, Colors.blue, cardWidth)),
                           GestureDetector(onTap: () => setState(() => _currentIndex = 2), child: _dashboardCard("Total Products", "$totalProducts", Icons.inventory_2, Colors.orange, cardWidth)),
                           GestureDetector(onTap: () => setState(() { _currentIndex = 1; _showPendingOnly = true; }), child: _dashboardCard("Pending Shipments", "$pendingDeliveries", Icons.local_shipping, Colors.purple, cardWidth)),
@@ -391,7 +380,6 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  // ==================== ALL OTHER METHODS (Original) ====================
   Widget _buildOrdersList() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('orders').snapshots(),
@@ -547,92 +535,6 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  Widget _buildCategoriesManager() {
-    final nameController = TextEditingController();
-    IconData selectedIcon = Icons.eco_outlined;
-
-    final List<Map<String, dynamic>> availableIcons = [
-      {'name': 'Eco', 'icon': Icons.eco_outlined},
-      {'name': 'Fruit', 'icon': Icons.apple_outlined},
-      {'name': 'Dairy', 'icon': Icons.local_drink_outlined},
-      {'name': 'Herbs', 'icon': Icons.grass},
-      {'name': 'Organic', 'icon': Icons.energy_savings_leaf},
-      {'name': 'Meat', 'icon': Icons.kebab_dining},
-      {'name': 'Grain', 'icon': Icons.grain},
-      {'name': 'Fast Food', 'icon': Icons.fastfood},
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.all(25),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Manage Categories", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-            child: Column(
-              children: [
-                TextField(controller: nameController, decoration: const InputDecoration(labelText: "Category Name", border: OutlineInputBorder())),
-                const SizedBox(height: 15),
-                const Align(alignment: Alignment.centerLeft, child: Text("Pick Icon", style: TextStyle(color: Colors.grey))),
-                const SizedBox(height: 10),
-                StatefulBuilder(
-                  builder: (context, setInnerS) => Wrap(
-                    spacing: 10,
-                    children: availableIcons.map((ico) => IconButton(
-                      icon: Icon(ico['icon'], color: selectedIcon == ico['icon'] ? Colors.green : Colors.grey),
-                      onPressed: () => setInnerS(() => selectedIcon = ico['icon'] as IconData),
-                    )).toList(),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      if (nameController.text.isEmpty) return;
-                      await FirebaseFirestore.instance.collection('categories').add({
-                        'name': nameController.text.trim(),
-                        'iconCode': selectedIcon.codePoint,
-                      });
-                      nameController.clear();
-                    },
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                    child: const Text("Create Category", style: TextStyle(color: Colors.white)),
-                  ),
-                )
-              ],
-            ),
-          ),
-          const SizedBox(height: 30),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('categories').snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                return ListView.builder(
-                  itemCount: snapshot.data!.docs.length,
-                  itemBuilder: (context, index) {
-                    final data = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-                    final int iconCode = data['iconCode'] ?? 0xe8b6;
-                    return ListTile(
-                      leading: Icon(IconData(iconCode, fontFamily: 'MaterialIcons'), color: Colors.green),
-                      title: Text(data['name']),
-                      trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => FirebaseFirestore.instance.collection('categories').doc(snapshot.data!.docs[index].id).delete()),
-                    );
-                  },
-                );
-              },
-            ),
-          )
-        ],
-      ),
-    );
-  }
-
   Widget _buildResearchManager() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('research_submissions').snapshots(),
@@ -744,12 +646,101 @@ class _AdminPageState extends State<AdminPage> {
   }
 
   void _showAddProductDialog(BuildContext context) {
+    final nameController = TextEditingController();
+    final categoryController = TextEditingController();
+    final priceController = TextEditingController();
+    final imageUrlController = TextEditingController();
+    final stockController = TextEditingController();
+    bool isSaving = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("New Product"),
-        content: const Text("Product form is available in the Farmer tab."),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text("New Product"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(labelText: "Product Name"),
+                ),
+                TextField(
+                  controller: categoryController,
+                  decoration: const InputDecoration(labelText: "Category"),
+                ),
+                TextField(
+                  controller: priceController,
+                  decoration: const InputDecoration(labelText: "Price (Rs.)"),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: stockController,
+                  decoration: const InputDecoration(labelText: "Stock (optional)"),
+                  keyboardType: TextInputType.number,
+                ),
+                TextField(
+                  controller: imageUrlController,
+                  decoration: const InputDecoration(labelText: "Image URL"),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                if (nameController.text.trim().isEmpty ||
+                    priceController.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Name and price are required")),
+                  );
+                  return;
+                }
+
+                setDialogState(() => isSaving = true);
+
+                try {
+                  await FirebaseFirestore.instance.collection('master_catalog').add({
+                    'name': nameController.text.trim(),
+                    'category': categoryController.text.trim(),
+                    'price': double.tryParse(priceController.text.trim()) ?? 0,
+                    'stock': int.tryParse(stockController.text.trim()) ?? 0,
+                    'imageUrl': imageUrlController.text.trim(),
+                    'createdAt': FieldValue.serverTimestamp(),
+                  });
+
+                  if (dialogContext.mounted) Navigator.pop(dialogContext);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Product added successfully")),
+                    );
+                  }
+                } catch (e) {
+                  setDialogState(() => isSaving = false);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Error adding product: $e")),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              child: isSaving
+                  ? const SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              )
+                  : const Text("Add Product", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
