@@ -10,8 +10,8 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
-import '../location_service.dart';
-import '../../login_screen.dart';
+import '../services/location_service.dart';
+import 'auth/login_screen.dart';
 
 const _kGreen = Color(0xFF2E7D32);
 const _kBg = Color(0xFFF4F6F0);
