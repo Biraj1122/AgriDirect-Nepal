@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
-import '../login_screen.dart';
+import 'auth/login_screen.dart';
 import '../utils/db_seeder.dart';
 
 class AdminPage extends StatefulWidget {
