@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,7 +8,6 @@ import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/screens/ai/crop_health_screen.dart';
-import 'package:farmtech_agridirect/models/price_request_model.dart';
 
 class FarmerScreen extends StatefulWidget {
   const FarmerScreen({super.key});

@@ -27,7 +27,13 @@ service cloud.firestore {
     // Users collection
     match /users/{userId} {
       allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Prevent role escalation: users cannot create themselves as Admin or change their role to Admin
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+                    request.resource.data.get('role', 'Customer') != 'Admin';
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (request.auth.uid == userId && request.resource.data.get('role', resource.data.get('role', 'Customer')) == resource.data.get('role', 'Customer'))
+      );
 
       // Notifications subcollection
       match /notifications/{notificationId} {
@@ -102,7 +108,7 @@ service cloud.firestore {
     // Price Update Requests
     match /price_requests/{requestId} {
       allow read: if isSignedIn() && (resource.data.farmerUid == request.auth.uid || isAdmin());
-      allow create: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.farmerUid == request.auth.uid;
       allow update, delete: if isAdmin();
     }
 
