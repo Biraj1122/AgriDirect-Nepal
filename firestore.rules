@@ -2,87 +2,68 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- HELPER FUNCTIONS ---
-    function isSignedIn() { return request.auth != null; }
-
-    function userExists() {
-      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
-    }
-
+    // Check if user is an admin
     function isAdmin() {
-      return isSignedIn() && (
+      return request.auth != null && (
         request.auth.token.email == 'agrifarmadmin@gmail.com' ||
-        (userExists() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Admin')
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin'
       );
     }
 
-    function isFarmer() {
-      return isSignedIn() && userExists() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Farmer';
-    }
-
-    // --- USER PROFILES & NOTIFICATIONS ---
+    // Users collection
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow write: if request.auth != null && (request.auth.uid == userId || isAdmin());
 
-      match /notifications/{notifId} {
-        // Allow anyone signed in to create a notification for a user (needed for Farmers/Admins/System)
-        // In a production app, you might want more restriction, but for now this fixes permission issues
-        allow create: if isSignedIn();
-        allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      }
-
-      match /addresses/{addressId} {
-        allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      }
-
-      match /favorites/{favId} {
-        allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Notifications subcollection
+      match /notifications/{notificationId} {
+        allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+        allow write: if isAdmin();
       }
     }
 
-    // --- FARMER & RIDER DATA ---
-    match /farmers/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-    }
-    match /riders/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-    }
-
-    // --- PRODUCTS (Farmer Access) ---
-    match /products/{productId} {
-      allow read: if true;
-      allow write: if isAdmin();
-      allow create: if isFarmer();
-      allow update, delete: if isFarmer() && resource.data.farmerUid == request.auth.uid;
-    }
-
-    // --- ORDERS (Farmer Access) ---
+    // Orders collection
     match /orders/{orderId} {
-      allow create: if isSignedIn();
-      allow read, update: if isSignedIn() && (
+      allow read: if request.auth != null && (
         resource.data.userId == request.auth.uid ||
         resource.data.farmerUid == request.auth.uid ||
+        resource.data.deliveryId == request.auth.uid ||
         isAdmin()
       );
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && (
+        isAdmin() ||
+        (resource.data.farmerUid == request.auth.uid && (request.resource.data.status == 'Farmer Accepted' || request.resource.data.status == 'Awaiting Pickup')) ||
+        (resource.data.deliveryId == request.auth.uid || resource.data.deliveryId == null || resource.data.deliveryId == "")
+      );
+      allow delete: if isAdmin();
     }
 
-    match /categories/{catId} { allow read: if true; allow write: if isAdmin(); }
-    match /settings/{docId} { allow read: if true; allow write: if isAdmin(); }
-    match /research_submissions/{id} {
-      allow create: if isSignedIn();
-      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    // Products (Master Catalog)
+    match /master_catalog/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    // Scan History
-    match /scan_history/{id} {
-      allow read, write: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn();
+    // Settings (Announcements)
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    match /{path=**} { allow read, write: if isAdmin(); }
+    // Research Submissions
+    match /research_submissions/{submissionId} {
+      allow read: if isAdmin();
+      allow create: if request.auth != null;
+      allow update, delete: if isAdmin();
+    }
+
+    // Price Update Requests
+    match /price_requests/{requestId} {
+      allow read: if request.auth != null && (resource.data.farmerUid == request.auth.uid || isAdmin());
+      allow create: if request.auth != null;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
   }
 }
