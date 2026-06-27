@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -438,9 +440,10 @@ class _ProductsTabState extends State<_ProductsTab> {
   }
 
   void _showProductSheet(BuildContext context, {Map<String, dynamic>? existingProduct, String? productId}) {
-    final name = TextEditingController(text: existingProduct?['name']);
+    final name = TextEditingController(text: existingProduct?['name'] ?? existingProduct?['title']);
     final price = TextEditingController(text: existingProduct?['price']?.toString());
     final unit = TextEditingController(text: existingProduct?['unit'] ?? 'kg');
+    final description = TextEditingController(text: existingProduct?['description'] ?? '');
     bool isEditing = existingProduct != null;
     XFile? selectedImage;
     bool isUploading = false;
@@ -452,119 +455,171 @@ class _ProductsTabState extends State<_ProductsTab> {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
           padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 25, right: 25, top: 25),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(isEditing ? "Request Price Update" : "Add New Product", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
-              
-              if (!isEditing) ...[
-                Center(
-                  child: GestureDetector(
-                    onTap: () async {
-                      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-                      if (image != null) {
-                        setModalState(() => selectedImage = image);
-                      }
-                    },
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withAlpha(20),
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: Colors.green.withAlpha(50)),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(isEditing ? "Request Price Update" : "Add New Product", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+                
+                if (!isEditing) ...[
+                  Center(
+                    child: GestureDetector(
+                      onTap: () async {
+                        try {
+                          final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+                          if (image != null) {
+                            setModalState(() => selectedImage = image);
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error picking image: $e")));
+                          }
+                        }
+                      },
+                      child: Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withAlpha(20),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: Colors.green.withAlpha(50)),
+                        ),
+                        child: selectedImage != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(15),
+                                child: kIsWeb
+                                    ? Image.network(selectedImage!.path, fit: BoxFit.cover)
+                                    : Image.file(File(selectedImage!.path), fit: BoxFit.cover),
+                              )
+                            : const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.add_a_photo, color: Colors.green, size: 30),
+                                  SizedBox(height: 4),
+                                  Text("Add Photo", style: TextStyle(fontSize: 10, color: Colors.green)),
+                                ],
+                              ),
                       ),
-                      child: selectedImage != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(15),
-                              child: Image.file(File(selectedImage!.path), fit: BoxFit.cover),
-                            )
-                          : const Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.add_a_photo, color: Colors.green, size: 30),
-                                SizedBox(height: 4),
-                                Text("Add Photo", style: TextStyle(fontSize: 10, color: Colors.green)),
-                              ],
-                            ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                TextField(controller: name, decoration: const InputDecoration(labelText: "Product Name")),
-              ],
-              
-              if (isEditing) Text("Updating: ${name.text}", style: const TextStyle(color: Colors.grey)),
-              
-              Row(
-                children: [
-                  Expanded(child: TextField(controller: price, decoration: const InputDecoration(labelText: "Price"), keyboardType: TextInputType.number)),
-                  const SizedBox(width: 20),
-                  Expanded(child: TextField(controller: unit, decoration: const InputDecoration(labelText: "Unit (e.g. kg, bundle)"))),
+                  const SizedBox(height: 20),
+                  TextField(controller: name, decoration: const InputDecoration(labelText: "Product Name")),
                 ],
-              ),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                  onPressed: isUploading ? null : () async {
-                    if (price.text.isEmpty || (!isEditing && name.text.isEmpty)) return;
-
-                    setModalState(() => isUploading = true);
-
-                    try {
-                      if (isEditing) {
-                        await FirebaseFirestore.instance.collection('price_requests').add({
-                          'productId': productId,
-                          'productName': name.text,
-                          'farmerUid': widget.uid,
-                          'farmName': widget.farmName,
-                          'oldPrice': double.tryParse(existingProduct['price']?.toString() ?? '0') ?? 0,
-                          'newPrice': double.parse(price.text),
-                          'oldUnit': existingProduct['unit'] ?? 'kg',
-                          'newUnit': unit.text,
-                          'status': 'pending',
-                          'createdAt': FieldValue.serverTimestamp(),
-                        });
-                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Price update request sent to admin")));
-                      } else {
-                        String? imageUrl;
-                        if (selectedImage != null) {
-                          final cloudinary = CloudinaryPublic('drt6y7f8v', 'agridirect_unsigned', cache: false);
-                          CloudinaryResponse response = await cloudinary.uploadFile(
-                            CloudinaryFile.fromFile(selectedImage!.path, folder: 'products'),
-                          );
-                          imageUrl = response.secureUrl;
-                        }
-
-                        await FirebaseFirestore.instance.collection('products').add({
-                          'name': name.text,
-                          'price': double.parse(price.text),
-                          'farmerUid': widget.uid,
-                          'farmName': widget.farmName,
-                          'unit': unit.text,
-                          'imageUrl': imageUrl,
-                          'createdAt': FieldValue.serverTimestamp(),
-                        });
-                      }
-                      if (context.mounted) Navigator.pop(context);
-                    } catch (e) {
-                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
-                    } finally {
-                      setModalState(() => isUploading = false);
-                    }
-                  },
-                  child: isUploading 
-                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : Text(isEditing ? "Submit Request" : "Add Product", style: const TextStyle(color: Colors.white)),
+                
+                if (isEditing) Text("Updating: ${name.text}", style: const TextStyle(color: Colors.grey)),
+                
+                Row(
+                  children: [
+                    Expanded(child: TextField(controller: price, decoration: const InputDecoration(labelText: "Price"), keyboardType: TextInputType.number)),
+                    const SizedBox(width: 20),
+                    Expanded(child: TextField(controller: unit, decoration: const InputDecoration(labelText: "Unit (e.g. kg, bundle)"))),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 30),
-            ],
+                const SizedBox(height: 10),
+                if (!isEditing) TextField(controller: description, decoration: const InputDecoration(labelText: "Description"), maxLines: 2),
+                const SizedBox(height: 30),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    onPressed: isUploading ? null : () async {
+                      if (price.text.isEmpty || (!isEditing && name.text.isEmpty)) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill all required fields")));
+                        return;
+                      }
+
+                      final double? priceVal = double.tryParse(price.text);
+                      if (priceVal == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a valid numeric price")));
+                        return;
+                      }
+
+                      setModalState(() => isUploading = true);
+
+                      try {
+                        if (isEditing) {
+                          await FirebaseFirestore.instance.collection('price_requests').add({
+                            'productId': productId,
+                            'productName': name.text,
+                            'farmerUid': widget.uid,
+                            'farmName': widget.farmName,
+                            'oldPrice': double.tryParse(existingProduct['price']?.toString() ?? '0') ?? 0,
+                            'newPrice': priceVal,
+                            'oldUnit': existingProduct['unit'] ?? 'kg',
+                            'newUnit': unit.text,
+                            'status': 'pending',
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
+                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Price update request sent to admin")));
+                        } else {
+                          if (selectedImage == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select an image")));
+                            setModalState(() => isUploading = false);
+                            return;
+                          }
+
+                          String? imageUrl;
+                          try {
+                            final cloudinary = CloudinaryPublic('drt6y7f8v', 'agridirect_unsigned', cache: false);
+                            CloudinaryResponse response;
+                            
+                            if (kIsWeb) {
+                              // On Web, reading bytes is more reliable than using the blob path
+                              final Uint8List bytes = await selectedImage!.readAsBytes();
+                              response = await cloudinary.uploadFile(
+                                CloudinaryFile.fromByteData(
+                                  ByteData.sublistView(bytes),
+                                  identifier: selectedImage!.name,
+                                  folder: 'products',
+                                ),
+                              );
+                            } else {
+                              response = await cloudinary.uploadFile(
+                                CloudinaryFile.fromFile(selectedImage!.path, folder: 'products'),
+                              );
+                            }
+                            imageUrl = response.secureUrl;
+                          } catch (e) {
+                            String errorMsg = e.toString();
+                            if (errorMsg.contains("401")) {
+                              errorMsg = "Unauthorized (401): Please ensure your Cloudinary Upload Preset ('agridirect_unsigned') is explicitly set to 'Unsigned' in your Cloudinary Dashboard Settings. If it's set to 'Signed', this request will fail.";
+                            }
+                            throw errorMsg;
+                          }
+
+                          await FirebaseFirestore.instance.collection('products').add({
+                            'name': name.text,
+                            'title': name.text, // Added for compatibility with Product model
+                            'price': priceVal,
+                            'farmerUid': widget.uid,
+                            'farmName': widget.farmName,
+                            'unit': unit.text,
+                            'imageUrl': imageUrl,
+                            'image': imageUrl, // Added for compatibility with Product model
+                            'description': description.text,
+                            'longDescription': description.text,
+                            'category': 'General', // Default category
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
+                        }
+                        if (context.mounted) Navigator.pop(context);
+                      } catch (e) {
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+                      } finally {
+                        setModalState(() => isUploading = false);
+                      }
+                    },
+                    child: isUploading 
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Text(isEditing ? "Submit Request" : "Add Product", style: const TextStyle(color: Colors.white)),
+                  ),
+                ),
+                const SizedBox(height: 30),
+              ],
+            ),
           ),
         ),
       ),

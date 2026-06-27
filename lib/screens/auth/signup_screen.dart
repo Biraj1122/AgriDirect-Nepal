@@ -262,7 +262,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           navigator.pop(); // Dismiss loading dialog
                           navigator.push(
                             MaterialPageRoute(
-                              builder: (_) => VerifyOtpScreen(
+                              builder: (_) => VerifyEmailScreen(
                                 email: email,
                                 source: OtpSource.signup,
                                 userData: userData,
