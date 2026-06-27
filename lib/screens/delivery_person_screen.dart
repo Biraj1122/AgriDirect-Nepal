@@ -51,11 +51,15 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
   void _logout() {
     if (mounted) {
       FirebaseAuth.instance.signOut();
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-        (route) => false,
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (route) => false,
+          );
+        }
+      });
     }
   }
 
@@ -603,7 +607,7 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('orders')
-          .where('status', whereIn: ['Farmer Accepted', 'Shipped', 'Picked Up', 'On the way'])
+          .where('status', whereIn: ['Awaiting Pickup', 'Picked Up', 'On the way'])
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: _kGreen));
@@ -611,7 +615,7 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
         final myOrders = docs.where((d) => (d.data() as Map<String, dynamic>)['deliveryId'] == widget.user.uid).toList();
         final available = docs.where((d) {
           final data = d.data() as Map<String, dynamic>;
-          return data['deliveryId'] == null || data['deliveryId'] == '';
+          return (data['deliveryId'] == null || data['deliveryId'] == '') && data['status'] == 'Awaiting Pickup';
         }).toList();
 
         if (myOrders.isEmpty && available.isEmpty) {
@@ -1564,7 +1568,7 @@ class _OrderCard extends StatelessWidget {
   }
 
   String _nextLabel(String status) {
-    if (status == 'Processing' || status == 'Shipped') return "Accept Request";
+    if (status == 'Awaiting Pickup') return "Accept & Pickup";
     if (status == 'Picked Up') return "Start Delivery";
     return "Mark Delivered";
   }
@@ -1586,7 +1590,7 @@ class _OrderCard extends StatelessWidget {
 
   Future<void> _advance(BuildContext context, String orderId, String status, Map<String, dynamic> data, String riderUid) async {
     String next = 'Delivered';
-    if (status == 'Processing' || status == 'Shipped') {
+    if (status == 'Awaiting Pickup') {
       next = 'Picked Up';
     } else if (status == 'Picked Up') {
       next = 'On the way';
