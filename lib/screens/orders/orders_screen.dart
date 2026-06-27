@@ -347,23 +347,6 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     }
   }
 
-  String _getStatusMessage(String status) {
-    switch (status) {
-      case 'Pending Farmer':
-        return "Routing order to nearest farm...";
-      case 'Farmer Accepted':
-        return "Farm is preparing your items...";
-      case 'Picked Up':
-        return "Rider picked up from farm";
-      case 'On the way':
-        return "Rider is on the way to you";
-      case 'Arrived':
-        return "Order almost delivered!";
-      default:
-        return "Order in progress";
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
