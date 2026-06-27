@@ -2,17 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../help_support.dart';
-import '../login_screen.dart';
-import '../my_favourites.dart';
-import '../notifications_screen.dart';
-import '../payment_methods_screen.dart';
-import 'about_us.dart';
-import 'ai_settings_screen.dart';
-import 'edit_profile_screen.dart';
-import 'my_addresses_screen.dart';
-import 'order_history_screen.dart';
-import 'scan_history_screen.dart';
+import 'package:farmtech_agridirect/screens/misc/help_support.dart';
+import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
+import 'package:farmtech_agridirect/screens/profile/my_favourites.dart';
+import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
+import 'package:farmtech_agridirect/screens/profile/payment_methods_screen.dart';
+import 'package:farmtech_agridirect/screens/about_us.dart';
+import 'package:farmtech_agridirect/screens/ai/ai_settings_screen.dart';
+import 'package:farmtech_agridirect/screens/profile/edit_profile_screen.dart';
+import 'package:farmtech_agridirect/screens/profile/my_addresses_screen.dart';
+import 'package:farmtech_agridirect/screens/orders/order_history_screen.dart';
+import 'package:farmtech_agridirect/screens/ai/scan_history_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userName;

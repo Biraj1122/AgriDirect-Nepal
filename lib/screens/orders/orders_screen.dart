@@ -4,12 +4,12 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../user_data.dart';
-import '../location_service.dart';
-import '../navigation_screen.dart';
-import '../farmer_screen.dart';
-import 'delivery_person_screen.dart';
-import 'admin_page.dart';
+import '../../models/user_data.dart';
+import '../../services/location_service.dart';
+import '../home/navigation_screen.dart';
+import '../misc/farmer_screen.dart';
+import '../delivery_person_screen.dart';
+import '../admin_page.dart';
 
 class OrderScreen extends StatefulWidget {
   final String? orderId;

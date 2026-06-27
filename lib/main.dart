@@ -3,8 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'firebase_options.dart';
-import 'splash_screen.dart';
+import 'package:provider/provider.dart';
+import 'package:farmtech_agridirect/viewmodels/admin_viewmodel.dart';
+import 'package:farmtech_agridirect/firebase_options.dart';
+import 'package:farmtech_agridirect/screens/misc/splash_screen.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -30,7 +32,14 @@ void main() {
       debugPrint("Flutter Error: ${details.exception}");
     };
 
-    runApp(const AgriDirectApp());
+    runApp(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => AdminViewModel()),
+        ],
+        child: const AgriDirectApp(),
+      ),
+    );
   }, (error, stackTrace) {
     debugPrint("Uncaught Error: $error");
     debugPrint("Stacktrace: $stackTrace");
@@ -51,7 +60,8 @@ class AgriDirectApp extends StatelessWidget {
         scaffoldBackgroundColor: Colors.white,
       ),
       builder: (context, child) {
-        ErrorWidget.builder = (FlutterErrorDetails details) {
+        ErrorWidget.builder = (FlutterErrorDetails details)
+        {
           return Scaffold(
             body: Center(
               child: SingleChildScrollView(

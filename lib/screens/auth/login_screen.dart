@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'signup_screen.dart';
-import 'forgot_password_screen.dart';
-import 'verify_otp_screen.dart';
-import 'navigation_screen.dart';
-import 'farmer_screen.dart';
-import 'screens/delivery_person_screen.dart';
-import 'screens/admin_page.dart';
-import 'services/social_auth_service.dart';
+import 'package:farmtech_agridirect/screens/auth/signup_screen.dart';
+import 'package:farmtech_agridirect/screens/auth/forgot_password_screen.dart';
+import 'package:farmtech_agridirect/screens/auth/verify_otp_screen.dart';
+import 'package:farmtech_agridirect/screens/home/navigation_screen.dart';
+import 'package:farmtech_agridirect/screens/misc/farmer_screen.dart';
+import 'package:farmtech_agridirect/screens/delivery_person_screen.dart';
+import 'package:farmtech_agridirect/screens/admin_page.dart';
+import 'package:farmtech_agridirect/services/social_auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

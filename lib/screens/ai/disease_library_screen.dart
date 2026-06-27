@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../utils/translations.dart';
+import '../../utils/translations.dart';
 
 class DiseaseLibraryScreen extends StatefulWidget {
   const DiseaseLibraryScreen({super.key});

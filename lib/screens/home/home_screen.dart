@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../product.dart';
-import 'product_detail_screen.dart';
-import '../notifications_screen.dart';
-import 'orders_screen.dart';
-import 'crop_health_screen.dart';
+import 'package:farmtech_agridirect/models/product.dart';
+import 'package:farmtech_agridirect/screens/shop/product_detail_screen.dart';
+import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
+import 'package:farmtech_agridirect/screens/orders/orders_screen.dart';
+import 'package:farmtech_agridirect/screens/ai/crop_health_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 

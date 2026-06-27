@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-// import 'package:cloud_functions/cloud_functions.dart';
-import 'Success/shared_widgets.dart';
+import '../../Success/shared_widgets.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   final String email;
@@ -103,14 +102,6 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen>
     try {
       // Simulation of password reset
       await Future.delayed(const Duration(seconds: 2));
-
-      /*
-      final fn = FirebaseFunctions.instance.httpsCallable('resetPassword');
-      await fn.call({
-        'email': widget.email,
-        'newPassword': _passwordController.text,
-      });
-      */
 
       if (!mounted) return;
       setState(() {

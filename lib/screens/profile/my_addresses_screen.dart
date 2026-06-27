@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../farm_osm_screen.dart';
-import '../user_data.dart';
+import 'package:farmtech_agridirect/screens/misc/farm_osm_screen.dart';
+import 'package:farmtech_agridirect/models/user_data.dart';
 
 class MyAddressesScreen extends StatefulWidget {
   const MyAddressesScreen({super.key});

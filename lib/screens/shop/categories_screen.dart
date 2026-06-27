@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'product_detail_screen.dart';
-import '../cart_model.dart';
-import '../product.dart';
-import '../my_favourites.dart';
+import '../../models/cart_model.dart';
+import '../../models/product.dart';
+import '../profile/my_favourites.dart';
 
 class CategoriesScreen extends StatefulWidget {
   final String initialCategory;

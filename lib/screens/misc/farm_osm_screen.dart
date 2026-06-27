@@ -2,9 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
-import 'location_service.dart';
-import 'user_data.dart';
-import 'cart_model.dart';
+import 'package:farmtech_agridirect/services/location_service.dart';
+import 'package:farmtech_agridirect/models/user_data.dart';
+import 'package:farmtech_agridirect/models/cart_model.dart';
 
 class FarmOsmScreen extends StatefulWidget {
   const FarmOsmScreen({super.key});

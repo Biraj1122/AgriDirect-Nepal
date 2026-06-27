@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:farmtech_agridirect/cart_model.dart';
-import 'package:farmtech_agridirect/product.dart';
+import '../../models/cart_model.dart';
+import '../../models/product.dart';
 
 class MyFavouritesScreen extends StatelessWidget {
   final Function(Map<String, dynamic>) onFavouriteToggle;

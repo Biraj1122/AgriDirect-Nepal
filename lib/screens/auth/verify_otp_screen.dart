@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:farmtech_agridirect/navigation_screen.dart';
-import 'package:farmtech_agridirect/farmer_screen.dart';
-import 'package:farmtech_agridirect/screens/delivery_person_screen.dart';
-import 'package:farmtech_agridirect/screens/admin_page.dart';
+import '../home/navigation_screen.dart';
+import '../misc/farmer_screen.dart';
+import '../delivery_person_screen.dart';
+import '../admin_page.dart';
 
 enum OtpSource { signup, login, resetPassword }
 
@@ -77,17 +77,21 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> with SingleTickerProv
           _timer?.cancel();
           _onVerificationSuccess();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Email is not verified yet. Please check your inbox.")),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Email is not verified yet. Please check your inbox.")),
+            );
+          }
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -184,10 +188,14 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> with SingleTickerProv
                   onPressed: () async {
                     try {
                       await FirebaseAuth.instance.currentUser?.sendEmailVerification();
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Verification link resent!")));
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Verification link resent!")));
+                      }
                       _startTimer();
                     } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+                      }
                     }
                   },
                   child: const Text("Resend Link", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
@@ -204,23 +212,4 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> with SingleTickerProv
       ),
     );
   }
-}
-
-// Minimal stubs for navigation
-class FarmerScreenPlaceholder extends StatelessWidget {
-  const FarmerScreenPlaceholder({super.key});
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text("Farmer Screen")));
-}
-
-class DeliveryPersonPlaceholder extends StatelessWidget {
-  const DeliveryPersonPlaceholder({super.key});
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text("Delivery Person Screen")));
-}
-
-class AdminPagePlaceholder extends StatelessWidget {
-  const AdminPagePlaceholder({super.key});
-  @override
-  Widget build(BuildContext context) => const Scaffold(body: Center(child: Text("Admin Page")));
 }

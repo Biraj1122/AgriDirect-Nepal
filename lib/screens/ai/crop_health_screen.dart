@@ -6,9 +6,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'disease_library_screen.dart';
 import 'ai_settings_screen.dart';
-import '../utils/translations.dart';
-import '../utils/ai_helper.dart';
-import '../utils/gemini_helper.dart';
+import '../../utils/translations.dart';
+import '../../utils/ai_helper.dart';
+import '../../utils/gemini_helper.dart';
 
 class CropHealthScreen extends StatefulWidget {
   const CropHealthScreen({super.key});

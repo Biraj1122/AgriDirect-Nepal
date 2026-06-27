@@ -2,16 +2,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:farmtech_agridirect/screens/home_screen.dart';
+import 'package:farmtech_agridirect/screens/home/home_screen.dart';
 import 'package:farmtech_agridirect/screens/my_cart.dart';
-import 'package:farmtech_agridirect/screens/categories_screen.dart';
-import 'package:farmtech_agridirect/screens/orders_screen.dart';
-import 'package:farmtech_agridirect/screens/profile_screen.dart';
-import 'package:farmtech_agridirect/my_favourites.dart';
-import 'package:farmtech_agridirect/farmer_screen.dart';
+import 'package:farmtech_agridirect/screens/shop/categories_screen.dart';
+import 'package:farmtech_agridirect/screens/orders/orders_screen.dart';
+import 'package:farmtech_agridirect/screens/profile/profile_screen.dart';
+import 'package:farmtech_agridirect/screens/profile/my_favourites.dart';
+import 'package:farmtech_agridirect/screens/misc/farmer_screen.dart';
 import 'package:farmtech_agridirect/screens/delivery_person_screen.dart';
 import 'package:farmtech_agridirect/screens/admin_page.dart';
-import 'package:farmtech_agridirect/login_screen.dart';
+import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String userName;
