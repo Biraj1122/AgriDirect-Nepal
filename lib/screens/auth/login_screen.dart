@@ -229,25 +229,41 @@ class _LoginScreenState extends State<LoginScreen> {
                           } on FirebaseAuthException catch (e) {
                             if (context.mounted) Navigator.pop(context); // Pop loading
 
-                            // If it's NOT the admin, and login fails with these codes, 
-                            // it's likely a Google/Social account.
-                            if (!isMasterAdmin && (e.code == 'wrong-password' || e.code == 'invalid-credential' || e.code == 'user-not-found')) {
-                                _handleSocialSignIn(_socialAuthService.signInWithGoogle());
-                                return;
+                            String errorMessage = "Login failed. Please try again.";
+                            
+                            switch (e.code) {
+                              case 'invalid-email':
+                                errorMessage = "The email address is badly formatted.";
+                                break;
+                              case 'user-disabled':
+                                errorMessage = "This user account has been disabled.";
+                                break;
+                              case 'user-not-found':
+                                errorMessage = "No user found with this email.";
+                                break;
+                              case 'wrong-password':
+                                errorMessage = "Incorrect password. Please try again.";
+                                break;
+                              case 'invalid-credential':
+                                errorMessage = "Incorrect email or password.";
+                                break;
+                              case 'too-many-requests':
+                                errorMessage = "Too many attempts. Please try again later.";
+                                break;
+                              case 'network-request-failed':
+                                errorMessage = "Network error. Please check your connection.";
+                                break;
                             }
 
-                            if (isMasterAdmin && (e.code == 'wrong-password' || e.code == 'invalid-credential')) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("Admin Login Failed: Please check your password in Firebase Console."),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                              }
-                              return;
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(errorMessage),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
                             }
-                            rethrow;
+                            return;
                           }
 
                           final User? user = userCredential.user;
