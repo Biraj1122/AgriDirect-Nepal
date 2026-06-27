@@ -300,7 +300,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                             if (context.mounted) {
                               Navigator.pop(context);
-                              Navigator.push(context, MaterialPageRoute(builder: (context) => VerifyOtpScreen(email: email, source: OtpSource.login, userData: userData)));
+                              Navigator.push(context, MaterialPageRoute(builder: (context) => VerifyEmailScreen(email: email, source: OtpSource.login, userData: userData)));
                             }
                             return;
                           }

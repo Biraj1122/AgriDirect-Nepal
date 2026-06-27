@@ -8,12 +8,12 @@ import '../admin_page.dart';
 
 enum OtpSource { signup, login, resetPassword }
 
-class VerifyOtpScreen extends StatefulWidget {
+class VerifyEmailScreen extends StatefulWidget {
   final String email;
   final OtpSource source;
   final Map<String, dynamic>? userData;
 
-  const VerifyOtpScreen({
+  const VerifyEmailScreen({
     super.key,
     required this.email,
     required this.source,
@@ -21,13 +21,10 @@ class VerifyOtpScreen extends StatefulWidget {
   });
 
   @override
-  State<VerifyOtpScreen> createState() => _VerifyOtpScreenState();
+  State<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
 }
 
-class _VerifyOtpScreenState extends State<VerifyOtpScreen> with SingleTickerProviderStateMixin {
-  final List<TextEditingController> _controllers = List.generate(6, (index) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(6, (index) => FocusNode());
-  
+class _VerifyEmailScreenState extends State<VerifyEmailScreen> with SingleTickerProviderStateMixin {
   int _timerSeconds = 60;
   Timer? _timer;
   bool _canResend = false;
@@ -58,12 +55,6 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> with SingleTickerProv
   @override
   void dispose() {
     _timer?.cancel();
-    for (var controller in _controllers) {
-      controller.dispose();
-    }
-    for (var node in _focusNodes) {
-      node.dispose();
-    }
     super.dispose();
   }
 
@@ -194,8 +185,7 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> with SingleTickerProv
                       _startTimer();
                     } catch (e) {
                       if (!mounted) return;
-                      final messenger = ScaffoldMessenger.of(context);
-                      messenger.showSnackBar(SnackBar(content: Text("Error: $e")));
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
                     }
                   },
                   child: const Text("Resend Link", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
