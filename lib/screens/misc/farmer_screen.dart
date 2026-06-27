@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/screens/ai/crop_health_screen.dart';
@@ -373,9 +376,16 @@ class _DashboardTabState extends State<_DashboardTab> {
   }
 }
 
-class _ProductsTab extends StatelessWidget {
+class _ProductsTab extends StatefulWidget {
   final String uid, farmName;
   const _ProductsTab({required this.uid, required this.farmName});
+
+  @override
+  State<_ProductsTab> createState() => _ProductsTabState();
+}
+
+class _ProductsTabState extends State<_ProductsTab> {
+  final ImagePicker _picker = ImagePicker();
 
   @override
   Widget build(BuildContext context) {
@@ -384,7 +394,7 @@ class _ProductsTab extends StatelessWidget {
         IconButton(icon: const Icon(Icons.add), onPressed: () => _showProductSheet(context))
       ]),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).snapshots(),
+        stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: widget.uid).snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
           final docs = snapshot.data!.docs;
@@ -393,9 +403,16 @@ class _ProductsTab extends StatelessWidget {
             itemCount: docs.length,
             itemBuilder: (context, i) {
               final data = docs[i].data() as Map<String, dynamic>;
+              final String? imageUrl = data['imageUrl'] ?? data['image'];
+              
               return Card(
                 child: ListTile(
-                  leading: const Icon(Icons.eco, color: Colors.green),
+                  leading: imageUrl != null && imageUrl.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(imageUrl, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.eco, color: Colors.green)),
+                        )
+                      : const Icon(Icons.eco, color: Colors.green),
                   title: Text(data['name'] ?? 'Product'),
                   subtitle: Text("Rs. ${data['price']} / ${data['unit']}"),
                   trailing: Row(
@@ -425,68 +442,130 @@ class _ProductsTab extends StatelessWidget {
     final price = TextEditingController(text: existingProduct?['price']?.toString());
     final unit = TextEditingController(text: existingProduct?['unit'] ?? 'kg');
     bool isEditing = existingProduct != null;
+    XFile? selectedImage;
+    bool isUploading = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 25, right: 25, top: 25),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(isEditing ? "Request Price Update" : "Add New Product", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            if (!isEditing) TextField(controller: name, decoration: const InputDecoration(labelText: "Product Name")),
-            if (isEditing) Text("Updating: ${name.text}", style: const TextStyle(color: Colors.grey)),
-            Row(
-              children: [
-                Expanded(child: TextField(controller: price, decoration: const InputDecoration(labelText: "Price"), keyboardType: TextInputType.number)),
-                const SizedBox(width: 20),
-                Expanded(child: TextField(controller: unit, decoration: const InputDecoration(labelText: "Unit (e.g. kg, bundle)"))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 25, right: 25, top: 25),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(isEditing ? "Request Price Update" : "Add New Product", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              
+              if (!isEditing) ...[
+                Center(
+                  child: GestureDetector(
+                    onTap: () async {
+                      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+                      if (image != null) {
+                        setModalState(() => selectedImage = image);
+                      }
+                    },
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withAlpha(20),
+                        borderRadius: BorderRadius.circular(15),
+                        border: Border.all(color: Colors.green.withAlpha(50)),
+                      ),
+                      child: selectedImage != null
+                          ? ClipRRect(
+                              borderRadius: BorderRadius.circular(15),
+                              child: Image.file(File(selectedImage!.path), fit: BoxFit.cover),
+                            )
+                          : const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_a_photo, color: Colors.green, size: 30),
+                                SizedBox(height: 4),
+                                Text("Add Photo", style: TextStyle(fontSize: 10, color: Colors.green)),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                TextField(controller: name, decoration: const InputDecoration(labelText: "Product Name")),
               ],
-            ),
-            const SizedBox(height: 30),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                onPressed: () async {
-                  if (price.text.isEmpty) return;
-
-                  if (isEditing) {
-                    await FirebaseFirestore.instance.collection('price_requests').add({
-                      'productId': productId,
-                      'productName': name.text,
-                      'farmerUid': uid,
-                      'farmName': farmName,
-                      'oldPrice': double.tryParse(existingProduct['price']?.toString() ?? '0') ?? 0,
-                      'newPrice': double.parse(price.text),
-                      'oldUnit': existingProduct['unit'] ?? 'kg',
-                      'newUnit': unit.text,
-                      'status': 'pending',
-                      'createdAt': FieldValue.serverTimestamp(),
-                    });
-                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Price update request sent to admin")));
-                  } else {
-                    FirebaseFirestore.instance.collection('products').add({
-                      'name': name.text,
-                      'price': double.parse(price.text),
-                      'farmerUid': uid,
-                      'farmName': farmName,
-                      'unit': unit.text,
-                      'createdAt': FieldValue.serverTimestamp(),
-                    });
-                  }
-                  if (context.mounted) Navigator.pop(context);
-                },
-                child: Text(isEditing ? "Submit Request" : "Add Product", style: const TextStyle(color: Colors.white)),
+              
+              if (isEditing) Text("Updating: ${name.text}", style: const TextStyle(color: Colors.grey)),
+              
+              Row(
+                children: [
+                  Expanded(child: TextField(controller: price, decoration: const InputDecoration(labelText: "Price"), keyboardType: TextInputType.number)),
+                  const SizedBox(width: 20),
+                  Expanded(child: TextField(controller: unit, decoration: const InputDecoration(labelText: "Unit (e.g. kg, bundle)"))),
+                ],
               ),
-            ),
-            const SizedBox(height: 30),
-          ],
+              const SizedBox(height: 30),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  onPressed: isUploading ? null : () async {
+                    if (price.text.isEmpty || (!isEditing && name.text.isEmpty)) return;
+
+                    setModalState(() => isUploading = true);
+
+                    try {
+                      if (isEditing) {
+                        await FirebaseFirestore.instance.collection('price_requests').add({
+                          'productId': productId,
+                          'productName': name.text,
+                          'farmerUid': widget.uid,
+                          'farmName': widget.farmName,
+                          'oldPrice': double.tryParse(existingProduct['price']?.toString() ?? '0') ?? 0,
+                          'newPrice': double.parse(price.text),
+                          'oldUnit': existingProduct['unit'] ?? 'kg',
+                          'newUnit': unit.text,
+                          'status': 'pending',
+                          'createdAt': FieldValue.serverTimestamp(),
+                        });
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Price update request sent to admin")));
+                      } else {
+                        String? imageUrl;
+                        if (selectedImage != null) {
+                          final cloudinary = CloudinaryPublic('drt6y7f8v', 'agridirect_unsigned', cache: false);
+                          CloudinaryResponse response = await cloudinary.uploadFile(
+                            CloudinaryFile.fromFile(selectedImage!.path, folder: 'products'),
+                          );
+                          imageUrl = response.secureUrl;
+                        }
+
+                        await FirebaseFirestore.instance.collection('products').add({
+                          'name': name.text,
+                          'price': double.parse(price.text),
+                          'farmerUid': widget.uid,
+                          'farmName': widget.farmName,
+                          'unit': unit.text,
+                          'imageUrl': imageUrl,
+                          'createdAt': FieldValue.serverTimestamp(),
+                        });
+                      }
+                      if (context.mounted) Navigator.pop(context);
+                    } catch (e) {
+                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
+                    } finally {
+                      setModalState(() => isUploading = false);
+                    }
+                  },
+                  child: isUploading 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Text(isEditing ? "Submit Request" : "Add Product", style: const TextStyle(color: Colors.white)),
+                ),
+              ),
+              const SizedBox(height: 30),
+            ],
+          ),
         ),
       ),
     );
