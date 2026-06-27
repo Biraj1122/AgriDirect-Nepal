@@ -220,7 +220,6 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     onPressed: () async {
                       if (_formKey.currentState!.validate()) {
-                        final navigator = Navigator.of(context);
                         String email = emailController.text.trim();
                         if (!email.contains('@')) {
                           email = "$email@gmail.com";
@@ -255,8 +254,12 @@ class _SignupScreenState extends State<SignupScreen> {
                           await userCredential.user
                               ?.updateDisplayName(firstNameController.text.trim());
                           await userCredential.user?.sendEmailVerification();
+                          
                           if (!mounted) return;
-                          navigator.pop();
+                          
+                          final navigator = Navigator.of(context);
+                          
+                          navigator.pop(); // Dismiss loading dialog
                           navigator.push(
                             MaterialPageRoute(
                               builder: (_) => VerifyOtpScreen(
@@ -267,12 +270,11 @@ class _SignupScreenState extends State<SignupScreen> {
                             ),
                           );
                         } catch (e) {
-                          if (mounted) {
-                            navigator.pop();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Error: $e")),
-                            );
-                          }
+                          if (!mounted) return;
+                          Navigator.of(context).pop(); // Dismiss loading dialog
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Error: $e")),
+                          );
                         }
                       }
                     },

@@ -96,10 +96,10 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> with SingleTickerProv
   }
 
   void _onVerificationSuccess() {
-    Widget target;
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
+    Widget target;
     if (widget.userData != null) {
       String role = widget.userData?['role'] ?? 'Customer';
       if (role == 'Farmer') {
@@ -115,6 +115,7 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> with SingleTickerProv
       target = NavigationScreen(userName: user.displayName ?? user.email ?? "User");
     }
 
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (context) => target),
@@ -188,14 +189,13 @@ class _VerifyOtpScreenState extends State<VerifyOtpScreen> with SingleTickerProv
                   onPressed: () async {
                     try {
                       await FirebaseAuth.instance.currentUser?.sendEmailVerification();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Verification link resent!")));
-                      }
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Verification link resent!")));
                       _startTimer();
                     } catch (e) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-                      }
+                      if (!mounted) return;
+                      final messenger = ScaffoldMessenger.of(context);
+                      messenger.showSnackBar(SnackBar(content: Text("Error: $e")));
                     }
                   },
                   child: const Text("Resend Link", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
