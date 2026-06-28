@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../utils/translations.dart';
 
 class ScanHistoryScreen extends StatelessWidget {
@@ -62,14 +63,30 @@ class ScanHistoryScreen extends StatelessWidget {
                     final date = (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
                     final diagnosis = data['diagnosis'] ?? "Unknown";
                     final isNepali = data['isNepali'] ?? false;
+                    final imageUrl = data['imageUrl'];
 
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.green.shade100,
-                          child: const Icon(Icons.medication, color: Colors.green),
+                        leading: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: imageUrl != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: CachedNetworkImage(
+                                    imageUrl: imageUrl,
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                    errorWidget: (context, url, error) => const Icon(Icons.error, color: Colors.red),
+                                  ),
+                                )
+                              : const Icon(Icons.medication, color: Colors.green),
                         ),
                         title: Text(
                           AppTranslations.translate(diagnosis, 'name_ne', isNepali: isNepali),

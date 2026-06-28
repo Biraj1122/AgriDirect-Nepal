@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -150,7 +151,14 @@ class OrderDetailsScreen extends StatelessWidget {
 
   Widget _buildProductImage(String imagePath) {
     if (imagePath.startsWith('http')) {
-      return Image.network(imagePath, fit: BoxFit.contain, errorBuilder: (_, __, ___) => const Icon(Icons.image_not_supported));
+      return CachedNetworkImage(
+        imageUrl: imagePath,
+        fit: BoxFit.contain,
+        placeholder: (context, url) => const Center(
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+        ),
+        errorWidget: (context, url, error) => const Icon(Icons.image_not_supported),
+      );
     } else if (imagePath.startsWith('data:image')) {
       try {
         final base64String = imagePath.split(',').last;

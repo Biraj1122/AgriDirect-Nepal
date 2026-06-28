@@ -4,11 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'disease_library_screen.dart';
 import 'ai_settings_screen.dart';
 import '../../utils/translations.dart';
 import '../../utils/ai_helper.dart';
 import '../../utils/gemini_helper.dart';
+import '../../services/storage_service.dart';
 
 class CropHealthScreen extends StatefulWidget {
   const CropHealthScreen({super.key});
@@ -33,8 +35,9 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
   bool _isChatLoading = false;
 
   final ImagePicker _picker = ImagePicker();
+  final StorageService _storageService = StorageService();
 
-  Future<void> _saveScanToHistory() async {
+  Future<void> _saveScanToHistory(String? imageUrl) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || _diagnosisResult == null) return;
 
@@ -46,6 +49,7 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
         'timestamp': FieldValue.serverTimestamp(),
         'isNepali': _isNepali,
         'platform': kIsWeb ? 'web' : 'mobile',
+        'imageUrl': imageUrl,
       });
     } catch (e) {
       debugPrint("Error saving history: $e");
@@ -135,6 +139,11 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
     });
 
     try {
+      String? imageUrl;
+      if (!kIsWeb && _imageFile != null) {
+        imageUrl = await _storageService.uploadImage(File(_imageFile!.path), 'scans');
+      }
+
       if (kIsWeb) {
         await Future.delayed(const Duration(seconds: 2));
         final mockResults = [
@@ -151,7 +160,7 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
             _diagnosisResult = result['label'] as String;
             _confidence = result['confidence'] as double;
           });
-          _saveScanToHistory();
+          _saveScanToHistory(imageUrl);
         }
       } else {
         final result = await _aiHelper.runInference(_imageFile!);
@@ -161,7 +170,7 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
             _diagnosisResult = result['label'];
             _confidence = result['confidence'];
           });
-          _saveScanToHistory();
+          _saveScanToHistory(imageUrl);
         }
       }
     } catch (e) {
@@ -270,7 +279,14 @@ class _CropHealthScreenState extends State<CropHealthScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: kIsWeb 
-              ? Image.network(_imageFile!.path, height: 200, width: double.infinity, fit: BoxFit.cover)
+              ? CachedNetworkImage(
+                  imageUrl: _imageFile!.path,
+                  height: 200,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                  errorWidget: (context, url, error) => const Icon(Icons.error),
+                )
               : Image.file(File(_imageFile!.path), height: 200, width: double.infinity, fit: BoxFit.cover),
           ),
           const SizedBox(height: 15),

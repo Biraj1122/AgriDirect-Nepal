@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -311,12 +312,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     }
 
     if (image.startsWith('http')) {
-      return Image.network(
-        image,
+      return CachedNetworkImage(
+        imageUrl: image,
         key: ValueKey(image),
         width: double.infinity,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
+        placeholder: (context, url) => const Center(
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+        ),
+        errorWidget: (context, url, error) => const Center(
+          child: Icon(Icons.broken_image, color: Colors.grey),
+        ),
       );
     } else if (image.startsWith('data:image')) {
       try {

@@ -10,7 +10,9 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloudinary_public/cloudinary_public.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../services/location_service.dart';
+import '../services/storage_service.dart';
 import 'auth/login_screen.dart';
 
 const _kGreen = Color(0xFF2E7D32);
@@ -1105,14 +1107,23 @@ class _EarningsTabState extends State<_EarningsTab> {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      setState(() {
-        _qrCodeImgPath = pickedFile.path;
-      });
-      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set({
-        'paymentQrCode': pickedFile.path,
-      }, SetOptions(merge: true));
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("QR updated")));
+      final storageService = StorageService();
+      final imageUrl = await storageService.uploadImage(File(pickedFile.path), 'qrcodes');
+      
+      if (imageUrl != null) {
+        setState(() {
+          _qrCodeImgPath = imageUrl;
+        });
+        await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set({
+          'paymentQrCode': imageUrl,
+        }, SetOptions(merge: true));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("QR updated")));
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to upload QR")));
+        }
       }
     }
   }
@@ -1202,7 +1213,12 @@ class _EarningsTabState extends State<_EarningsTab> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: kIsWeb || _qrCodeImgPath!.startsWith('http')
-                                  ? Image.network(_qrCodeImgPath!, fit: BoxFit.contain)
+                                  ? CachedNetworkImage(
+                                      imageUrl: _qrCodeImgPath!,
+                                      fit: BoxFit.contain,
+                                      placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                                      errorWidget: (context, url, error) => const Icon(Icons.error),
+                                    )
                                   : Image.file(File(_qrCodeImgPath!), fit: BoxFit.contain),
                             ),
                           )
@@ -1349,20 +1365,14 @@ class _ProfileTabState extends State<_ProfileTab> {
     String? finalLicenseUrl = _licenseImgPath;
 
     try {
-      final cloudinary = CloudinaryPublic('drt6y7f8v', 'agridirect_unsigned', cache: false);
+      final storageService = StorageService();
 
       if (_profileImgPath != null && !(_profileImgPath!.startsWith('http'))) {
-        CloudinaryResponse response = await cloudinary.uploadFile(
-          CloudinaryFile.fromFile(_profileImgPath!, folder: 'profile_pics'),
-        );
-        finalProfileUrl = response.secureUrl;
+        finalProfileUrl = await storageService.uploadImage(File(_profileImgPath!), 'profile_pics');
       }
 
       if (_licenseImgPath != null && !(_licenseImgPath!.startsWith('http'))) {
-        CloudinaryResponse response = await cloudinary.uploadFile(
-          CloudinaryFile.fromFile(_licenseImgPath!, folder: 'licenses'),
-        );
-        finalLicenseUrl = response.secureUrl;
+        finalLicenseUrl = await storageService.uploadImage(File(_licenseImgPath!), 'licenses');
       }
 
       final updates = <String, dynamic>{
@@ -1424,7 +1434,7 @@ class _ProfileTabState extends State<_ProfileTab> {
                     backgroundColor: _kGreen.withValues(alpha: 0.1),
                     backgroundImage: _profileImgPath != null
                         ? (kIsWeb || _profileImgPath!.startsWith('http')
-                        ? NetworkImage(_profileImgPath!)
+                        ? CachedNetworkImageProvider(_profileImgPath!) as ImageProvider
                         : FileImage(File(_profileImgPath!)) as ImageProvider)
                         : null,
                     child: _profileImgPath == null ? const Icon(Icons.person, size: 44, color: _kGreen) : null,
@@ -1465,7 +1475,12 @@ class _ProfileTabState extends State<_ProfileTab> {
                     width: double.infinity,
                     height: 110,
                     child: kIsWeb || _licenseImgPath!.startsWith('http')
-                        ? Image.network(_licenseImgPath!, fit: BoxFit.cover)
+                        ? CachedNetworkImage(
+                            imageUrl: _licenseImgPath!,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                            errorWidget: (context, url, error) => const Icon(Icons.error),
+                          )
                         : Image.file(File(_licenseImgPath!), fit: BoxFit.cover),
                   ),
                 )

@@ -27,6 +27,7 @@ dependencies:
   http: ^1.2.2
   shared_preferences: ^2.5.2
   intl: ^0.20.2
+  path: ^1.9.1
 
   geolocator: ^14.0.2
   geocoding: ^3.0.0
@@ -37,6 +38,7 @@ dependencies:
 
   cached_network_image: ^3.4.1
   provider: ^6.1.2
+  aws_s3_upload:
 
   image_picker: ^1.2.2
   image: ^4.2.0
@@ -57,11 +59,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
   assets:
     - assets/
     - assets/images/
 
+dependency_overrides:
+  http: ^1.2.2
 
 flutter_launcher_icons:
   android: true
