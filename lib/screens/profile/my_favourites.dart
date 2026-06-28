@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -191,7 +192,14 @@ class MyFavouritesScreen extends StatelessWidget {
   Widget _buildImage(String path) {
     if (path.isEmpty || path == 'null') return const Icon(Icons.image_not_supported, color: Colors.grey);
     if (path.startsWith('http')) {
-      return Image.network(path, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image));
+      return CachedNetworkImage(
+        imageUrl: path,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => const Center(
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+        ),
+        errorWidget: (context, url, error) => const Icon(Icons.broken_image),
+      );
     }
     return Image.asset(
       path.startsWith('assets/') ? path : 'assets/images/$path',

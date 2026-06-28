@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -330,79 +331,90 @@ class AdminPage extends StatelessWidget {
   }
 
   Widget _buildOrdersList(BuildContext context, AdminViewModel viewModel) {
-    return StreamBuilder<List<OrderModel>>(
-      stream: viewModel.getOrders(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        var orders = snapshot.data!;
-
-        if (viewModel.showPendingOnly) {
-          orders = orders.where((order) => order.status.toLowerCase() == 'pending').toList();
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(20),
-          itemCount: orders.length,
-          itemBuilder: (context, index) {
-            final order = orders[index];
-            return Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                title: Text("Order #${order.id}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text("Customer: ${order.userName ?? 'N/A'} | Status: ${order.status}"),
-                trailing: DropdownButton<String>(
-                  value: ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].contains(order.status) ? order.status : 'Pending',
-                  items: ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                  onChanged: (val) => viewModel.updateOrderStatus(order.id, val!),
+    return RefreshIndicator(
+      onRefresh: () async => viewModel.getOrders(),
+      child: StreamBuilder<List<OrderModel>>(
+        stream: viewModel.getOrders(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          var orders = snapshot.data!;
+  
+          if (viewModel.showPendingOnly) {
+            orders = orders.where((order) => order.status.toLowerCase() == 'pending').toList();
+          }
+  
+          return ListView.builder(
+            padding: const EdgeInsets.all(20),
+            itemCount: orders.length,
+            itemBuilder: (context, index) {
+              final order = orders[index];
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  title: Text("Order #${order.id}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("Customer: ${order.userName ?? 'N/A'} | Status: ${order.status}"),
+                  trailing: DropdownButton<String>(
+                    value: ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].contains(order.status) ? order.status : 'Pending',
+                    items: ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                    onChanged: (val) => viewModel.updateOrderStatus(order.id, val!),
+                  ),
                 ),
-              ),
-            );
-          },
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
   Widget _buildProductsList(BuildContext context, AdminViewModel viewModel) {
-    return StreamBuilder<List<Product>>(
-      stream: viewModel.getProducts(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final products = snapshot.data!;
-
-        return Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("Total Products in Catalog: ${products.length}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ElevatedButton.icon(onPressed: () => _showAddProductDialog(context, viewModel), icon: const Icon(Icons.add), label: const Text("Add Product")),
-                ],
+    return RefreshIndicator(
+      onRefresh: () async => viewModel.getProducts(),
+      child: StreamBuilder<List<Product>>(
+        stream: viewModel.getProducts(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          final products = snapshot.data!;
+  
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("Total Products in Catalog: ${products.length}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ElevatedButton.icon(onPressed: () => _showAddProductDialog(context, viewModel), icon: const Icon(Icons.add), label: const Text("Add Product")),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                itemCount: products.length,
-                itemBuilder: (context, index) {
-                  final product = products[index];
-                  return Card(
-                    child: ListTile(
-                      leading: Image.network(product.image, width: 50, errorBuilder: (_, __, ___) => const Icon(Icons.image)),
-                      title: Text(product.title),
-                      subtitle: Text("Category: ${product.category} | Price: Rs. ${product.price}"),
-                      trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => viewModel.deleteProduct(product.id!)),
-                    ),
-                  );
-                },
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: products.length,
+                  itemBuilder: (context, index) {
+                    final product = products[index];
+                    return Card(
+                      child: ListTile(
+                        leading: CachedNetworkImage(
+                          imageUrl: product.image,
+                          width: 50,
+                          placeholder: (context, url) => const CircularProgressIndicator(strokeWidth: 2),
+                          errorWidget: (context, url, error) => const Icon(Icons.image),
+                        ),
+                        title: Text(product.title),
+                        subtitle: Text("Category: ${product.category} | Price: Rs. ${product.price}"),
+                        trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => viewModel.deleteProduct(product.id!)),
+                      ),
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 

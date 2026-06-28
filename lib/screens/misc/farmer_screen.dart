@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -10,6 +11,7 @@ import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/screens/ai/crop_health_screen.dart';
+import 'package:farmtech_agridirect/services/storage_service.dart';
 
 class FarmerScreen extends StatefulWidget {
   const FarmerScreen({super.key});
@@ -412,7 +414,14 @@ class _ProductsTabState extends State<_ProductsTab> {
                   leading: imageUrl != null && imageUrl.isNotEmpty
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(imageUrl, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.eco, color: Colors.green)),
+                          child: CachedNetworkImage(
+                            imageUrl: imageUrl,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const CircularProgressIndicator(strokeWidth: 2),
+                            errorWidget: (context, url, error) => const Icon(Icons.eco, color: Colors.green),
+                          ),
                         )
                       : const Icon(Icons.eco, color: Colors.green),
                   title: Text(data['name'] ?? 'Product'),
@@ -490,7 +499,19 @@ class _ProductsTabState extends State<_ProductsTab> {
                             ? ClipRRect(
                                 borderRadius: BorderRadius.circular(15),
                                 child: kIsWeb
-                                    ? Image.network(selectedImage!.path, fit: BoxFit.cover)
+                                    ? (selectedImage!.path.startsWith('http')
+                                        ? CachedNetworkImage(
+                                            imageUrl: selectedImage!.path,
+                                            fit: BoxFit.cover,
+                                            placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                                            errorWidget: (context, url, error) => const Icon(Icons.error),
+                                          )
+                                        : CachedNetworkImage(
+                                            imageUrl: selectedImage!.path,
+                                            fit: BoxFit.cover,
+                                            placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                                            errorWidget: (context, url, error) => const Icon(Icons.error),
+                                          ))
                                     : Image.file(File(selectedImage!.path), fit: BoxFit.cover),
                               )
                             : const Column(
@@ -563,30 +584,11 @@ class _ProductsTabState extends State<_ProductsTab> {
 
                           String? imageUrl;
                           try {
-                            final cloudinary = CloudinaryPublic('drt6y7f8v', 'agridirect_unsigned', cache: false);
-                            CloudinaryResponse response;
-                            
-                            if (kIsWeb) {
-                              // On Web, reading bytes is more reliable than using the blob path
-                              final Uint8List bytes = await selectedImage!.readAsBytes();
-                              response = await cloudinary.uploadFile(
-                                CloudinaryFile.fromByteData(
-                                  ByteData.sublistView(bytes),
-                                  identifier: selectedImage!.name,
-                                  folder: 'products',
-                                ),
-                              );
-                            } else {
-                              response = await cloudinary.uploadFile(
-                                CloudinaryFile.fromFile(selectedImage!.path, folder: 'products'),
-                              );
-                            }
-                            imageUrl = response.secureUrl;
+                            final storageService = StorageService();
+                            imageUrl = await storageService.uploadImage(File(selectedImage!.path), 'products');
+                            if (imageUrl == null) throw "Upload failed";
                           } catch (e) {
-                            String errorMsg = e.toString();
-                            if (errorMsg.contains("401")) {
-                              errorMsg = "Unauthorized (401): Please ensure your Cloudinary Upload Preset ('agridirect_unsigned') is explicitly set to 'Unsigned' in your Cloudinary Dashboard Settings. If it's set to 'Signed', this request will fail.";
-                            }
+                            String errorMsg = "Error uploading to R2: $e";
                             throw errorMsg;
                           }
 
@@ -871,7 +873,13 @@ class _StockTab extends StatelessWidget {
                   children: [
                     Expanded(
                       child: image.isNotEmpty
-                          ? Image.network(image, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _fallbackImage())
+                          ? CachedNetworkImage(
+                              imageUrl: image,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(color: Colors.grey[200]),
+                              errorWidget: (context, url, error) => _fallbackImage(),
+                            )
                           : _fallbackImage(),
                     ),
                     Padding(

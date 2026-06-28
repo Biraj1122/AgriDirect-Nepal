@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/cart_model.dart';
@@ -259,11 +260,14 @@ class _CartScreenState extends State<CartScreen> {
 
   Widget _buildProductImage(String imagePath) {
     if (imagePath.startsWith('http')) {
-      return Image.network(
-        imagePath,
+      return CachedNetworkImage(
+        imageUrl: imagePath,
         key: ValueKey(imagePath), // Forces reload when URL changes in Firestore
         fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) => const Center(
+        placeholder: (context, url) => const Center(
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+        ),
+        errorWidget: (context, url, error) => const Center(
           child: Icon(Icons.image_not_supported, size: 40, color: Colors.grey),
         ),
       );
