@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -324,10 +325,13 @@ class OrderHistoryScreen extends StatelessWidget {
 
   Widget _buildProductImage(String imagePath) {
     if (imagePath.startsWith('http')) {
-      return Image.network(
-        imagePath,
+      return CachedNetworkImage(
+        imageUrl: imagePath,
         fit: BoxFit.contain,
-        errorBuilder: (context, error, stackTrace) => const Center(
+        placeholder: (context, url) => const Center(
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+        ),
+        errorWidget: (context, url, error) => const Center(
           child: Icon(Icons.image_not_supported, size: 20, color: Colors.grey),
         ),
       );

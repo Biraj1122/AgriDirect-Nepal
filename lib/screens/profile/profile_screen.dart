@@ -128,12 +128,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         controller: _bannerController,
                         itemCount: _bannerImages.length,
                         itemBuilder: (context, index) {
-                          return Image.network(
-                            _bannerImages[index],
+                          return CachedNetworkImage(
+                            imageUrl: _bannerImages[index],
                             fit: BoxFit.cover,
                             color: Colors.black.withValues(alpha: 0.2),
                             colorBlendMode: BlendMode.darken,
-                            errorBuilder: (context, error, stackTrace) => Container(
+                            placeholder: (context, url) => Container(
+                              color: Colors.green.shade100,
+                              child: const Center(
+                                child: CircularProgressIndicator(color: Colors.green),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
                               color: Colors.green.shade100,
                               child: const Icon(Icons.agriculture, size: 50, color: Colors.green),
                             ),

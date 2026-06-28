@@ -257,10 +257,8 @@ class _SignupScreenState extends State<SignupScreen> {
                           
                           if (!mounted) return;
                           
-                          final navigator = Navigator.of(context);
-                          
-                          navigator.pop(); // Dismiss loading dialog
-                          navigator.push(
+                          Navigator.of(context).pop(); // Dismiss loading dialog
+                          Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => VerifyEmailScreen(
                                 email: email,
