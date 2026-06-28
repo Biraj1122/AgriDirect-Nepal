@@ -525,7 +525,12 @@ class _ProductsTabState extends State<_ProductsTab> {
                     child: GestureDetector(
                       onTap: () async {
                         try {
-                          final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+                          final XFile? image = await _picker.pickImage(
+                            source: ImageSource.gallery,
+                            maxWidth: 1024, // Resize to 1024px max width
+                            maxHeight: 1024, // Resize to 1024px max height
+                            imageQuality: 85, // Compress to 85% quality
+                          );
                           if (image != null) {
                             setModalState(() => selectedImage = image);
                           }
@@ -633,11 +638,13 @@ class _ProductsTabState extends State<_ProductsTab> {
                           String? imageUrl;
                           try {
                             final storageService = StorageService();
+                            debugPrint("Starting image upload to 'products' folder...");
                             imageUrl = await storageService.uploadImage(selectedImage!, 'products');
-                            if (imageUrl == null) throw "Upload failed";
+                            if (imageUrl == null) throw "Upload failed (Check Firebase Storage Rules and Logs)";
+                            debugPrint("Upload successful: $imageUrl");
                           } catch (e) {
-                            String errorMsg = "Error uploading image: $e";
-                            throw errorMsg;
+                            debugPrint("Upload Error: $e");
+                            throw "Image upload failed: $e";
                           }
 
                           await FirebaseFirestore.instance.collection('products').add({
