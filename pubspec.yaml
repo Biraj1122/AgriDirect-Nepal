@@ -38,11 +38,9 @@ dependencies:
 
   cached_network_image: ^3.4.1
   provider: ^6.1.2
-  aws_s3_upload:
 
   image_picker: ^1.2.2
   image: ^4.2.0
-  google_generative_ai: ^0.4.4
 
   cloudinary_public:
 

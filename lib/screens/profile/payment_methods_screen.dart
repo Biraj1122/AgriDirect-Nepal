@@ -44,6 +44,11 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         final customerLat = widget.selectedLat ?? UserData.defaultLat;
         final customerLng = widget.selectedLng ?? UserData.defaultLng;
 
+        // Calculate revenue sharing (20% cut for Admin)
+        final adminRevenue = (widget.subtotal * 0.20) + (widget.deliveryFee * 0.20);
+        final farmerRevenue = widget.subtotal * 0.80;
+        final deliveryRevenue = widget.deliveryFee * 0.80;
+
         // Save Order to Firestore
         final docRef = await FirebaseFirestore.instance.collection('orders').add({
           'userId': user.uid,
@@ -54,6 +59,9 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           'subtotal': widget.subtotal,
           'deliveryFee': widget.deliveryFee,
           'total': widget.total,
+          'adminRevenue': adminRevenue,
+          'farmerRevenue': farmerRevenue,
+          'deliveryRevenue': deliveryRevenue,
           'lat': customerLat ?? UserData.defaultLat,
           'lng': customerLng ?? UserData.defaultLng,
           'customerLat': customerLat ?? UserData.defaultLat,
