@@ -115,7 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2),
                       ],
                     ),
-                    child: Image.asset("assets/images/logo_full.png", height: 100, width: 100, fit: BoxFit.contain),
+                    child: Image.asset("assets/images/logo_full.png", height: 100, width: 70, fit: BoxFit.contain),
                   ),
                 ),
                 const SizedBox(height: 15),
