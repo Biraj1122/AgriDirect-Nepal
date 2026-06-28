@@ -314,23 +314,26 @@ class _DashboardTabState extends State<_DashboardTab> {
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('orders')
-                  .where('farmerUid', isEqualTo: widget.uid)
                   .where('status', isEqualTo: 'Pending Farmer')
                   .snapshots(),
               builder: (context, snap) {
                 if (snap.hasError) return Text("Error: ${snap.error}");
                 if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
+                
                 final docs = snap.data!.docs;
-                if (docs.isEmpty) return const SizedBox();
+                // Only show orders that haven't been picked by another farmer
+                final availableDocs = docs.where((d) => (d.data() as Map)['farmerUid'] == null).toList();
+
+                if (availableDocs.isEmpty) return const SizedBox();
                 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Active Delivery Requests", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
+                    const Text("Available Orders (Unassigned)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
                     const SizedBox(height: 12),
-                    ...docs.map((doc) {
+                    ...availableDocs.map((doc) {
                       final data = doc.data() as Map<String, dynamic>;
-                      return _OrderAcceptanceTile(orderId: doc.id, data: data);
+                      return _OrderAcceptanceTile(orderId: doc.id, data: data, currentFarmerUid: widget.uid, currentFarmName: widget.farmName);
                     }),
                     const SizedBox(height: 20),
                   ],
@@ -752,7 +755,39 @@ class _DeliveryCard extends StatelessWidget {
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  onPressed: () => docRef.update({'status': 'Awaiting Pickup'}),
+                  onPressed: () async {
+                    await docRef.update({'status': 'Awaiting Pickup'});
+                    
+                    final userId = data['userId'];
+                    if (userId != null) {
+                      await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
+                        'title': 'Order Ready for Pickup',
+                        'body': 'Your order has been packed and is ready for the delivery person.',
+                        'createdAt': FieldValue.serverTimestamp(),
+                        'isRead': false,
+                        'type': 'delivery_status',
+                        'status': 'Awaiting Pickup',
+                        'orderId': orderId,
+                      });
+                    }
+
+                    // Notify all Delivery Persons that a new pickup is available
+                    final ridersSnap = await FirebaseFirestore.instance
+                        .collection('users')
+                        .where('role', isEqualTo: 'Delivery Person')
+                        .get();
+                    
+                    for (var rDoc in ridersSnap.docs) {
+                      await FirebaseFirestore.instance.collection('users').doc(rDoc.id).collection('notifications').add({
+                        'title': 'New Pickup Available!',
+                        'body': 'A package is ready for pickup at ${data['farmName'] ?? 'a nearby farm'}.',
+                        'createdAt': FieldValue.serverTimestamp(),
+                        'isRead': false,
+                        'type': 'pickup_alert',
+                        'orderId': orderId,
+                      });
+                    }
+                  },
                   child: const Text("Ready for Pickup", style: TextStyle(color: Colors.white)),
                 ),
               ),
@@ -766,7 +801,9 @@ class _DeliveryCard extends StatelessWidget {
 class _OrderAcceptanceTile extends StatelessWidget {
   final String orderId;
   final Map<String, dynamic> data;
-  const _OrderAcceptanceTile({required this.orderId, required this.data});
+  final String currentFarmerUid;
+  final String currentFarmName;
+  const _OrderAcceptanceTile({required this.orderId, required this.data, required this.currentFarmerUid, required this.currentFarmName});
 
   @override
   Widget build(BuildContext context) {
@@ -783,14 +820,18 @@ class _OrderAcceptanceTile extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(data['itemsSummary'] ?? 'New Order', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text("Total: Rs. ${data['total'] ?? 0}", style: const TextStyle(color: Colors.green, fontSize: 13)),
-                  Text("Customer: ${data['userName']}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(data['itemsSummary'] ?? 'New Order', style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                    Text("Total: Rs. ${data['total'] ?? 0}", style: const TextStyle(color: Colors.green, fontSize: 13)),
+                    Text("Customer: ${data['userName']}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                    Text("Address: ${data['deliveryAddress']}", style: const TextStyle(color: Colors.grey, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               const Text("NEW REQUEST", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 10)),
             ],
           ),
@@ -801,8 +842,19 @@ class _OrderAcceptanceTile extends StatelessWidget {
             child: ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
               onPressed: () async {
+                // Check if already taken
+                final freshDoc = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
+                if (freshDoc.data()?['farmerUid'] != null) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Too late! Another farm already accepted this order.")));
+                  }
+                  return;
+                }
+
                 await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
                   'status': 'Farmer Accepted',
+                  'farmerUid': currentFarmerUid,
+                  'farmName': currentFarmName,
                   'updatedAt': FieldValue.serverTimestamp(),
                 });
                 
@@ -810,9 +862,10 @@ class _OrderAcceptanceTile extends StatelessWidget {
                 if (userId != null) {
                   await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
                     'title': 'Farmer Accepted Your Order',
-                    'body': 'A farm has accepted your order and is preparing it.',
+                    'body': '$currentFarmName has accepted your order and is preparing it.',
                     'createdAt': FieldValue.serverTimestamp(),
                     'isRead': false,
+                    'type': 'delivery_status',
                   });
                 }
               },
