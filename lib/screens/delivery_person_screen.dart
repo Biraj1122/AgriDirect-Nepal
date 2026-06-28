@@ -609,7 +609,7 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('orders')
-          .where('status', whereIn: ['Awaiting Pickup', 'Picked Up', 'On the way'])
+          .where('status', whereIn: ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: _kGreen));
@@ -617,6 +617,7 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
         final myOrders = docs.where((d) => (d.data() as Map<String, dynamic>)['deliveryId'] == widget.user.uid).toList();
         final available = docs.where((d) {
           final data = d.data() as Map<String, dynamic>;
+          // Show orders that are ready for pickup and not yet taken by a rider
           return (data['deliveryId'] == null || data['deliveryId'] == '') && data['status'] == 'Awaiting Pickup';
         }).toList();
 
@@ -1585,6 +1586,7 @@ class _OrderCard extends StatelessWidget {
   String _nextLabel(String status) {
     if (status == 'Awaiting Pickup') return "Accept & Pickup";
     if (status == 'Picked Up') return "Start Delivery";
+    if (status == 'On the way') return "Mark Arrived";
     return "Mark Delivered";
   }
 
@@ -1609,6 +1611,8 @@ class _OrderCard extends StatelessWidget {
       next = 'Picked Up';
     } else if (status == 'Picked Up') {
       next = 'On the way';
+    } else if (status == 'On the way') {
+      next = 'Arrived';
     }
 
     try {
@@ -1655,6 +1659,9 @@ class _OrderCard extends StatelessWidget {
         } else if (next == 'On the way') {
           title = 'On The Way';
           body = 'Rider is coming with package #$shortId';
+        } else if (next == 'Arrived') {
+          title = 'Rider Arrived';
+          body = 'Your rider has reached the location. Please collect package #$shortId';
         } else if (next == 'Delivered') {
           title = 'Delivered';
           body = 'Package #$shortId has been dropped off';

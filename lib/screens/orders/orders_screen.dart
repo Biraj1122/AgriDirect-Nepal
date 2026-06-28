@@ -37,10 +37,12 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   LatLng? riderPosition;
   Timer? _trackingTimer;
   StreamSubscription? _orderSubscription;
+  StreamSubscription? _riderLocationSubscription;
 
   bool _isLoading = true;
   String? _activeOrderId;
   bool _noActiveOrder = false;
+  bool _isConfirmingReceipt = false;
 
   @override
   void initState() {
@@ -64,7 +66,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         final query = await FirebaseFirestore.instance
             .collection('orders')
             .where('userId', isEqualTo: user.uid)
-            .where('status', whereIn: ['Pending', 'Processing', 'Picked Up', 'On the way', 'Arrived'])
+            .where('status', whereIn: ['Pending Farmer', 'Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
             .orderBy('createdAt', descending: true)
             .limit(1)
             .get();
@@ -119,9 +121,9 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
           return;
         }
 
-        bool shouldStartSimulation = false;
-        if (deliveryId == null && newDeliveryId != null) {
-          shouldStartSimulation = true;
+        bool shouldStartRiderTracking = false;
+        if (deliveryId != newDeliveryId && newDeliveryId != null) {
+          shouldStartRiderTracking = true;
         }
 
         setState(() {
@@ -131,9 +133,41 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
           deliveryId = newDeliveryId;
         });
 
-        if (shouldStartSimulation) {
-          _calculateTrackingDetails();
-          _startTrackingSimulation();
+        if (shouldStartRiderTracking) {
+          _listenToRiderLocation(newDeliveryId);
+        }
+      }
+    });
+  }
+
+  void _listenToRiderLocation(String riderId) {
+    _riderLocationSubscription?.cancel();
+    _riderLocationSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(riderId)
+        .snapshots()
+        .listen((doc) {
+      if (doc.exists && mounted) {
+        final data = doc.data() as Map<String, dynamic>;
+        final lat = (data['lat'] as num?)?.toDouble();
+        final lng = (data['lng'] as num?)?.toDouble();
+
+        if (lat != null && lng != null) {
+          final newPos = LatLng(lat, lng);
+          setState(() {
+            riderPosition = newPos;
+            if (UserData.hasAddress && UserData.defaultLat != null) {
+              distance = _locationService.calculateDistance(
+                lat, lng, UserData.defaultLat!, UserData.defaultLng!,
+              );
+              estimatedTime = (distance * 2).round();
+            }
+          });
+          _updateRiderMarker();
+          
+          if (_riderCardController.status == AnimationStatus.dismissed) {
+             _riderCardController.forward();
+          }
         }
       }
     });
@@ -154,54 +188,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     ));
   }
 
-  void _calculateTrackingDetails() {
-    if (UserData.hasAddress && UserData.defaultLat != null && UserData.defaultLng != null) {
-      distance = _locationService.calculateDistance(
-        UserData.hqLat,
-        UserData.hqLng,
-        UserData.defaultLat!,
-        UserData.defaultLng!,
-      );
-      estimatedTime = (distance * 2).round() + 10;
-      riderPosition = const LatLng(UserData.hqLat, UserData.hqLng);
-    }
-  }
-
-  void _startTrackingSimulation() {
-    if (!UserData.hasAddress || UserData.defaultLat == null || UserData.defaultLng == null) return;
-    if (_trackingTimer != null) return;
-
-    _riderCardController.forward();
-
-    const steps = 50;
-    int currentStep = 0;
-
-    _trackingTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      if (currentStep >= steps) {
-        timer.cancel();
-        return;
-      }
-
-      currentStep++;
-      double t = currentStep / steps;
-
-      double lat = UserData.hqLat + (UserData.defaultLat! - UserData.hqLat) * t;
-      double lng = UserData.hqLng + (UserData.defaultLng! - UserData.hqLng) * t;
-
-      if (mounted) {
-        setState(() {
-          riderPosition = LatLng(lat, lng);
-          double remainingDist = _locationService.calculateDistance(
-            lat, lng, UserData.defaultLat!, UserData.defaultLng!,
-          );
-          distance = remainingDist;
-          estimatedTime = (remainingDist * 2).round();
-          if (estimatedTime < 1) status = "Arrived";
-        });
-        _updateRiderMarker();
-      }
-    });
-  }
+  // Removed simulation logic in favor of real tracking
 
   void _onMapCreated(MapLibreMapController controller) {
     mapController = controller;
@@ -220,13 +207,6 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
       ));
     }
 
-    await mapController!.addSymbol(SymbolOptions(
-      geometry: const LatLng(UserData.hqLat, UserData.hqLng),
-      iconImage: "marker-15",
-      iconColor: "#00FF00",
-      iconSize: 1.5,
-    ));
-
     if (riderPosition != null) {
       riderSymbol = await mapController!.addSymbol(SymbolOptions(
         geometry: riderPosition!,
@@ -239,11 +219,31 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   }
 
   void _updateRiderMarker() {
-    if (mapController != null && riderSymbol != null && riderPosition != null) {
-      mapController!.updateSymbol(riderSymbol!, SymbolOptions(
-        geometry: riderPosition!,
-      ));
+    if (mapController != null && riderPosition != null) {
+      if (riderSymbol == null) {
+        mapController!.addSymbol(SymbolOptions(
+          geometry: riderPosition!,
+          iconImage: "airport-15",
+          iconRotate: 90,
+          iconColor: "#4CAF50",
+          iconSize: 2.5,
+        )).then((s) => riderSymbol = s);
+      } else {
+        mapController!.updateSymbol(riderSymbol!, SymbolOptions(
+          geometry: riderPosition!,
+        ));
+      }
     }
+  }
+
+  String _getStatusMessage() {
+    if (status == 'Pending Farmer') return "Waiting for farm to accept your order...";
+    if (status == 'Farmer Accepted') return "Farm is preparing your fresh items...";
+    if (status == 'Awaiting Pickup') return "Items packed! Waiting for rider pickup...";
+    if (status == 'Picked Up') return "Rider has picked up your order!";
+    if (status == 'On the way') return "Rider is heading to your location...";
+    if (status == 'Arrived') return "Rider has arrived! Please collect your order.";
+    return "Processing your order...";
   }
 
   @override
@@ -251,8 +251,10 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     _riderCardController.dispose();
     _trackingTimer?.cancel();
     _orderSubscription?.cancel();
+    _riderLocationSubscription?.cancel();
     super.dispose();
   }
+
 
   void _handleBack() async {
     if (Navigator.canPop(context)) {
@@ -347,6 +349,66 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     }
   }
 
+  Future<void> _confirmReceipt() async {
+    if (_activeOrderId == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Received Order", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("Confirm that you have received the items?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("No", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Yes, Received", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _isConfirmingReceipt = true);
+      try {
+        await FirebaseFirestore.instance
+            .collection('orders')
+            .doc(_activeOrderId)
+            .update({
+          'status': 'Delivered',
+          'receivedAt': FieldValue.serverTimestamp(),
+        });
+        
+        if (deliveryId != null) {
+          await FirebaseFirestore.instance.collection('users').doc(deliveryId).collection('notifications').add({
+            'title': 'Delivery Confirmed',
+            'body': 'Customer has confirmed receipt of order #${_activeOrderId!.substring(0, 6)}',
+            'createdAt': FieldValue.serverTimestamp(),
+            'isRead': false,
+          });
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Order completed! Thank you."), backgroundColor: Colors.green),
+          );
+          _handleBack();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error: $e")),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isConfirmingReceipt = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -384,9 +446,43 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                   styleString: "https://tiles.openfreemap.org/styles/positron",
                 ),
                 
-                if (hasRider)
+                if (status != "Delivered" && status != "Cancelled")
                   Positioned(
                     top: 20,
+                    left: 15,
+                    right: 15,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, 5))],
+                      ),
+                      child: Row(
+                        children: [
+                          if (!hasRider && status == 'Pending Farmer')
+                            const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+                            )
+                          else
+                            const Icon(Icons.info_outline, color: Colors.green),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Text(
+                              _getStatusMessage(),
+                              style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                if (hasRider)
+                  Positioned(
+                    top: 90,
                     left: 15,
                     right: 15,
                     child: SlideTransition(
@@ -418,37 +514,6 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                       ),
                     ),
                   ),
-
-                if (!hasRider && status != "Delivered" && status != "Cancelled")
-                  Positioned(
-                    top: 20,
-                    left: 15,
-                    right: 15,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 15, offset: const Offset(0, 5))],
-                      ),
-                      child: const Row(
-                        children: [
-                          SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
-                          ),
-                          SizedBox(width: 15),
-                          Expanded(
-                            child: Text(
-                              "Waiting for rider to accept...",
-                              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -463,15 +528,33 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                       child: Column(
                         children: [
                           _step(Icons.check_circle, "Order Received", "We have received your order", status != "Cancelled"),
-                          _step(Icons.agriculture, "Farm Accepted", "Nearest farm is preparing", status == "Farmer Accepted" || status == "Picked Up" || status == "On the way" || status == "Arrived" || status == "Delivered"),
+                          _step(Icons.agriculture, "Farm Accepted", "Nearest farm is preparing", status != "Pending Farmer" && status != "Cancelled"),
                           _step(Icons.inventory, "Picked Up", "Rider has picked up items", status == "Picked Up" || status == "On the way" || status == "Arrived" || status == "Delivered"),
                           _step(Icons.local_shipping, "On the way", "Rider is heading to you", status == "On the way" || status == "Arrived" || status == "Delivered"),
-                          _step(Icons.home, "Delivered", "Enjoy your produce", status == "Arrived" || status == "Delivered", isLast: true),
+                          _step(Icons.home, "Delivered", "Enjoy your produce", status == "Delivered", isLast: true),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
+                  if (status == "On the way" || status == "Arrived")
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 55,
+                        child: ElevatedButton(
+                          onPressed: _isConfirmingReceipt ? null : _confirmReceipt,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                          ),
+                          child: _isConfirmingReceipt 
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text("I have Received my Product", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                    ),
                   if (_canCancelOrder())
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
