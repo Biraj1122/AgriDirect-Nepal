@@ -739,7 +739,8 @@ class _DeliveryCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Order #$orderId", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                Expanded(child: Text("Order #$orderId", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                const SizedBox(width: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(color: statusColor.withAlpha(30), borderRadius: BorderRadius.circular(20)),
@@ -748,7 +749,7 @@ class _DeliveryCard extends StatelessWidget {
               ],
             ),
             const Divider(height: 24),
-            Text(data['itemsSummary'] ?? 'Products ordered', style: const TextStyle(fontSize: 14)),
+            Text(data['itemsSummary'] ?? 'Products ordered', style: const TextStyle(fontSize: 14), maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 8),
             Text("Total: Rs. ${data['total'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
             const SizedBox(height: 16),
