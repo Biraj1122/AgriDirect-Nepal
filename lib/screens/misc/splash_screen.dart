@@ -200,9 +200,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                             child: Hero(
                               tag: 'app_logo',
                               child: Image.asset(
-                                "assets/images/logo_full.png",
-                                height: isLargeScreen ? 160 : 130,
-                                width: isLargeScreen ? 160 : 130,
+                                "assets/images/logo_adaptive.png",
+                                height: isLargeScreen ? 160 : 160,
+                                width: isLargeScreen ? 160 : 160,
                                 fit: BoxFit.contain,
                                 errorBuilder: (context, error, stackTrace) =>
                                     Icon(Icons.eco, size: isLargeScreen ? 100 : 80, color: Colors.green),
