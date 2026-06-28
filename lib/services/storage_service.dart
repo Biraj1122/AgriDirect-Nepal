@@ -48,7 +48,7 @@ class StorageService {
       final String? result = await AwsS3.uploadFile(
         accessKey: _accessKey,
         secretKey: _secretKey,
-        file: tempFile!,
+        file: tempFile,
         bucket: _bucketName,
         region: _region,
         destDir: cleanFolder,
@@ -62,10 +62,6 @@ class StorageService {
       }
       return null;
     } catch (e) {
-      debugPrint('R2 Upload Error: $e');
-      return null;
-    } finally {
-      // Cleanup renamed temporary file
       if (tempFile != null && await tempFile.exists()) {
         try {
           await tempFile.delete();
