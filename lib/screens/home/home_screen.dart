@@ -303,9 +303,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   children: [
-                    _buildPromoCard("10% OFF", "On all organic fertilizers", Colors.orange, Icons.percent),
+                    _buildPromoCard("10% OFF", "On all organic vegetables", Colors.orange, Icons.percent),
                     _buildPromoCard("FREE DELIVERY", "Orders above Rs. 2000", Colors.blue, Icons.local_shipping),
-                    _buildPromoCard("COMBO DEAL", "Get seeds with every tool", Colors.purple, Icons.card_giftcard),
+                    _buildPromoCard("COMBO DEALS", "Get freebies on every purchase of dry-fruits above Rs.4000", Colors.purple, Icons.card_giftcard),
                   ],
                 ),
               ),

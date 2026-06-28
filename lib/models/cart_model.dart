@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'product.dart';
+import 'user_data.dart';
 
 class CartItem {
   final Product product;
@@ -74,8 +76,37 @@ class CartModel extends ChangeNotifier {
 
   double get deliveryFee {
     if (_items.isEmpty) return 0;
-    // Base fee 40 + 5 per km
-    return 40 + (_distanceInKm * 5);
+    if (UserData.defaultLat == null || UserData.defaultLng == null) return 0;
+
+    // Set to store unique farm UIDs and their distances
+    final Set<String> uniqueFarms = {};
+    double totalDeliveryFee = 0;
+
+    for (var item in _items) {
+      final product = item.product;
+      if (product.farmerUid != null && !uniqueFarms.contains(product.farmerUid)) {
+        uniqueFarms.add(product.farmerUid!);
+
+        // Calculate distance from user to this specific farm
+        double distance = 0;
+        if (product.farmerLat != null && product.farmerLng != null) {
+          distance = Geolocator.distanceBetween(
+                UserData.defaultLat!,
+                UserData.defaultLng!,
+                product.farmerLat!,
+                product.farmerLng!,
+              ) / 1000;
+        } else {
+          // Fallback to HQ distance if farm coordinates are missing
+          distance = UserData.distanceToHq;
+        }
+
+        // Rs. 10 per km
+        totalDeliveryFee += (distance * 10);
+      }
+    }
+
+    return totalDeliveryFee > 0 ? totalDeliveryFee : 40; // Minimum 40 if distance is very low
   }
 
   double get total => subtotal + deliveryFee;
