@@ -10,6 +10,8 @@ class Product {
   final String? season;
   final String? farmerUid;
   final String? farmName;
+  final double? farmerLat;
+  final double? farmerLng;
 
   Product({
     this.id,
@@ -23,6 +25,8 @@ class Product {
     this.season,
     this.farmerUid,
     this.farmName,
+    this.farmerLat,
+    this.farmerLng,
   });
 
   Map<String, dynamic> toMap() {
@@ -38,6 +42,8 @@ class Product {
       'season': season,
       'farmerUid': farmerUid,
       'farmName': farmName,
+      'farmerLat': farmerLat,
+      'farmerLng': farmerLng,
     };
   }
 
@@ -57,6 +63,8 @@ class Product {
       season: map['season'],
       farmerUid: map['farmerUid'],
       farmName: map['farmName'],
+      farmerLat: (map['farmerLat'] as num?)?.toDouble(),
+      farmerLng: (map['farmerLng'] as num?)?.toDouble(),
     );
   }
 }

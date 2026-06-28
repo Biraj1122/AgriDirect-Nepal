@@ -1,13 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/screens/ai/crop_health_screen.dart';
@@ -85,7 +83,12 @@ class _FarmerScreenState extends State<FarmerScreen> {
 
     final List<Widget> pages = [
       _DashboardTab(farmerName: farmerName, farmName: farmName, farmLocation: farmLocation, uid: uid),
-      _ProductsTab(uid: uid, farmName: farmName),
+      _ProductsTab(
+        uid: uid,
+        farmName: farmName,
+        farmerLat: _farmerData?['farmLat'],
+        farmerLng: _farmerData?['farmLng'],
+      ),
       _DeliveryTab(uid: uid),
       const CropHealthScreen(),
       _StockTab(uid: uid),
@@ -385,7 +388,13 @@ class _DashboardTabState extends State<_DashboardTab> {
 
 class _ProductsTab extends StatefulWidget {
   final String uid, farmName;
-  const _ProductsTab({required this.uid, required this.farmName});
+  final dynamic farmerLat, farmerLng;
+  const _ProductsTab({
+    required this.uid,
+    required this.farmName,
+    this.farmerLat,
+    this.farmerLng,
+  });
 
   @override
   State<_ProductsTab> createState() => _ProductsTabState();
@@ -601,6 +610,8 @@ class _ProductsTabState extends State<_ProductsTab> {
                             'price': priceVal,
                             'farmerUid': widget.uid,
                             'farmName': widget.farmName,
+                            'farmerLat': widget.farmerLat,
+                            'farmerLng': widget.farmerLng,
                             'unit': unit.text,
                             'imageUrl': imageUrl,
                             'image': imageUrl, // Added for compatibility with Product model

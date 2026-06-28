@@ -104,14 +104,32 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               children: [
                 const SizedBox(height: 50),
-                Image.asset("assets/images/logo.png", height: 140),
-                const SizedBox(height: 10),
+                Hero(
+                  tag: 'app_logo',
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2),
+                      ],
+                    ),
+                    child: Image.asset("assets/images/logo_full.png", height: 100, width: 100, fit: BoxFit.contain),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                const Text(
+                  "Farmtech",
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green, letterSpacing: 1.2),
+                ),
+                const SizedBox(height: 5),
                 const Text(
                   "Welcome!",
                   style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 8),

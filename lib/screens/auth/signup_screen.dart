@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'verify_otp_screen.dart';
+import '../misc/farm_osm_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -21,6 +22,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
   final TextEditingController farmNameController = TextEditingController();
   final TextEditingController farmLocationController = TextEditingController();
+  double? farmLat;
+  double? farmLng;
 
   String selectedRole = 'Customer';
   final List<String> roles = ['Customer', 'Farmer', 'Delivery Person'];
@@ -84,14 +87,32 @@ class _SignupScreenState extends State<SignupScreen> {
                   ],
                 ),
                 const SizedBox(height: 20),
-                Image.asset("assets/images/logo.png", height: 140),
+                Hero(
+                  tag: 'app_logo',
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2),
+                      ],
+                    ),
+                    child: Image.asset("assets/images/logo_full.png", height: 90, width: 90, fit: BoxFit.contain),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                const Text(
+                  "Farmtech",
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green),
+                ),
                 const SizedBox(height: 10),
                 const Text(
                   "Create Account",
                   style: TextStyle(
-                    fontSize: 28,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                    color: Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -138,10 +159,33 @@ class _SignupScreenState extends State<SignupScreen> {
                     icon: Icons.agriculture_outlined,
                   ),
                   const SizedBox(height: 18),
-                  buildTextField(
+                  TextFormField(
                     controller: farmLocationController,
-                    hintText: "Farm Location",
-                    icon: Icons.location_on_outlined,
+                    readOnly: true,
+                    onTap: () async {
+                      final result = await Navigator.push<Map<String, dynamic>>(
+                        context,
+                        MaterialPageRoute(builder: (_) => const FarmOsmScreen()),
+                      );
+                      if (result != null) {
+                        setState(() {
+                          farmLocationController.text = result['address'];
+                          farmLat = result['lat'];
+                          farmLng = result['lng'];
+                        });
+                      }
+                    },
+                    decoration: InputDecoration(
+                      hintText: "Farm Location (Tap to pick)",
+                      prefixIcon: const Icon(Icons.location_on_outlined),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(5),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    validator: (value) => (value == null || value.isEmpty) ? "Required" : null,
                   ),
                   const SizedBox(height: 18),
                 ],
@@ -246,6 +290,8 @@ class _SignupScreenState extends State<SignupScreen> {
                           if (selectedRole == 'Farmer') {
                             userData['farmName'] = farmNameController.text.trim();
                             userData['farmLocation'] = farmLocationController.text.trim();
+                            userData['farmLat'] = farmLat;
+                            userData['farmLng'] = farmLng;
                           }
                           await FirebaseFirestore.instance
                               .collection('users')

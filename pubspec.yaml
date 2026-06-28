@@ -69,6 +69,6 @@ dependency_overrides:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/images/logo.png
+  image_path: assets/images/logo_full.png
   adaptive_icon_background: "#ffffff"
-  adaptive_icon_foreground: assets/images/logo1.png
+  adaptive_icon_foreground: assets/images/logo_adaptive.png
