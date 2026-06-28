@@ -1,74 +1,45 @@
-import 'dart:io';
-import 'package:aws_s3_upload/aws_s3_upload.dart';
-import 'package:path/path.dart' as p;
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 class StorageService {
-  // Cloudflare R2 credentials (S3-compatible)
-  // Note: For production, these should be handled securely (e.g., via a proxy/worker or pre-signed URLs)
-  static const String _accountId = 'YOUR_CLOUDFLARE_ACCOUNT_ID';
-  static const String _accessKey = 'YOUR_ACCESS_KEY';
-  static const String _secretKey = 'YOUR_SECRET_KEY';
-  static const String _bucketName = 'agridirect-uploads';
-  static const String _customDomain = 'https://pub-xxxx.r2.dev'; // Your R2 Public Bucket URL or Custom Domain
-  static const String _region = 'auto'; // R2 uses 'auto'
+  final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  /// Uploads a file to Cloudflare R2 and returns the public URL
-  Future<String?> uploadImage(File file, String folder) async {
-    File? tempFile;
+  /// Uploads an image to Firebase Storage and returns the download URL.
+  /// This implementation is cross-platform (Web & Mobile) and uses 
+  /// the project's default Firebase configuration.
+  Future<String?> uploadImage(XFile xFile, String folder) async {
     try {
-      if (!await file.exists()) {
-        debugPrint('Upload Error: File does not exist at ${file.path}');
-        return null;
-      }
+      // Use xFile.name to get the extension as xFile.path can be a blob URL on web
+      final String ext = p.extension(xFile.name).toLowerCase();
+      final String fileName = '${DateTime.now().millisecondsSinceEpoch}${ext.isEmpty ? ".jpg" : ext}';
+      final storageRef = _storage.ref().child(folder).child(fileName);
 
-      final extension = p.extension(file.path);
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}$extension';
-      
-      // We must rename the file locally because the package uses the local filename as the S3 object key
-      final String tempPath = p.join(Directory.systemTemp.path, fileName);
-      tempFile = await file.copy(tempPath);
-
-      // Determine content type based on extension
+      // Determine content type for better browser/cloud handling
       String contentType = 'image/jpeg';
-      final extLower = extension.toLowerCase();
-      if (extLower == '.png') {
+      if (ext == '.png') {
         contentType = 'image/png';
-      } else if (extLower == '.gif') {
+      } else if (ext == '.gif') {
         contentType = 'image/gif';
-      } else if (extLower == '.webp') {
+      } else if (ext == '.webp') {
         contentType = 'image/webp';
       }
 
-      final cleanFolder = folder.trim().replaceAll(RegExp(r'^/|/$'), '');
-
-      // Using AwsS3.uploadFile from aws_s3_upload package
-      // Note: The current package version (1.5.0) uses the AWS S3 endpoint by default.
-      // For Cloudflare R2, if this method fails, a manual implementation using the S3 API is required.
-      final String? result = await AwsS3.uploadFile(
-        accessKey: _accessKey,
-        secretKey: _secretKey,
-        file: tempFile,
-        bucket: _bucketName,
-        region: _region,
-        destDir: cleanFolder,
-        contentType: contentType,
-      );
-
-      if (result != null) {
-        // Construct the URL using the custom domain and path
-        final String folderPath = cleanFolder.isEmpty ? "" : "$cleanFolder/";
-        return '$_customDomain/$folderPath$fileName';
-      }
-      return null;
+      final metadata = SettableMetadata(contentType: contentType);
+      
+      // readAsBytes() works on both Web and Mobile
+      final bytes = await xFile.readAsBytes();
+      
+      // putData is the most reliable cross-platform upload method
+      final TaskSnapshot uploadTask = await storageRef.putData(bytes, metadata);
+      
+      // Get and return the public download URL
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+      return downloadUrl;
     } catch (e) {
-      if (tempFile != null && await tempFile.exists()) {
-        try {
-          await tempFile.delete();
-        } catch (e) {
-          debugPrint('Failed to delete temp file: $e');
-        }
-      }
+      debugPrint('StorageService Error: $e');
+      return null;
     }
   }
 }

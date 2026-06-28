@@ -241,7 +241,7 @@ class AdminPage extends StatelessWidget {
         int pendingDeliveries = 0;
 
         for (var order in orders) {
-          totalRevenue += order.total;
+          totalRevenue += order.adminRevenue;
           String status = order.status.toLowerCase();
           if (status == 'pending' || status == 'processing') pendingDeliveries++;
         }
@@ -524,13 +524,13 @@ class AdminPage extends StatelessWidget {
         double totalRevenue = 0;
 
         for (var order in orders) {
-          totalRevenue += order.total;
+          totalRevenue += order.adminRevenue;
 
           String dateKey = "Today";
           if (order.createdAt != null) {
             dateKey = "${order.createdAt!.day}/${order.createdAt!.month}";
           }
-          revenueByDate[dateKey] = (revenueByDate[dateKey] ?? 0) + order.total;
+          revenueByDate[dateKey] = (revenueByDate[dateKey] ?? 0) + order.adminRevenue;
         }
 
         List<FlSpot> spots = [];

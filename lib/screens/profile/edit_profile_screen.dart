@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cloudinary_public/cloudinary_public.dart';
+import 'package:farmtech_agridirect/services/storage_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   final String currentName;
@@ -30,6 +30,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _profileImageUrl;
   File? _imageFile;
   final _picker = ImagePicker();
+  final _storageService = StorageService();
 
   @override
   void initState() {
@@ -61,21 +62,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  Future<String?> _uploadToCloudinary() async {
-    if (_imageFile == null) return _profileImageUrl;
-
-    try {
-      final cloudinary = CloudinaryPublic('drt6y7f8v', 'agridirect_unsigned', cache: false);
-      CloudinaryResponse response = await cloudinary.uploadFile(
-        CloudinaryFile.fromFile(_imageFile!.path, folder: 'profile_pics'),
-      );
-      return response.secureUrl;
-    } catch (e) {
-      debugPrint("Cloudinary Upload Error: $e");
-      return null;
-    }
-  }
-
   Future<void> _updateProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -86,7 +72,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (user != null) {
         String? imageUrl = _profileImageUrl;
         if (_imageFile != null) {
-          imageUrl = await _uploadToCloudinary();
+          final xFile = XFile(_imageFile!.path);
+          imageUrl = await _storageService.uploadImage(xFile, 'profile_pics');
           if (imageUrl == null) throw "Failed to upload image";
         }
 

@@ -8,7 +8,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
-import 'package:farmtech_agridirect/screens/ai/crop_health_screen.dart';
 import 'package:farmtech_agridirect/services/storage_service.dart';
 
 class FarmerScreen extends StatefulWidget {
@@ -90,7 +89,6 @@ class _FarmerScreenState extends State<FarmerScreen> {
         farmerLng: _farmerData?['farmLng'],
       ),
       _DeliveryTab(uid: uid),
-      const CropHealthScreen(),
       _StockTab(uid: uid),
     ];
 
@@ -119,7 +117,6 @@ class _FarmerScreenState extends State<FarmerScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
           BottomNavigationBarItem(icon: Icon(Icons.storefront_outlined), label: 'Products'),
           BottomNavigationBarItem(icon: Icon(Icons.local_shipping_outlined), label: 'Deliveries'),
-          BottomNavigationBarItem(icon: Icon(Icons.health_and_safety_outlined), label: 'Health'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), label: 'Stock'),
         ],
       ),
@@ -351,13 +348,52 @@ class _DashboardTabState extends State<_DashboardTab> {
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).snapshots(),
               builder: (context, snapshot) {
-                final orders = snapshot.data?.docs ?? [];
-                final pending = orders.where((o) => (o.data() as Map)['status'] == 'Pending').length;
-                return Row(
+                final docs = snapshot.data?.docs ?? [];
+                
+                double totalEarnings = 0;
+                int pendingCount = 0;
+                
+                for (var doc in docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  // Only count revenue from Delivered orders and use the new 80% share field
+                  if (data['status'] == 'Delivered') {
+                    totalEarnings += (data['farmerRevenue'] ?? 0).toDouble();
+                  }
+                  
+                  String status = (data['status'] ?? '').toString().toLowerCase();
+                  if (status.contains('pending') || status.contains('accepted')) {
+                    pendingCount++;
+                  }
+                }
+
+                return Column(
                   children: [
-                    _StatCard(title: "Orders", value: "${orders.length}", icon: Icons.receipt_long, color: Colors.blue),
-                    const SizedBox(width: 12),
-                    _StatCard(title: "Pending", value: "$pending", icon: Icons.pending, color: Colors.orange),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 10)],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("TOTAL EARNINGS (80%)", style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          Text("Rs. ${totalEarnings.toStringAsFixed(2)}", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green)),
+                          const Text("After 20% admin cut", style: TextStyle(color: Colors.grey, fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    Row(
+                      children: [
+                        _StatCard(title: "Total Orders", value: "${docs.length}", icon: Icons.receipt_long, color: Colors.blue),
+                        const SizedBox(width: 12),
+                        _StatCard(title: "Active Tasks", value: "$pendingCount", icon: Icons.pending_actions, color: Colors.orange),
+                      ],
+                    ),
                   ],
                 );
               },
@@ -597,10 +633,10 @@ class _ProductsTabState extends State<_ProductsTab> {
                           String? imageUrl;
                           try {
                             final storageService = StorageService();
-                            imageUrl = await storageService.uploadImage(File(selectedImage!.path), 'products');
+                            imageUrl = await storageService.uploadImage(selectedImage!, 'products');
                             if (imageUrl == null) throw "Upload failed";
                           } catch (e) {
-                            String errorMsg = "Error uploading to R2: $e";
+                            String errorMsg = "Error uploading image: $e";
                             throw errorMsg;
                           }
 
