@@ -82,4 +82,31 @@ class LocationService {
     }
     return [];
   }
+
+  Future<Map<String, dynamic>> getRouteData(double startLat, double startLng, double endLat, double endLng) async {
+    try {
+      final url = "https://router.project-osrm.org/route/v1/driving/$startLng,$startLat;$endLng,$endLat?overview=full&geometries=geojson";
+      final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          final route = data['routes'][0];
+          final coordinates = route['geometry']['coordinates'] as List;
+          return {
+            'points': coordinates.map((c) => [c[1] as double, c[0] as double]).toList(),
+            'distance': route['distance'] as num, // in meters
+            'duration': route['duration'] as num, // in seconds
+          };
+        }
+      }
+    } catch (e) {
+      debugPrint("OSRM Routing Error: $e");
+    }
+    return {
+      'points': [[startLat, startLng], [endLat, endLng]],
+      'distance': Geolocator.distanceBetween(startLat, startLng, endLat, endLng),
+      'duration': 0,
+    };
+  }
 }

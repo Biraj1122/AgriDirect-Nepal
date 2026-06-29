@@ -7,6 +7,91 @@ service cloud.firestore {
     // Allow anyone (guests and users) to read all data.
     // This ensures Home items, Categories, and Farmer profiles always load.
     match /{document=**} {
+    function userExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'agrifarmadmin@gmail.com' ||
+        (userExists() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Admin')
+      );
+    }
+
+    function isFarmer() {
+      return isSignedIn() && userExists() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Farmer';
+    }
+
+    function isDeliveryPerson() {
+      return isSignedIn() && userExists() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Delivery Person';
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Prevent role escalation: users cannot create themselves as Admin or change their role to Admin
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+                    request.resource.data.get('role', 'Customer') != 'Admin';
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (request.auth.uid == userId && request.resource.data.get('role', resource.data.get('role', 'Customer')) == resource.data.get('role', 'Customer'))
+      );
+
+      // Notifications subcollection
+      match /notifications/{notificationId} {
+        allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      }
+    }
+
+    // --- FARMER & RIDER DATA ---
+    match /farmers/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+    match /riders/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // --- PRODUCTS (Farmer Access) ---
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if isFarmer() || isAdmin();
+      allow update, delete: if (isFarmer() && resource.data.farmerUid == request.auth.uid) || isAdmin();
+    }
+
+    // --- ORDERS ---
+    match /orders/{orderId} {
+      allow create: if isSignedIn();
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid ||
+        resource.data.farmerUid == request.auth.uid ||
+        resource.data.deliveryId == request.auth.uid ||
+        (isDeliveryPerson() && resource.data.status in ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived']) ||
+        (isFarmer() && resource.data.status == 'Pending Farmer')
+      );
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.userId == request.auth.uid ||
+        resource.data.farmerUid == request.auth.uid ||
+        resource.data.deliveryId == request.auth.uid ||
+        (isFarmer() && resource.data.status == 'Pending Farmer' && (resource.data.farmerUid == null || resource.data.farmerUid == "")) ||
+        (isDeliveryPerson() && resource.data.status in ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'] && (resource.data.deliveryId == null || resource.data.deliveryId == "" || resource.data.deliveryId == request.auth.uid))
+      );
+      allow delete: if isAdmin();
+    }
+
+    // --- DELIVERY ALERTS ---
+    match /delivery_alerts/{alertId} {
+      allow read: if isDeliveryPerson() || isAdmin();
+      allow create: if isFarmer() || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    // Products (Master Catalog)
+    match /master_catalog/{productId} {
       allow read: if true;
     }
 

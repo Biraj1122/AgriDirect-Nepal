@@ -58,7 +58,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   Future<void> _fetchCategories() async {
     try {
-      final snapshot = await FirebaseFirestore.instance.collection('categories').get();
+      // Add a timeout to prevent hanging on poor connections
+      final snapshot = await FirebaseFirestore.instance
+          .collection('categories')
+          .get()
+          .timeout(const Duration(seconds: 5));
+
       if (snapshot.docs.isNotEmpty) {
         final fetched = snapshot.docs.map((doc) {
           final data = doc.data();
@@ -67,7 +72,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             'name': data['name'] ?? 'Category',
             'icon': iconCode != null
                 ? IconData(iconCode, fontFamily: 'MaterialIcons')
-                : Icons.category,
+                : Icons.category_rounded,
           };
         }).toList();
 
@@ -88,6 +93,13 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   void _useFallbackCategories() {
+        return;
+      }
+    } catch (e) {
+      debugPrint("Firestore Categories Error: $e. Using local defaults.");
+    }
+
+    // Fallback to local categories if Firestore fails or is empty
     if (mounted) {
       setState(() {
         _categories = [
@@ -297,7 +309,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     top: 8,
                     right: 8,
                     child: GestureDetector(
-                      onTap: () => widget.onExternalFavouriteToggle(product),
+                      onTap: () {
+                        widget.onExternalFavouriteToggle(product);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(isFavorite ? "Removed from Favourites" : "Added to Favourites"),
+                            duration: const Duration(seconds: 1),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: isFavorite ? Colors.black87 : Colors.redAccent,
+                          ),
+                        );
+                      },
                       child: CircleAvatar(
                         radius: 14,
                         backgroundColor: Colors.white.withValues(alpha: 0.8),
@@ -404,6 +426,23 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
             final filteredProducts = _getFilteredProducts(allProducts);
 
+            if (snapshot.hasError) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                    const SizedBox(height: 16),
+                    Text("Error: ${snapshot.error}"),
+                    ElevatedButton(
+                      onPressed: () => setState(() {}),
+                      child: const Text("Retry"),
+                    )
+                  ],
+                ),
+              );
+            }
+
             return Column(
               children: [
                 _buildAppBar(),
@@ -435,10 +474,30 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                 childAspectRatio: 0.72,
                                 crossAxisSpacing: 14,
                                 mainAxisSpacing: 14,
+                      : (allProducts.isEmpty 
+                          ? const Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
+                                  SizedBox(height: 16),
+                                  Text("No products available in the shop"),
+                                ],
                               ),
-                              itemCount: filteredProducts.length,
-                              itemBuilder: (context, index) => _buildProductCard(filteredProducts[index]),
-                            )),
+                            )
+                          : (filteredProducts.isEmpty
+                              ? const Center(child: Text("No products found in this category"))
+                              : GridView.builder(
+                                  padding: const EdgeInsets.all(16),
+                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    childAspectRatio: 0.72,
+                                    crossAxisSpacing: 14,
+                                    mainAxisSpacing: 14,
+                                  ),
+                                  itemCount: filteredProducts.length,
+                                  itemBuilder: (context, index) => _buildProductCard(filteredProducts[index]),
+                                ))),
                 ),
               ],
             );
