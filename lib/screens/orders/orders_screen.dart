@@ -34,7 +34,9 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   late Animation<Offset> _riderCardOffsetAnimation;
 
   Symbol? riderSymbol;
+  Symbol? customerSymbol;
   LatLng? riderPosition;
+  LatLng? customerPosition;
   Timer? _trackingTimer;
   StreamSubscription? _orderSubscription;
   StreamSubscription? _riderLocationSubscription;
@@ -113,6 +115,8 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         final newRiderName = data['deliveryName'] ?? "Assigning...";
         final newRiderPhone = data['deliveryPhone'] ?? data['userPhone'];
         final newDeliveryId = data['deliveryId'];
+        final double? custLat = (data['customerLat'] as num?)?.toDouble();
+        final double? custLng = (data['customerLng'] as num?)?.toDouble();
 
         if (widget.orderId == null && (newStatus == 'Delivered' || newStatus == 'Cancelled')) {
           setState(() {
@@ -131,6 +135,10 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
           riderName = newRiderName;
           riderPhone = newRiderPhone;
           deliveryId = newDeliveryId;
+          if (custLat != null && custLng != null) {
+            customerPosition = LatLng(custLat, custLng);
+            _updateCustomerMarker();
+          }
         });
 
         if (shouldStartRiderTracking) {
@@ -156,9 +164,12 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
           final newPos = LatLng(lat, lng);
           setState(() {
             riderPosition = newPos;
-            if (UserData.hasAddress && UserData.defaultLat != null) {
+            final targetLat = customerPosition?.latitude ?? UserData.defaultLat;
+            final targetLng = customerPosition?.longitude ?? UserData.defaultLng;
+            
+            if (targetLat != null && targetLng != null) {
               distance = _locationService.calculateDistance(
-                lat, lng, UserData.defaultLat!, UserData.defaultLng!,
+                lat, lng, targetLat, targetLng,
               );
               estimatedTime = (distance * 2).round();
             }
@@ -198,24 +209,8 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   Future<void> _addMarkers() async {
     if (mapController == null) return;
 
-    if (UserData.hasAddress && UserData.defaultLat != null && UserData.defaultLng != null) {
-      await mapController!.addSymbol(SymbolOptions(
-        geometry: LatLng(UserData.defaultLat!, UserData.defaultLng!),
-        iconImage: "marker-15",
-        iconColor: "#FF0000",
-        iconSize: 2.0,
-      ));
-    }
-
-    if (riderPosition != null) {
-      riderSymbol = await mapController!.addSymbol(SymbolOptions(
-        geometry: riderPosition!,
-        iconImage: "airport-15",
-        iconRotate: 90,
-        iconColor: "#4CAF50",
-        iconSize: 2.5,
-      ));
-    }
+    _updateCustomerMarker();
+    _updateRiderMarker();
   }
 
   void _updateRiderMarker() {
@@ -231,6 +226,27 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
       } else {
         mapController!.updateSymbol(riderSymbol!, SymbolOptions(
           geometry: riderPosition!,
+        ));
+      }
+    }
+  }
+
+  void _updateCustomerMarker() {
+    final lat = customerPosition?.latitude ?? UserData.defaultLat;
+    final lng = customerPosition?.longitude ?? UserData.defaultLng;
+
+    if (mapController != null && lat != null && lng != null) {
+      final pos = LatLng(lat, lng);
+      if (customerSymbol == null) {
+        mapController!.addSymbol(SymbolOptions(
+          geometry: pos,
+          iconImage: "marker-15",
+          iconColor: "#FF0000",
+          iconSize: 2.0,
+        )).then((s) => customerSymbol = s);
+      } else {
+        mapController!.updateSymbol(customerSymbol!, SymbolOptions(
+          geometry: pos,
         ));
       }
     }
