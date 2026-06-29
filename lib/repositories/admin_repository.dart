@@ -83,6 +83,68 @@ class AdminRepository {
     });
   }
 
+  Stream<List<Product>> getPendingProducts() {
+    return _firestore
+        .collection('products')
+        .where('status', isEqualTo: 'pending')
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.map((doc) => Product.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id)).toList();
+    });
+  }
+
+  Future<void> approveProduct(Product product) async {
+    // 1. Update product status in 'products' collection
+    await _firestore.collection('products').doc(product.id).update({'status': 'approved'});
+
+    // 2. Check if it's already in 'master_catalog'
+    final masterSnap = await _firestore
+        .collection('master_catalog')
+        .where('title', isEqualTo: product.title)
+        .get();
+
+    if (masterSnap.docs.isEmpty) {
+      // Add to master_catalog if unique
+      await _firestore.collection('master_catalog').add({
+        'name': product.title,
+        'title': product.title,
+        'price': double.tryParse(product.price) ?? 0,
+        'unit': product.unit,
+        'image': product.image,
+        'imageUrl': product.image,
+        'description': product.description,
+        'longDescription': product.longDescription,
+        'category': product.category ?? 'General',
+        'farmerUid': product.farmerUid,
+        'farmName': product.farmName,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }
+
+    // 3. Notify farmer
+    if (product.farmerUid != null) {
+      await _firestore.collection('users').doc(product.farmerUid).collection('notifications').add({
+        'title': 'Product Approved',
+        'body': 'Your product "${product.title}" has been approved and added to the catalog.',
+        'createdAt': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+    }
+  }
+
+  Future<void> rejectProduct(String productId, String? farmerUid, String title) async {
+    await _firestore.collection('products').doc(productId).update({'status': 'rejected'});
+    
+    if (farmerUid != null) {
+      await _firestore.collection('users').doc(farmerUid).collection('notifications').add({
+        'title': 'Product Rejected',
+        'body': 'Your product "$title" was not approved by admin.',
+        'createdAt': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+    }
+  }
+
   Future<void> addProduct(Map<String, dynamic> productData) async {
     await _firestore.collection('master_catalog').add(productData);
   }

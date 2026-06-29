@@ -24,7 +24,13 @@ class AdminViewModel extends ChangeNotifier {
   bool get showPendingOnly => _showPendingOnly;
 
   AdminViewModel() {
+    refreshAdminState();
+  }
+
+  void refreshAdminState() {
+    _isCheckingRole = true;
     _adminEmail = FirebaseAuth.instance.currentUser?.email;
+    notifyListeners();
     _checkRole();
   }
 
@@ -78,6 +84,7 @@ class AdminViewModel extends ChangeNotifier {
 
   Stream<List<OrderModel>> getOrders() => _repository.getOrders();
   Stream<List<Product>> getProducts() => _repository.getProducts();
+  Stream<List<Product>> getPendingProducts() => _repository.getPendingProducts();
   Stream<List<UserModel>> getUsers() => _repository.getUsers();
   Stream<List<ResearchSubmissionModel>> getResearchSubmissions() => _repository.getResearchSubmissions();
   Stream<List<PriceRequestModel>> getPriceRequests() => _repository.getPriceRequests();
@@ -88,6 +95,16 @@ class AdminViewModel extends ChangeNotifier {
 
   Future<void> declinePriceRequest(PriceRequestModel request) async {
     await _repository.declinePriceRequest(request.id, request.farmerUid, request.productName);
+  }
+
+  Future<void> approveProduct(Product product) async {
+    await _repository.approveProduct(product);
+    notifyListeners();
+  }
+
+  Future<void> rejectProduct(Product product) async {
+    await _repository.rejectProduct(product.id!, product.farmerUid, product.title);
+    notifyListeners();
   }
 
   Future<void> updateOrderStatus(String id, String status) async {

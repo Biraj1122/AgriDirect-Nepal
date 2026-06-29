@@ -21,6 +21,22 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
   debugPrint("Authenticated as: ${user.email} (UID: ${user.uid})");
 
   final List<Map<String, dynamic>> nepalProducts = [
+    {
+      "title": "Local Adhuwa (Ginger)",
+      "name": "Local Adhuwa (Ginger)",
+      "category": "Vegetables",
+      "season": "All Year",
+      "price": 120,
+      "unit": "kg",
+      "description": "Organic fresh ginger from Palpa.",
+      "longDescription": "High-quality fresh ginger roots from Palpa, known for their strong aroma and medicinal properties. Essential for Nepali tea and curries.",
+      "s3Url": "s3://agridirectproducts/Vegetables/ginger.png",
+      "imageUrl": "https://agridirectproducts.s3.ap-south-1.amazonaws.com/Vegetables/ginger.png",
+      "image": "ginger.png",
+      "farmName": "Palpa Ginger Cooperatives",
+      "badge": "Organic",
+      "badgeColor": 0xFF2E7D32,
+    },
     // --- VEGETABLES ---
     {
       "title": "Rayo Ko Saag",
@@ -31,7 +47,8 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
       "unit": "bundle",
       "description": "Organic broad leaf mustard from Bhaktapur.",
       "longDescription": "Freshly harvested Rayo ko Saag from the fertile fields of Bhaktapur. Known for its distinct sharp flavor and high Vitamin A content.",
-      "imageUrl": "https://annapurnaexpress.prixacdn.net/media/albums/IMG_2523_UQZnF2Fh0l.jpeg",
+      "s3Url": "s3://agridirectproducts/Vegetables/Rayo_Ko_Saag.jpg", // Pointing to your S3 folder
+      "imageUrl": "https://agridirectproducts.s3.ap-south-1.amazonaws.com/Vegetables/Rayo_Ko_Saag.jpg",
       "farmName": "Bhaktapur Organic Farm",
       "badge": "Fresh",
       "badgeColor": 0xFF2E7D32,
@@ -45,7 +62,8 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
       "unit": "kg",
       "description": "Famous red potatoes from Mude, Sindhupalchowk.",
       "longDescription": "These red potatoes are grown in the high altitudes of Mude. They are famous for their texture and taste.",
-      "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRLPtnQdjTrSieQkYgtuRNsgCxHoIJEs02VklgMAAdwWA&s=10",
+      "s3Url": "s3://agridirectproducts/Vegetables/Mude_ko_Aloo.jpg",
+      "imageUrl": "https://agridirectproducts.s3.ap-south-1.amazonaws.com/Vegetables/Mude_ko_Aloo.jpg",
       "farmName": "Mude Highland Cooperatives",
       "badge": "Top Rated",
       "badgeColor": 0xFFF57C00,
@@ -59,7 +77,8 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
       "unit": "kg",
       "description": "Crispy white cauliflower from Palung valley.",
       "longDescription": "Palung is famous for its off-season cauliflower. These are grown at high altitudes resulting in a sweeter, crispier texture.",
-      "imageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRwDEaxl5aeZGXdTksnMXYatNvIvKvjr83GSlky0Mc6cM-QkkboLVAy2uI&s=10",
+      "s3Url": "s3://agridirectproducts/Vegetables/Local_Kauli.jpg",
+      "imageUrl": "https://agridirectproducts.s3.ap-south-1.amazonaws.com/Vegetables/Local_Kauli.jpg",
       "farmName": "Mountain Fresh Palung",
       "badge": "High Altitude",
       "badgeColor": 0xFF1976D2,
@@ -531,6 +550,11 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
   final CollectionReference products = FirebaseFirestore.instance.collection('master_catalog');
   debugPrint("Beginning catalog seeding. Target products: ${nepalProducts.length}");
 
+  // Also seed into 'products' collection for immediate display if needed, 
+  // or ensure the app reads from master_catalog. 
+  // Based on the app structure, 'products' is usually where items are listed.
+  final CollectionReference liveProducts = FirebaseFirestore.instance.collection('products');
+
   for (var product in nepalProducts) {
     bool catMatch = selectedCategories == null || selectedCategories.contains(product['category']);
     bool seasonMatch = selectedSeasons == null || selectedSeasons.contains(product['season']) || product['season'] == 'All Year';
@@ -539,10 +563,8 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
       try {
         product['addedAt'] = FieldValue.serverTimestamp();
         product['updatedAt'] = FieldValue.serverTimestamp();
-        // product['stock'] = 100; // Stock should now be per-farmer
         product['rating'] = 4.8;
         product['image'] = product['imageUrl'];
-        // product['farmerUid'] = user.uid; // Master catalog items are not tied to a farmer
         
         String docId = product['name'].toString().replaceAll(' ', '_').toLowerCase();
         
@@ -551,6 +573,12 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
           const Duration(seconds: 10),
           onTimeout: () => throw Exception("Write timeout for ${product['name']}"),
         );
+
+        // Also add to the main products collection so they show up in the app
+        // We set a default farmerUid if one isn't present, or leave it for the store to handle
+        Map<String, dynamic> liveProduct = Map.from(product);
+        liveProduct['isSample'] = true;
+        await liveProducts.doc(docId).set(liveProduct, SetOptions(merge: true));
         
         productSuccess++;
         debugPrint("✓ Seeded Product: ${product['name']}");

@@ -129,7 +129,10 @@ class MyFavouritesScreen extends StatelessWidget {
                   child: Container(
                     width: double.infinity,
                     color: Colors.grey.shade100,
-                    child: _buildImage(image),
+                    child: Hero(
+                      tag: 'fav_${product['docId'] ?? name}',
+                      child: _buildImage(image),
+                    ),
                   ),
                 ),
                 Positioned(
@@ -166,16 +169,14 @@ class MyFavouritesScreen extends StatelessWidget {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
                     onPressed: () {
-                      cartModel.add(Product(
-                        title: name,
-                        price: price,
-                        image: image,
-                        unit: product['unit'] ?? 'kg',
-                        description: product['description'] ?? '',
-                        longDescription: '',
-                      ));
+                      final p = Product.fromMap(product, docId: product['docId']);
+                      cartModel.add(p);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("$name added to cart"), duration: const Duration(seconds: 1)),
+                        SnackBar(
+                          content: Text("$name added to cart"), 
+                          duration: const Duration(seconds: 1),
+                          behavior: SnackBarBehavior.floating,
+                        ),
                       );
                     },
                     child: const Text("Add to Cart", style: TextStyle(color: Colors.white, fontSize: 11)),

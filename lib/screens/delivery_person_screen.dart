@@ -445,7 +445,7 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(15),
-                      boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, offset: const Offset(0, 5))],
+                      boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, 5))],
                     ),
                     child: TextField(
                       controller: _searchController,
@@ -465,7 +465,7 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
                     Container(
                       margin: const EdgeInsets.only(top: 10),
                       constraints: const BoxConstraints(maxHeight: 250),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)]),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20)]),
                       child: ListView.separated(
                         shrinkWrap: true,
                         itemCount: _searchResults.length,
@@ -1154,7 +1154,7 @@ class _EarningsTabState extends State<_EarningsTab> {
           if (snapshot.hasData) {
             for (var doc in snapshot.data!.docs) {
               final data = doc.data() as Map<String, dynamic>;
-              // Use new deliveryRevenue field (80% share). 
+              // Use new delivery revenue field (80% share).
               // Legacy orders will result in 0, effectively resetting the dashboard.
               final earning = (data['deliveryRevenue'] ?? 0).toDouble();
               totalEarnings += earning;

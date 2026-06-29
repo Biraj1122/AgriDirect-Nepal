@@ -6,6 +6,7 @@ import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/orders_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -33,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final PageController _featuredPageController = PageController();
   int _currentFeaturedIndex = 0;
   Timer? _featuredTimer;
+  int _itemCount = 0;
 
   @override
   void initState() {
@@ -41,17 +43,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startFeaturedTimer() {
+    _featuredTimer?.cancel();
     _featuredTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (_featuredPageController.hasClients) {
-        int nextIndex = (_currentFeaturedIndex + 1) % 4;
+      if (_featuredPageController.hasClients && _itemCount > 1) {
+        int nextIndex = (_currentFeaturedIndex + 1) % _itemCount;
         _featuredPageController.animateToPage(
           nextIndex,
           duration: const Duration(milliseconds: 800),
           curve: Curves.easeInOut,
         );
-        setState(() {
-          _currentFeaturedIndex = nextIndex;
-        });
       }
     });
   }
@@ -150,21 +150,29 @@ class _HomeScreenState extends State<HomeScreen> {
                       .collection('orders')
                       .where('userId', isEqualTo: user.uid)
                       .where('status', whereIn: ['Pending Farmer', 'Farmer Accepted', 'Picked Up', 'On the way', 'Arrived'])
-                      .orderBy('createdAt', descending: true)
-                      .limit(1)
+                      // Removed orderBy to avoid index requirement
+                      .limit(5)
                       .snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
-                      debugPrint("Firestore Error: ${snapshot.error}");
+                      debugPrint("Firestore Order Stream Error: ${snapshot.error}");
                       return const SizedBox();
                     }
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                       return const SizedBox();
                     }
 
-                    final order = snapshot.data!.docs.first.data() as Map<String, dynamic>;
+                    // Sort in memory
+                    final docs = snapshot.data!.docs.toList();
+                    docs.sort((a, b) {
+                      final aTime = ((a.data() as Map)['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+                      final bTime = ((b.data() as Map)['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+                      return bTime.compareTo(aTime);
+                    });
+
+                    final order = docs.first.data() as Map<String, dynamic>;
                     final status = order['status'] ?? 'Pending';
-                    final orderId = snapshot.data!.docs.first.id;
+                    final orderId = docs.first.id;
 
                     return GestureDetector(
                       onTap: () {
@@ -218,19 +226,45 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance.collection('master_catalog').limit(4).snapshots(),
                   builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: Colors.green));
+                    }
+                    if (snapshot.hasError) {
+                      return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(fontSize: 12)));
+                    }
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return const Center(child: CircularProgressIndicator());
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: const Center(child: Text("No featured items available", style: TextStyle(color: Colors.grey))),
+                      );
                     }
                     final products = snapshot.data!.docs;
-                    return PageView.builder(
-                      controller: _featuredPageController,
-                      onPageChanged: (idx) => setState(() => _currentFeaturedIndex = idx),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) {
-                        final data = products[index].data() as Map<String, dynamic>;
-                        final product = Product.fromMap(data, docId: products[index].id);
-                        return _buildFeaturedCard(context, product);
+                    _itemCount = products.length;
+
+                    return NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification is ScrollStartNotification) {
+                          _featuredTimer?.cancel();
+                        } else if (notification is ScrollEndNotification) {
+                          _startFeaturedTimer();
+                        }
+                        return false;
                       },
+                      child: PageView.builder(
+                        controller: _featuredPageController,
+                        onPageChanged: (idx) => _currentFeaturedIndex = idx,
+                        itemCount: products.length,
+                        physics: const BouncingScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          final data = products[index].data() as Map<String, dynamic>;
+                          final product = Product.fromMap(data, docId: products[index].id);
+                          return _buildFeaturedCard(context, product);
+                        },
+                      ),
                     );
                   },
                 ),
@@ -270,21 +304,31 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance.collection('categories').snapshots(),
                   builder: (context, snapshot) {
-                    if (snapshot.hasError) return const SizedBox();
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return ListView(
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: Colors.green));
+                    }
+                    
+                    final List<Map<String, dynamic>> fallbackCategories = [
+                      {"name": "Vegetables", "icon": Icons.eco_outlined},
+                      {"name": "Fruits", "icon": Icons.apple_outlined},
+                      {"name": "Grains", "icon": Icons.grain},
+                      {"name": "Dairy", "icon": Icons.local_drink_outlined},
+                      {"name": "Pulses", "icon": Icons.lens_blur},
+                      {"name": "Mushrooms", "icon": Icons.spa},
+                      {"name": "Tea & Coffee", "icon": Icons.local_cafe_outlined},
+                      {"name": "Spices", "icon": Icons.flare},
+                      {"name": "Specialty", "icon": Icons.star_border},
+                    ];
+
+                    if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return ListView.builder(
                         scrollDirection: Axis.horizontal,
-                        children: [
-                          categoryItem(context, Icons.eco_outlined, "Vegetables"),
-                          categoryItem(context, Icons.apple_outlined, "Fruits"),
-                          categoryItem(context, Icons.grain, "Grains"),
-                          categoryItem(context, Icons.local_drink_outlined, "Dairy"),
-                          categoryItem(context, Icons.lens_blur, "Pulses"),
-                          categoryItem(context, Icons.spa, "Mushrooms"),
-                          categoryItem(context, Icons.local_cafe_outlined, "Tea & Coffee"),
-                          categoryItem(context, Icons.flare, "Spices"),
-                          categoryItem(context, Icons.star_border, "Specialty"),
-                        ],
+                        itemCount: fallbackCategories.length,
+                        itemBuilder: (context, index) => categoryItem(
+                          context, 
+                          fallbackCategories[index]['icon'] as IconData, 
+                          fallbackCategories[index]['name']
+                        ),
                       );
                     }
 
@@ -341,57 +385,82 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          image: DecorationImage(
-            image: product.image.startsWith('http')
-                ? NetworkImage(product.image)
-                : AssetImage(product.image) as ImageProvider,
-            fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.3), BlendMode.darken),
-          ),
+          color: Colors.grey.shade200,
         ),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
-                    child: const Text("FEATURED", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(product.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                  Text("Rs. ${product.price}", style: const TextStyle(color: Colors.white, fontSize: 16)),
-                ],
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: product.image.startsWith('http')
+                    ? CachedNetworkImage(
+                        imageUrl: product.image,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                        errorWidget: (context, url, error) => Image.asset('assets/images/placeholder.png', fit: BoxFit.cover),
+                      )
+                    : Image.asset(
+                        product.image.isNotEmpty ? product.image : 'assets/images/placeholder.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Image.asset('assets/images/placeholder.png', fit: BoxFit.cover),
+                      ),
               ),
-            ),
-            Positioned(
-              top: 15,
-              right: 15,
-              child: GestureDetector(
-                onTap: () {
-                  final productMap = product.toMap();
-                  productMap['badge'] = 'Featured';
-                  productMap['badgeColor'] = Colors.green.toARGB32();
-                  productMap['farm'] = product.farmName ?? 'Local Farm';
-                  productMap['rating'] = 4.8;
-                  widget.onFavouriteToggle(productMap);
-                },
-                child: CircleAvatar(
-                  backgroundColor: Colors.white.withValues(alpha: 0.8),
-                  radius: 18,
-                  child: Icon(
-                    isFavourite ? Icons.favorite : Icons.favorite_border,
-                    color: Colors.red,
-                    size: 20,
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.7),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
+                      child: const Text("FEATURED", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(product.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text("Rs. ${product.price}", style: const TextStyle(color: Colors.white, fontSize: 16)),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 15,
+                right: 15,
+                child: GestureDetector(
+                  onTap: () {
+                    final productMap = product.toMap();
+                    productMap['badge'] = 'Featured';
+                    productMap['badgeColor'] = Colors.green.toARGB32();
+                    productMap['farm'] = product.farmName ?? 'Local Farm';
+                    productMap['rating'] = 4.8;
+                    widget.onFavouriteToggle(productMap);
+                  },
+                  child: CircleAvatar(
+                    backgroundColor: Colors.white.withValues(alpha: 0.8),
+                    radius: 18,
+                    child: Icon(
+                      isFavourite ? Icons.favorite : Icons.favorite_border,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

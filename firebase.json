@@ -1,1 +1,29 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"agridirect-nepal-9fecd","appId":"1:931317017971:android:fd1517137fa36761816906","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"agridirect-nepal-9fecd","configurations":{"android":"1:931317017971:android:fd1517137fa36761816906","ios":"1:931317017971:ios:0bc4e90273dd28ef816906","macos":"1:931317017971:ios:0bc4e90273dd28ef816906","web":"1:931317017971:web:b6266933117f06f8816906","windows":"1:931317017971:web:2445e6084b90c5ff816906"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "agridirect-nepal-9fecd",
+          "appId": "1:931317017971:android:fd1517137fa36761816906",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "agridirect-nepal-9fecd",
+          "configurations": {
+            "android": "1:931317017971:android:fd1517137fa36761816906",
+            "ios": "1:931317017971:ios:0bc4e90273dd28ef816906",
+            "macos": "1:931317017971:ios:0bc4e90273dd28ef816906",
+            "web": "1:931317017971:web:b6266933117f06f8816906",
+            "windows": "1:931317017971:web:2445e6084b90c5ff816906"
+          }
+        }
+      }
+    }
+  }
+}

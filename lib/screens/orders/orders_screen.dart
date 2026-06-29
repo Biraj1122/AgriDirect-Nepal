@@ -63,16 +63,24 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         _activeOrderId = widget.orderId;
         _startTrackingFlow();
       } else {
+        // Fetching without orderBy and sorting in memory to avoid index requirements
         final query = await FirebaseFirestore.instance
             .collection('orders')
             .where('userId', isEqualTo: user.uid)
             .where('status', whereIn: ['Pending Farmer', 'Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
-            .orderBy('createdAt', descending: true)
-            .limit(1)
+            .limit(10) // Get recent few
             .get();
 
         if (query.docs.isNotEmpty) {
-          _activeOrderId = query.docs.first.id;
+          // Sort by createdAt descending in memory
+          final docs = query.docs.toList();
+          docs.sort((a, b) {
+            final aTime = (a.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            final bTime = (b.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+            return bTime.compareTo(aTime);
+          });
+          
+          _activeOrderId = docs.first.id;
           _startTrackingFlow();
         } else {
           if (mounted) {

@@ -384,18 +384,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
                 
-                // Social Login Buttons
+                // Social Login Button
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _socialButton(
                       asset: "assets/images/Gmail_icon_(2020).svg.png",
                       onTap: () => _handleSocialSignIn(_socialAuthService.signInWithGoogle()),
-                    ),
-                    const SizedBox(width: 20),
-                    _socialButton(
-                      asset: "assets/images/Facebook.png",
-                      onTap: () => _handleSocialSignIn(_socialAuthService.signInWithFacebook()),
                     ),
                   ],
                 ),

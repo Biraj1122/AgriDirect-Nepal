@@ -1,3 +1,5 @@
+import '../config/aws_config.dart';
+
 class Product {
   final String? id;
   final String image;
@@ -48,8 +50,13 @@ class Product {
   }
 
   factory Product.fromMap(Map<String, dynamic> map, {String? docId}) {
-    // Prefer imageUrl then image then imagePath
-    String imageVal = map['imageUrl'] ?? map['image'] ?? map['imagePath'] ?? '';
+    // Prefer s3Url, then imageUrl, then image, then imagePath
+    String imageVal = map['s3Url'] ?? map['imageUrl'] ?? map['image'] ?? map['imagePath'] ?? '';
+    
+    // If the image is just a key/filename, get the full AWS URL
+    if (imageVal.isNotEmpty && !imageVal.startsWith('http') && !imageVal.startsWith('assets/') && !imageVal.startsWith('data:image')) {
+      imageVal = AWSConfig.getImageUrl(imageVal);
+    }
     
     return Product(
       id: docId ?? map['id'],
