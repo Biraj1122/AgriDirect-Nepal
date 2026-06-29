@@ -18,10 +18,16 @@ void main() {
     );
 
     // Optimized Firestore Settings for compatibility
-    FirebaseFirestore.instance.settings = const Settings(
-      persistenceEnabled: true,
-      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-    );
+    if (kIsWeb) {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: false, // Disable on Web to prevent INTERNAL ASSERTION FAILED
+      );
+    } else {
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+    }
 
     FlutterError.onError = (FlutterErrorDetails details) {
       FlutterError.presentError(details);

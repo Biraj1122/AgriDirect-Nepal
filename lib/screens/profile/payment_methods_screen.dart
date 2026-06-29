@@ -31,8 +31,31 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   final String _selectedMethod = 'COD'; // Fixed to Cash on Delivery
 
   Future<void> _processPayment() async {
-    setState(() => _isProcessing = true);
+    // Show Confirmation Dialog first
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Confirm Order", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("Are you sure you want to place this order with Cash on Delivery?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            child: const Text("Yes, Place Order", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
 
+    if (confirm != true) return;
+
+    setState(() => _isProcessing = true);
+    // ... rest of the logic remains the same
     try {
       final user = FirebaseAuth.instance.currentUser;
       String? orderId;
@@ -54,7 +77,8 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           'userId': user.uid,
           'userName': user.displayName ?? "User",
           'userPhone': userPhone,
-          'farmerUid': null, // Broadcast to all farmers
+          'farmerUid': null, 
+          'deliveryId': null, 
           'farmName': "Waiting for assignment",
           'subtotal': widget.subtotal,
           'deliveryFee': widget.deliveryFee,
@@ -81,27 +105,6 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
           'itemsSummary': cartModel.items.map((e) => "${e.quantity}x ${e.product.title}").join(", "),
         });
         orderId = docRef.id;
-
-        // Broadcast to all farmers via their notifications sub-collection
-        final farmersSnap = await FirebaseFirestore.instance
-            .collection('users')
-            .where('role', isEqualTo: 'Farmer')
-            .get();
-
-        for (var fDoc in farmersSnap.docs) {
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(fDoc.id)
-              .collection('notifications')
-              .add({
-            'title': 'New Order Available',
-            'body': 'A new order of ${cartModel.items.length} items is available for pickup near ${UserData.defaultAddress}',
-            'orderId': orderId,
-            'createdAt': FieldValue.serverTimestamp(),
-            'isRead': false,
-            'type': 'order_broadcast',
-          });
-        }
       }
 
       if (mounted) {

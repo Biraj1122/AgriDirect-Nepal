@@ -405,6 +405,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     productMap['farm'] = product.farmName ?? 'Local Farm';
                     productMap['rating'] = 4.8;
                     widget.onFavouriteToggle(productMap);
+
+                    // Add feedback
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(isFavourite ? "Removed from Favourites" : "Added to Favourites"),
+                        duration: const Duration(seconds: 1),
+                        behavior: SnackBarBehavior.floating,
+                        backgroundColor: isFavourite ? Colors.black87 : Colors.redAccent,
+                      ),
+                    );
                   },
                   child: CircleAvatar(
                     backgroundColor: Colors.white.withValues(alpha: 0.8),
