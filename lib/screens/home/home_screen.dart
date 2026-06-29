@@ -4,7 +4,6 @@ import 'package:farmtech_agridirect/models/product.dart';
 import 'package:farmtech_agridirect/screens/shop/product_detail_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/orders_screen.dart';
-import 'package:farmtech_agridirect/screens/ai/crop_health_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -35,6 +34,8 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentFeaturedIndex = 0;
   Timer? _featuredTimer;
 
+  int _featuredCount = 0;
+
   @override
   void initState() {
     super.initState();
@@ -43,8 +44,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _startFeaturedTimer() {
     _featuredTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (_featuredPageController.hasClients) {
-        int nextIndex = (_currentFeaturedIndex + 1) % 4;
+      if (_featuredPageController.hasClients && _featuredCount > 0) {
+        int nextIndex = (_currentFeaturedIndex + 1) % _featuredCount;
         _featuredPageController.animateToPage(
           nextIndex,
           duration: const Duration(milliseconds: 800),
@@ -217,80 +218,28 @@ class _HomeScreenState extends State<HomeScreen> {
               SizedBox(
                 height: 180,
                 child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('master_catalog').limit(4).snapshots(),
+                  // Try master_catalog first, then fall back to products if empty
+                  stream: FirebaseFirestore.instance.collection('master_catalog').limit(6).snapshots(),
                   builder: (context, snapshot) {
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return const Center(child: CircularProgressIndicator());
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: Colors.green));
                     }
-                    final products = snapshot.data!.docs;
-                    return PageView.builder(
-                      controller: _featuredPageController,
-                      onPageChanged: (idx) => setState(() => _currentFeaturedIndex = idx),
-                      itemCount: products.length,
-                      itemBuilder: (context, index) {
-                        final data = products[index].data() as Map<String, dynamic>;
-                        final product = Product.fromMap(data, docId: products[index].id);
-                        return _buildFeaturedCard(context, product);
-                      },
-                    );
+                    
+                    if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      // Fallback to regular products if master_catalog is empty
+                      return StreamBuilder<QuerySnapshot>(
+                        stream: FirebaseFirestore.instance.collection('products').limit(6).snapshots(),
+                        builder: (context, prodSnapshot) {
+                          if (!prodSnapshot.hasData || prodSnapshot.data!.docs.isEmpty) {
+                            return _buildDefaultFeatured();
+                          }
+                          return _buildFeaturedPager(prodSnapshot.data!.docs);
+                        },
+                      );
+                    }
+                    
+                    return _buildFeaturedPager(snapshot.data!.docs);
                   },
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const CropHealthScreen()),
-                  );
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF1B5E20), Color(0xFF4CAF50)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(color: Colors.green.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4)),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.psychology, color: Colors.white, size: 36),
-                      ),
-                      const SizedBox(width: 15),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text("Crop Health AI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)),
-                            SizedBox(height: 2),
-                            Text("Detect diseases in seconds", style: TextStyle(color: Colors.white70, fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Text("BETA", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10)),
-                      ),
-                    ],
-                  ),
                 ),
               ),
 
@@ -303,9 +252,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: ListView(
                   scrollDirection: Axis.horizontal,
                   children: [
-                    _buildPromoCard("10% OFF", "On all organic fertilizers", Colors.orange, Icons.percent),
+                    _buildPromoCard("10% OFF", "On all organic vegetables", Colors.orange, Icons.percent),
                     _buildPromoCard("FREE DELIVERY", "Orders above Rs. 2000", Colors.blue, Icons.local_shipping),
-                    _buildPromoCard("COMBO DEAL", "Get seeds with every tool", Colors.purple, Icons.card_giftcard),
+                    _buildPromoCard("COMBO DEALS", "Get freebies on every purchase", Colors.purple, Icons.card_giftcard),
                   ],
                 ),
               ),
@@ -328,8 +277,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance.collection('categories').snapshots(),
                   builder: (context, snapshot) {
-                    if (snapshot.hasError) return const SizedBox();
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                       return const Center(child: CircularProgressIndicator(color: Colors.green, strokeWidth: 2));
+                    }
+
+                    if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
                       return ListView(
                         scrollDirection: Axis.horizontal,
                         children: [
@@ -338,10 +290,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           categoryItem(context, Icons.grain, "Grains"),
                           categoryItem(context, Icons.local_drink_outlined, "Dairy"),
                           categoryItem(context, Icons.lens_blur, "Pulses"),
-                          categoryItem(context, Icons.spa, "Mushrooms"),
-                          categoryItem(context, Icons.local_cafe_outlined, "Tea & Coffee"),
-                          categoryItem(context, Icons.flare, "Spices"),
-                          categoryItem(context, Icons.star_border, "Specialty"),
                         ],
                       );
                     }
@@ -356,13 +304,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
                         final displayIcon = iconCode != null
                             ? IconData(iconCode, fontFamily: 'MaterialIcons')
-                            : Icons.category;
+                            : Icons.category_rounded;
 
-                        return categoryItem(
-                            context,
-                            displayIcon,
-                            name
-                        );
+                        return categoryItem(context, displayIcon, name);
                       },
                     );
                   },
@@ -373,6 +317,25 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildFeaturedPager(List<DocumentSnapshot> docs) {
+    if (_featuredCount != docs.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _featuredCount = docs.length);
+      });
+    }
+
+    return PageView.builder(
+      controller: _featuredPageController,
+      onPageChanged: (idx) => setState(() => _currentFeaturedIndex = idx),
+      itemCount: docs.length,
+      itemBuilder: (context, index) {
+        final data = docs[index].data() as Map<String, dynamic>;
+        final product = Product.fromMap(data, docId: docs[index].id);
+        return _buildFeaturedCard(context, product);
+      },
     );
   }
 
@@ -399,56 +362,117 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          image: DecorationImage(
-            image: product.image.startsWith('http')
-                ? NetworkImage(product.image)
-                : AssetImage(product.image) as ImageProvider,
-            fit: BoxFit.cover,
-            colorFilter: ColorFilter.mode(Colors.black.withValues(alpha: 0.3), BlendMode.darken),
-          ),
         ),
-        child: Stack(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
-                    child: const Text("FEATURED", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(product.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                  Text("Rs. ${product.price}", style: const TextStyle(color: Colors.white, fontSize: 16)),
-                ],
-              ),
-            ),
-            Positioned(
-              top: 15,
-              right: 15,
-              child: GestureDetector(
-                onTap: () {
-                  final productMap = product.toMap();
-                  productMap['badge'] = 'Featured';
-                  productMap['badgeColor'] = Colors.green.toARGB32();
-                  productMap['farm'] = product.farmName ?? 'Local Farm';
-                  productMap['rating'] = 4.8;
-                  widget.onFavouriteToggle(productMap);
-                },
-                child: CircleAvatar(
-                  backgroundColor: Colors.white.withValues(alpha: 0.8),
-                  radius: 18,
-                  child: Icon(
-                    isFavourite ? Icons.favorite : Icons.favorite_border,
-                    color: Colors.red,
-                    size: 20,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            children: [
+              _buildSafeFeaturedImage(product.image),
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
                   ),
                 ),
               ),
-            ),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
+                      child: const Text("FEATURED", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(product.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                    Text("Rs. ${product.price}", style: const TextStyle(color: Colors.white, fontSize: 16)),
+                  ],
+                ),
+              ),
+              Positioned(
+                top: 15,
+                right: 15,
+                child: GestureDetector(
+                  onTap: () {
+                    final productMap = product.toMap();
+                    productMap['badge'] = 'Featured';
+                    productMap['badgeColor'] = Colors.green.toARGB32();
+                    productMap['farm'] = product.farmName ?? 'Local Farm';
+                    productMap['rating'] = 4.8;
+                    widget.onFavouriteToggle(productMap);
+                  },
+                  child: CircleAvatar(
+                    backgroundColor: Colors.white.withValues(alpha: 0.8),
+                    radius: 18,
+                    child: Icon(
+                      isFavourite ? Icons.favorite : Icons.favorite_border,
+                      color: Colors.red,
+                      size: 20,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSafeFeaturedImage(String image) {
+    if (image.isEmpty) {
+      return Container(color: Colors.grey.shade300, child: const Center(child: Icon(Icons.image, color: Colors.white, size: 40)));
+    }
+    
+    if (image.startsWith('http')) {
+      return Image.network(
+        image,
+        width: double.infinity,
+        height: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          color: Colors.grey.shade300,
+          child: const Center(child: Icon(Icons.broken_image, color: Colors.white, size: 40)),
+        ),
+      );
+    }
+    
+    String assetPath = image;
+    if (!assetPath.startsWith('assets/')) {
+      assetPath = 'assets/images/$image';
+    }
+    
+    return Image.asset(
+      assetPath,
+      width: double.infinity,
+      height: double.infinity,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => Container(
+        color: Colors.green.shade100,
+        child: const Center(child: Icon(Icons.eco, color: Colors.green, size: 40)),
+      ),
+    );
+  }
+
+  Widget _buildDefaultFeatured() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      decoration: BoxDecoration(
+        color: Colors.green.shade700,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.eco, color: Colors.white, size: 50),
+            SizedBox(height: 10),
+            Text("Fresh Produce Daily", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ],
         ),
       ),

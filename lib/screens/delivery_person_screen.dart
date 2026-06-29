@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/location_service.dart';
 import '../services/storage_service.dart';
@@ -1135,7 +1134,7 @@ class _EarningsTabState extends State<_EarningsTab> {
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       final storageService = StorageService();
-      final imageUrl = await storageService.uploadImage(File(pickedFile.path), 'qrcodes');
+      final imageUrl = await storageService.uploadImage(pickedFile, 'qrcodes');
       
       if (imageUrl != null) {
         setState(() {
@@ -1182,7 +1181,9 @@ class _EarningsTabState extends State<_EarningsTab> {
           if (snapshot.hasData) {
             for (var doc in snapshot.data!.docs) {
               final data = doc.data() as Map<String, dynamic>;
-              final earning = (data['deliveryFee'] ?? 100).toDouble();
+              // Use new deliveryRevenue field (80% share). 
+              // Legacy orders will result in 0, effectively resetting the dashboard.
+              final earning = (data['deliveryRevenue'] ?? 0).toDouble();
               totalEarnings += earning;
               recentEarnings.add({
                 'id': doc.id.substring(0, min(6, doc.id.length)),
@@ -1395,11 +1396,11 @@ class _ProfileTabState extends State<_ProfileTab> {
       final storageService = StorageService();
 
       if (_profileImgPath != null && !(_profileImgPath!.startsWith('http'))) {
-        finalProfileUrl = await storageService.uploadImage(File(_profileImgPath!), 'profile_pics');
+        finalProfileUrl = await storageService.uploadImage(XFile(_profileImgPath!), 'profile_pics');
       }
 
       if (_licenseImgPath != null && !(_licenseImgPath!.startsWith('http'))) {
-        finalLicenseUrl = await storageService.uploadImage(File(_licenseImgPath!), 'licenses');
+        finalLicenseUrl = await storageService.uploadImage(XFile(_licenseImgPath!), 'licenses');
       }
 
       final updates = <String, dynamic>{

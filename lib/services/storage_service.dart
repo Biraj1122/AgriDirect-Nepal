@@ -1,74 +1,70 @@
 import 'dart:io';
 import 'package:aws_s3_upload/aws_s3_upload.dart';
-import 'package:path/path.dart' as p;
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 class StorageService {
-  // Cloudflare R2 credentials (S3-compatible)
-  // Note: For production, these should be handled securely (e.g., via a proxy/worker or pre-signed URLs)
-  static const String _accountId = 'YOUR_CLOUDFLARE_ACCOUNT_ID';
+  // Cloudflare R2 Credentials (Placeholders - to be replaced with production values)
   static const String _accessKey = 'YOUR_ACCESS_KEY';
   static const String _secretKey = 'YOUR_SECRET_KEY';
-  static const String _bucketName = 'agridirect-uploads';
-  static const String _customDomain = 'https://pub-xxxx.r2.dev'; // Your R2 Public Bucket URL or Custom Domain
-  static const String _region = 'auto'; // R2 uses 'auto'
+  static const String _bucket = 'agridirect-uploads';
+  static const String _region = 'auto'; // Cloudflare R2 uses 'auto'
+  
+  // Public URL for accessing uploaded images (Cloudflare R2 Public Bucket/Custom Domain)
+  static const String _baseUrl = 'https://pub-your-id.r2.dev';
 
-  /// Uploads a file to Cloudflare R2 and returns the public URL
-  Future<String?> uploadImage(File file, String folder) async {
-    File? tempFile;
+  /// Uploads an image to Cloudflare R2 and returns the public URL.
+  /// Uses aws_s3_upload: 1.5.0 which does not support 'endpoint' parameter.
+  Future<String?> uploadImage(XFile xFile, String folder) async {
     try {
-      if (!await file.exists()) {
-        debugPrint('Upload Error: File does not exist at ${file.path}');
-        return null;
-      }
-
-      final extension = p.extension(file.path);
-      final fileName = '${DateTime.now().millisecondsSinceEpoch}$extension';
+      final String ext = p.extension(xFile.name).toLowerCase();
+      final String fileName = '${DateTime.now().millisecondsSinceEpoch}${ext.isEmpty ? ".jpg" : ext}';
       
-      // We must rename the file locally because the package uses the local filename as the S3 object key
-      final String tempPath = p.join(Directory.systemTemp.path, fileName);
-      tempFile = await file.copy(tempPath);
+      // aws_s3_upload 1.5.0 uses File object from dart:io
+      // Note: This implementation may need adjustment for Flutter Web
+      final File file = File(xFile.path);
 
-      // Determine content type based on extension
-      String contentType = 'image/jpeg';
-      final extLower = extension.toLowerCase();
-      if (extLower == '.png') {
-        contentType = 'image/png';
-      } else if (extLower == '.gif') {
-        contentType = 'image/gif';
-      } else if (extLower == '.webp') {
-        contentType = 'image/webp';
-      }
-
-      final cleanFolder = folder.trim().replaceAll(RegExp(r'^/|/$'), '');
-
-      // Using AwsS3.uploadFile from aws_s3_upload package
-      // Note: The current package version (1.5.0) uses the AWS S3 endpoint by default.
-      // For Cloudflare R2, if this method fails, a manual implementation using the S3 API is required.
+      // Using the specific API of aws_s3_upload: 1.5.0
+      // - No 'endpoint' parameter (not defined in this version)
+      // - 'destDir' is a non-nullable String
+      // - Uses 'filename' to avoid manual copying
       final String? result = await AwsS3.uploadFile(
         accessKey: _accessKey,
         secretKey: _secretKey,
-        file: tempFile,
-        bucket: _bucketName,
+        bucket: _bucket,
         region: _region,
-        destDir: cleanFolder,
-        contentType: contentType,
+        file: file,
+        destDir: folder, 
+        filename: fileName,
       );
 
+      // result is the filename/path if successful
       if (result != null) {
-        // Construct the URL using the custom domain and path
-        final String folderPath = cleanFolder.isEmpty ? "" : "$cleanFolder/";
-        return '$_customDomain/$folderPath$fileName';
+        final String downloadUrl = '$_baseUrl/$folder/$fileName';
+        debugPrint('Upload successful: $downloadUrl');
+        return downloadUrl;
       }
+      
+      debugPrint('Upload failed: No result from AwsS3.uploadFile');
       return null;
     } catch (e) {
-      if (tempFile != null && await tempFile.exists()) {
-        try {
-          await tempFile.delete();
-        } catch (e) {
-          debugPrint('Failed to delete temp file: $e');
+      debugPrint('StorageService Error: $e');
+      return null;
+    }
+  }
+
+  /// Optional: Cleanup local temporary files if needed
+  Future<void> cleanup(XFile xFile) async {
+    try {
+      if (!kIsWeb) {
+        final file = File(xFile.path);
+        if (await file.exists()) {
+          await file.delete();
         }
       }
+    } catch (e) {
+      debugPrint('Cleanup Error: $e');
     }
   }
 }

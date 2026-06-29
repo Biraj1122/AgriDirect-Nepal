@@ -1,16 +1,13 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cloudinary_public/cloudinary_public.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
-import 'package:farmtech_agridirect/screens/ai/crop_health_screen.dart';
 import 'package:farmtech_agridirect/services/storage_service.dart';
 
 class FarmerScreen extends StatefulWidget {
@@ -85,9 +82,13 @@ class _FarmerScreenState extends State<FarmerScreen> {
 
     final List<Widget> pages = [
       _DashboardTab(farmerName: farmerName, farmName: farmName, farmLocation: farmLocation, uid: uid),
-      _ProductsTab(uid: uid, farmName: farmName),
+      _ProductsTab(
+        uid: uid,
+        farmName: farmName,
+        farmerLat: _farmerData?['farmLat'],
+        farmerLng: _farmerData?['farmLng'],
+      ),
       _DeliveryTab(uid: uid),
-      const CropHealthScreen(),
       _StockTab(uid: uid),
     ];
 
@@ -116,7 +117,6 @@ class _FarmerScreenState extends State<FarmerScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
           BottomNavigationBarItem(icon: Icon(Icons.storefront_outlined), label: 'Products'),
           BottomNavigationBarItem(icon: Icon(Icons.local_shipping_outlined), label: 'Deliveries'),
-          BottomNavigationBarItem(icon: Icon(Icons.health_and_safety_outlined), label: 'Health'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), label: 'Stock'),
         ],
       ),
@@ -348,13 +348,52 @@ class _DashboardTabState extends State<_DashboardTab> {
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).snapshots(),
               builder: (context, snapshot) {
-                final orders = snapshot.data?.docs ?? [];
-                final pending = orders.where((o) => (o.data() as Map)['status'] == 'Pending').length;
-                return Row(
+                final docs = snapshot.data?.docs ?? [];
+                
+                double totalEarnings = 0;
+                int pendingCount = 0;
+                
+                for (var doc in docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  // Only count revenue from Delivered orders and use the new 80% share field
+                  if (data['status'] == 'Delivered') {
+                    totalEarnings += (data['farmerRevenue'] ?? 0).toDouble();
+                  }
+                  
+                  String status = (data['status'] ?? '').toString().toLowerCase();
+                  if (status.contains('pending') || status.contains('accepted')) {
+                    pendingCount++;
+                  }
+                }
+
+                return Column(
                   children: [
-                    _StatCard(title: "Orders", value: "${orders.length}", icon: Icons.receipt_long, color: Colors.blue),
-                    const SizedBox(width: 12),
-                    _StatCard(title: "Pending", value: "$pending", icon: Icons.pending, color: Colors.orange),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [BoxShadow(color: Colors.black.withAlpha(10), blurRadius: 10)],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text("TOTAL EARNINGS (80%)", style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          Text("Rs. ${totalEarnings.toStringAsFixed(2)}", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green)),
+                          const Text("After 20% admin cut", style: TextStyle(color: Colors.grey, fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    Row(
+                      children: [
+                        _StatCard(title: "Total Orders", value: "${docs.length}", icon: Icons.receipt_long, color: Colors.blue),
+                        const SizedBox(width: 12),
+                        _StatCard(title: "Active Tasks", value: "$pendingCount", icon: Icons.pending_actions, color: Colors.orange),
+                      ],
+                    ),
                   ],
                 );
               },
@@ -385,7 +424,13 @@ class _DashboardTabState extends State<_DashboardTab> {
 
 class _ProductsTab extends StatefulWidget {
   final String uid, farmName;
-  const _ProductsTab({required this.uid, required this.farmName});
+  final dynamic farmerLat, farmerLng;
+  const _ProductsTab({
+    required this.uid,
+    required this.farmName,
+    this.farmerLat,
+    this.farmerLng,
+  });
 
   @override
   State<_ProductsTab> createState() => _ProductsTabState();
@@ -588,10 +633,10 @@ class _ProductsTabState extends State<_ProductsTab> {
                           String? imageUrl;
                           try {
                             final storageService = StorageService();
-                            imageUrl = await storageService.uploadImage(File(selectedImage!.path), 'products');
+                            imageUrl = await storageService.uploadImage(selectedImage!, 'products');
                             if (imageUrl == null) throw "Upload failed";
                           } catch (e) {
-                            String errorMsg = "Error uploading to R2: $e";
+                            String errorMsg = "Error uploading image: $e";
                             throw errorMsg;
                           }
 
@@ -601,6 +646,8 @@ class _ProductsTabState extends State<_ProductsTab> {
                             'price': priceVal,
                             'farmerUid': widget.uid,
                             'farmName': widget.farmName,
+                            'farmerLat': widget.farmerLat,
+                            'farmerLng': widget.farmerLng,
                             'unit': unit.text,
                             'imageUrl': imageUrl,
                             'image': imageUrl, // Added for compatibility with Product model

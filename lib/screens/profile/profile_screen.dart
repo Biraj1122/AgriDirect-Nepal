@@ -8,11 +8,9 @@ import 'package:farmtech_agridirect/screens/profile/my_favourites.dart';
 import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/payment_methods_screen.dart';
 import 'package:farmtech_agridirect/screens/about_us.dart';
-import 'package:farmtech_agridirect/screens/ai/ai_settings_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/edit_profile_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/my_addresses_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/order_history_screen.dart';
-import 'package:farmtech_agridirect/screens/ai/scan_history_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userName;
@@ -254,32 +252,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => const OrderHistoryScreen(),
-                          ),
-                        );
-                      },
-                    ),
-
-                    menuItem(
-                      Icons.medical_services_outlined,
-                      "Scan History",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ScanHistoryScreen(),
-                          ),
-                        );
-                      },
-                    ),
-
-                    menuItem(
-                      Icons.auto_awesome,
-                      "AI Settings",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const AISettingsScreen(),
                           ),
                         );
                       },

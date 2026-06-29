@@ -185,27 +185,27 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                         child: FadeTransition(
                           opacity: _logoOpacity,
                           child: Container(
-                            padding: EdgeInsets.all(isLargeScreen ? 25 : 20),
+                            padding: EdgeInsets.all(isLargeScreen ? 10 : 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.2),
+                              color: Colors.white,
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 20,
-                                  spreadRadius: 5,
+                                  color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 30,
+                                  spreadRadius: 2,
                                 ),
                               ],
                             ),
                             child: Hero(
                               tag: 'app_logo',
                               child: Image.asset(
-                                "assets/images/logo.png",
-                                height: isLargeScreen ? 140 : 110,
-                                width: isLargeScreen ? 140 : 110,
+                                "assets/images/logo_adaptive.png",
+                                height: isLargeScreen ? 160 : 160,
+                                width: isLargeScreen ? 160 : 160,
                                 fit: BoxFit.contain,
                                 errorBuilder: (context, error, stackTrace) =>
-                                    Icon(Icons.eco, size: isLargeScreen ? 100 : 80, color: Colors.white),
+                                    Icon(Icons.eco, size: isLargeScreen ? 100 : 80, color: Colors.green),
                               ),
                             ),
                           ),
@@ -216,16 +216,16 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                     
                     FadeTransition(
                       opacity: _textOpacity,
-                      child: Column(
+                      child: const Column(
                         children: [
                           Text(
                             "Farmtech",
                             style: TextStyle(
-                              fontSize: isLargeScreen ? 54 : 46,
+                              fontSize: 54,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
                               letterSpacing: 2.0,
-                              shadows: const [
+                              shadows: [
                                 Shadow(
                                   color: Colors.black26,
                                   offset: Offset(0, 2),
@@ -234,17 +234,14 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                               ],
                             ),
                           ),
-                          SizedBox(height: isLargeScreen ? 12 : 8),
-                          FadeTransition(
-                            opacity: _subtitleOpacity,
-                            child: Text(
-                              "AgriDirect Nepal",
-                              style: TextStyle(
-                                fontSize: isLargeScreen ? 24 : 20,
-                                fontWeight: FontWeight.w400,
-                                color: Colors.white.withValues(alpha: 0.9),
-                                letterSpacing: 1.5,
-                              ),
+                          SizedBox(height: 12),
+                          Text(
+                            "AgriDirect Nepal",
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w400,
+                              color: Colors.white,
+                              letterSpacing: 1.5,
                             ),
                           ),
                         ],

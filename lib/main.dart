@@ -12,20 +12,16 @@ void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     
+    // Initialize Firebase
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    if (kIsWeb) {
-      FirebaseFirestore.instance.settings = const Settings(
-        persistenceEnabled: false,
-      );
-    } else {
-      FirebaseFirestore.instance.settings = const Settings(
-        persistenceEnabled: true,
-        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
-      );
-    }
+    // Optimized Firestore Settings for compatibility
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+    );
 
     FlutterError.onError = (FlutterErrorDetails details) {
       FlutterError.presentError(details);
