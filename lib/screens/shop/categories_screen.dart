@@ -395,7 +395,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     if (!assetPath.startsWith('assets/')) {
       assetPath = 'assets/images/$image';
     }
-
+    //
     return Image.asset(
       assetPath,
       width: double.infinity,
