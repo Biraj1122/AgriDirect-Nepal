@@ -1,17 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
-import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/services/storage_service.dart';
-import 'package:farmtech_agridirect/config/aws_config.dart';
-import 'package:maplibre_gl/maplibre_gl.dart';
-import 'package:geolocator/geolocator.dart';
 
 class FarmerScreen extends StatefulWidget {
   const FarmerScreen({super.key});
@@ -47,7 +42,6 @@ class _FarmerScreenState extends State<FarmerScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Listen to personal notifications
     _notificationSubscription = FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
@@ -55,12 +49,9 @@ class _FarmerScreenState extends State<FarmerScreen> {
         .where('isRead', isEqualTo: false)
         .snapshots()
         .listen((snapshot) {
-      if (mounted) {
-        setState(() => _unreadCount = snapshot.docs.length);
-      }
+      if (mounted) setState(() => _unreadCount = snapshot.docs.length);
     });
 
-    // Listen to broadcasted "Pending Farmer" orders
     _orderSubscription = FirebaseFirestore.instance
         .collection('orders')
         .where('status', isEqualTo: 'Pending Farmer')
@@ -74,7 +65,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
           ScaffoldMessenger.of(context).hideCurrentSnackBar();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text("New order request available! Check Dashboard."),
+              content: const Text("New order request available!"),
               backgroundColor: Colors.orange,
               action: SnackBarAction(label: "VIEW", textColor: Colors.white, onPressed: () {
                 setState(() => _currentIndex = 0);
@@ -115,7 +106,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
+      (route) => false,
     );
   }
 
@@ -123,16 +114,14 @@ class _FarmerScreenState extends State<FarmerScreen> {
   Widget build(BuildContext context) {
     if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator(color: Colors.green)));
 
-    final String farmerName = _farmerData?['name'] ?? 'Farmer';
+    final String farmerName = _farmerData?['name'] ?? _farmerData?['fullName'] ?? 'Farmer';
     final String farmName = _farmerData?['farmName'] ?? 'AgriDirect Farm';
-    final String farmLocation = _farmerData?['farmLocation'] ?? '';
     final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
 
     final List<Widget> pages = [
       _DashboardTab(
         farmerName: farmerName,
         farmName: farmName,
-        farmLocation: farmLocation,
         uid: uid,
         farmerLat: _farmerData?['farmLat'],
         farmerLng: _farmerData?['farmLng'],
@@ -154,11 +143,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
         elevation: 0,
         title: Text(farmName, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.red),
-            onPressed: () => _logout(),
-            tooltip: 'Logout',
-          ),
+          IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: _logout),
         ],
       ),
       body: pages[_currentIndex],
@@ -167,28 +152,12 @@ class _FarmerScreenState extends State<FarmerScreen> {
         onTap: (i) => setState(() => _currentIndex = i),
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Colors.green,
-        unselectedItemColor: Colors.grey,
         items: [
           BottomNavigationBarItem(
-            icon: Stack(
-              children: [
-                const Icon(Icons.dashboard_outlined),
-                if (_unreadCount + _pendingOrderCount > 0)
-                  Positioned(
-                    right: 0,
-                    top: 0,
-                    child: Container(
-                      padding: const EdgeInsets.all(2),
-                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-                      child: Text(
-                        '${_unreadCount + _pendingOrderCount}',
-                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-              ],
+            icon: Badge(
+              label: Text('${_unreadCount + _pendingOrderCount}'),
+              isLabelVisible: _unreadCount + _pendingOrderCount > 0,
+              child: const Icon(Icons.dashboard_outlined),
             ),
             label: 'Dashboard',
           ),
@@ -202,16 +171,9 @@ class _FarmerScreenState extends State<FarmerScreen> {
 }
 
 class _DashboardTab extends StatefulWidget {
-  final String farmerName, farmName, farmLocation, uid;
+  final String farmerName, farmName, uid;
   final double? farmerLat, farmerLng;
-  const _DashboardTab({
-    required this.farmerName,
-    required this.farmName,
-    required this.farmLocation,
-    required this.uid,
-    this.farmerLat,
-    this.farmerLng,
-  });
+  const _DashboardTab({required this.farmerName, required this.farmName, required this.uid, this.farmerLat, this.farmerLng});
 
   @override
   State<_DashboardTab> createState() => _DashboardTabState();
@@ -243,11 +205,6 @@ class _DashboardTabState extends State<_DashboardTab> {
         int nextIndex = (_currentCarouselIndex + 1) % _carouselItemCount;
         _pageController.animateToPage(
           nextIndex,
-    _carouselTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
-      if (_pageController.hasClients) {
-        int next = _currentCarouselIndex + 1;
-        _pageController.animateToPage(
-          next,
           duration: const Duration(milliseconds: 800),
           curve: Curves.easeInOut,
         );
@@ -275,7 +232,7 @@ class _DashboardTabState extends State<_DashboardTab> {
               ],
             ),
           ),
-          Icon(icon, color: Colors.white.withAlpha(50), size: 60),
+          Icon(icon, color: Colors.white.withValues(alpha: 0.2), size: 60),
         ],
       ),
     );
@@ -296,117 +253,31 @@ class _DashboardTabState extends State<_DashboardTab> {
         const SizedBox(height: 25),
 
         StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('users').doc(widget.uid).collection('notifications').orderBy('createdAt', descending: true).limit(5).snapshots(),
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(widget.uid)
+              .collection('notifications')
+              .orderBy('createdAt', descending: true)
+              .limit(5)
+              .snapshots(),
           builder: (context, snapshot) {
             final notifications = snapshot.data?.docs ?? [];
+            _carouselItemCount = notifications.isEmpty ? 1 : notifications.length;
+
             return SizedBox(
-              height: 160,
+              height: 180,
               child: Stack(
                 children: [
-                  const Icon(Icons.agriculture, color: Colors.white, size: 30),
-                  const SizedBox(height: 10),
-                  Text(widget.farmName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                  Text(widget.farmLocation, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 25),
-            
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(widget.uid)
-                  .collection('notifications')
-                  .orderBy('createdAt', descending: true)
-                  .limit(4)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                final notifications = snapshot.data?.docs ?? [];
-                _carouselItemCount = notifications.isEmpty ? 1 : notifications.length;
-                
-                return Container(
-                  height: 180,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [BoxShadow(color: Colors.black.withAlpha(20), blurRadius: 10, offset: const Offset(0, 5))],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: Stack(
-                      children: [
-                        Image.asset(
-                          "assets/images/vegetables.png",
-                          width: double.infinity,
-                          height: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                        Container(color: Colors.black.withAlpha(80)),
-                        
-                        NotificationListener<ScrollNotification>(
-                          onNotification: (notification) {
-                            if (notification is ScrollStartNotification) {
-                              _carouselTimer?.cancel();
-                            } else if (notification is ScrollEndNotification) {
-                              _startCarousel();
-                            }
-                            return false;
-                          },
-                          child: PageView.builder(
-                            controller: _pageController,
-                            onPageChanged: (i) => setState(() => _currentCarouselIndex = i),
-                            itemCount: _carouselItemCount,
-                            itemBuilder: (context, i) {
-                              if (notifications.isEmpty) {
-                                return _buildCarouselSlide(
-                                  "Fresh Harvest Awaits", 
-                                  "Keep track of your products and orders efficiently.",
-                                  Icons.eco,
-                                );
-                              }
-                              final data = notifications[i].data() as Map<String, dynamic>;
-                              return _buildCarouselSlide(
-                                data['title'] ?? 'Notification',
-                                data['body'] ?? '',
-                                Icons.info_outline,
-                              );
-                            },
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 15,
-                          right: 20,
-                          child: Row(
-                            children: List.generate(
-                              notifications.isEmpty ? 1 : notifications.length,
-                              (index) => Container(
-                                margin: const EdgeInsets.only(left: 4),
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: _currentCarouselIndex == index ? Colors.white : Colors.white.withAlpha(100),
-                                ),
-                              ),
-                            ),
                   PageView.builder(
                     controller: _pageController,
                     onPageChanged: (i) => setState(() => _currentCarouselIndex = i),
-                    itemCount: notifications.isEmpty ? 1 : notifications.length,
+                    itemCount: _carouselItemCount,
                     itemBuilder: (context, i) {
                       if (notifications.isEmpty) {
-                        return _buildCarouselSlide(
-                          "Fresh Harvest Awaits",
-                          "Keep track of your products and orders efficiently.",
-                          Icons.eco,
-                        );
+                        return _buildCarouselSlide("Fresh Harvest Awaits", "Keep track of your products and orders efficiently.", Icons.eco);
                       }
                       final data = notifications[i].data() as Map<String, dynamic>;
-                      return _buildCarouselSlide(
-                        data['title'] ?? 'Notification',
-                        data['body'] ?? '',
-                        Icons.info_outline,
-                      );
+                      return _buildCarouselSlide(data['title'] ?? 'Notification', data['body'] ?? '', Icons.info_outline);
                     },
                   ),
                   Positioned(
@@ -414,14 +285,14 @@ class _DashboardTabState extends State<_DashboardTab> {
                     right: 20,
                     child: Row(
                       children: List.generate(
-                        notifications.isEmpty ? 1 : notifications.length,
-                            (index) => Container(
+                        _carouselItemCount,
+                        (index) => Container(
                           margin: const EdgeInsets.only(left: 4),
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: _currentCarouselIndex == index ? Colors.white : Colors.white.withAlpha(100),
+                            color: _currentCarouselIndex == index ? Colors.white : Colors.white.withValues(alpha: 0.4),
                           ),
                         ),
                       ),
@@ -433,107 +304,12 @@ class _DashboardTabState extends State<_DashboardTab> {
           },
         ),
 
-        const SizedBox(height: 20),
-
-            const SizedBox(height: 20),
-            
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('orders')
-                  .where('status', isEqualTo: 'Pending Farmer')
-                  .snapshots(),
-              builder: (context, snap) {
-                if (snap.hasError) return Text("Error: ${snap.error}");
-                if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
-                
-                final docs = snap.data!.docs;
-                // Only show orders that haven't been picked by another farmer AND are not cancelled
-                final availableDocs = docs.where((d) {
-                  final data = d.data() as Map;
-                  return data['farmerUid'] == null && data['status'] != 'Cancelled';
-                }).toList();
-
-                if (availableDocs.isEmpty) return const SizedBox();
-                
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text("Available Orders (Unassigned)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
-                    const SizedBox(height: 12),
-                    ...availableDocs.map((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      return _OrderAcceptanceTile(orderId: doc.id, data: data, currentFarmerUid: widget.uid, currentFarmName: widget.farmName);
-                    }),
-                    const SizedBox(height: 20),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-            const Text("Recent Orders", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
-            const SizedBox(height: 12),
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).snapshots(),
-              builder: (context, snapshot) {
-                final allDocs = snapshot.data?.docs ?? [];
-                // Filter out cancelled orders from the dashboard overview to avoid "flooding"
-                final docs = allDocs.where((d) => (d.data() as Map)['status'] != 'Cancelled').toList();
-                
-                double totalEarnings = 0;
-                int pendingCount = 0;
-                
-                for (var doc in docs) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  // Only count revenue from Delivered orders and use the new 80% share field
-                  if (data['status'] == 'Delivered') {
-                    totalEarnings += (data['farmerRevenue'] ?? 0).toDouble();
-                  }
-                  
-                  String status = (data['status'] ?? '').toString().toLowerCase();
-                  if (status.contains('pending') || status.contains('accepted')) {
-                    pendingCount++;
-                  }
-                }
-        StreamBuilder<DocumentSnapshot>(
-          stream: FirebaseFirestore.instance.collection('settings').doc('announcement').snapshots(),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData || !snapshot.data!.exists) return const SizedBox();
-            final data = snapshot.data!.data() as Map<String, dynamic>;
-            final String title = data['title'] ?? '';
-            final String content = data['content'] ?? '';
-
-            if (title.isEmpty && content.isEmpty) return const SizedBox();
-
-            return Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(color: Colors.orange.withAlpha(30), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.withAlpha(50))),
-              child: Row(
-                children: [
-                  const Icon(Icons.campaign, color: Colors.orange),
-                  const SizedBox(width: 15),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text(content, style: const TextStyle(fontSize: 12)),
-                  ]))
-                ],
-              ),
-            );
-          },
-        ),
-
-        const SizedBox(height: 20),
-
+        const SizedBox(height: 25),
+        
         StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('orders')
-              .where('status', isEqualTo: 'Pending Farmer')
-              .snapshots(),
+          stream: FirebaseFirestore.instance.collection('orders').where('status', isEqualTo: 'Pending Farmer').snapshots(),
           builder: (context, snap) {
-            if (snap.hasError) return Text("Error: ${snap.error}");
-            if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
-
-            final docs = snap.data!.docs;
-            // Only show orders that haven't been picked by another farmer
+            final docs = snap.data?.docs ?? [];
             final availableDocs = docs.where((d) => (d.data() as Map)['farmerUid'] == null).toList();
 
             if (availableDocs.isEmpty) return const SizedBox();
@@ -541,40 +317,35 @@ class _DashboardTabState extends State<_DashboardTab> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Available Orders (Unassigned)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
+                const Text("New Order Requests", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 12),
-                ...availableDocs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return _OrderAcceptanceTile(
-                    orderId: doc.id,
-                    data: data,
-                    currentFarmerUid: widget.uid,
-                    currentFarmName: widget.farmName,
-                    farmerLat: widget.farmerLat,
-                    farmerLng: widget.farmerLng,
-                  );
-                }),
+                ...availableDocs.map((doc) => _OrderAcceptanceTile(
+                  orderId: doc.id,
+                  data: doc.data() as Map<String, dynamic>,
+                  currentFarmerUid: widget.uid,
+                  currentFarmName: widget.farmName,
+                  farmerLat: widget.farmerLat,
+                  farmerLng: widget.farmerLng,
+                )),
                 const SizedBox(height: 20),
               ],
             );
           },
         ),
-        const SizedBox(height: 24),
-        const Text("Recent Orders", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
+
+        const Text("Business Overview", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).snapshots(),
           builder: (context, snapshot) {
             final docs = snapshot.data?.docs ?? [];
-
             double totalEarnings = 0;
             int pendingCount = 0;
 
             for (var doc in docs) {
               final data = doc.data() as Map<String, dynamic>;
-              // Only count revenue from Delivered orders and use the new 80% share field
               if (data['status'] == 'Delivered') {
-                totalEarnings += (data['farmerRevenue'] ?? 0).toDouble();
+                totalEarnings += (data['farmerRevenue'] ?? (data['total'] ?? 0) * 0.8).toDouble();
               } else if (data['status'] != 'Cancelled') {
                 pendingCount++;
               }
@@ -582,9 +353,9 @@ class _DashboardTabState extends State<_DashboardTab> {
 
             return Row(
               children: [
-                _StatCard(title: "Farmer Net", value: "Rs. ${totalEarnings.toStringAsFixed(0)}", icon: Icons.payments, color: Colors.green),
+                _StatCard(title: "Total Revenue", value: "Rs. ${totalEarnings.toStringAsFixed(0)}", icon: Icons.payments, color: Colors.green),
                 const SizedBox(width: 15),
-                _StatCard(title: "Live Tasks", value: "$pendingCount", icon: Icons.pending_actions, color: Colors.blue),
+                _StatCard(title: "Active Tasks", value: "$pendingCount", icon: Icons.pending_actions, color: Colors.blue),
               ],
             );
           },
@@ -613,15 +384,6 @@ class _ProductsTabState extends State<_ProductsTab> {
     );
   }
 
-  void _editProduct(Map<String, dynamic> product, String id) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _ProductForm(uid: widget.uid, farmName: widget.farmName, existingProduct: product, productId: id),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -637,77 +399,30 @@ class _ProductsTabState extends State<_ProductsTab> {
           if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
           final docs = snapshot.data!.docs;
 
-          if (docs.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inventory_2_outlined, size: 80, color: Colors.grey.withAlpha(50)),
-                  const SizedBox(height: 16),
-                  const Text("No products yet", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            );
-          }
+          if (docs.isEmpty) return const Center(child: Text("No products yet", style: TextStyle(color: Colors.grey)));
 
           return ListView.builder(
             padding: const EdgeInsets.all(20),
             itemCount: docs.length,
             itemBuilder: (context, i) {
               final data = docs[i].data() as Map<String, dynamic>;
-              final String? imageUrl = data['imageUrl'] ?? data['image'];
-              final String status = data['status'] ?? 'approved';
-              
-              Color statusColor = Colors.green;
-              if (status == 'pending') statusColor = Colors.orange;
-              if (status == 'rejected') statusColor = Colors.red;
-
               return Card(
-                margin: const EdgeInsets.only(bottom: 15),
+                margin: const EdgeInsets.only(bottom: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                 child: ListTile(
-                  leading: imageUrl != null && imageUrl.isNotEmpty
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: CachedNetworkImage(
-                            imageUrl: imageUrl,
-                            width: 40,
-                            height: 40,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => const CircularProgressIndicator(strokeWidth: 2),
-                            errorWidget: (context, url, error) => const Icon(Icons.eco, color: Colors.green),
-                          ),
-                        )
-                      : const Icon(Icons.eco, color: Colors.green),
-                  title: Row(
-                    children: [
-                      Expanded(child: Text(data['name'] ?? 'Product')),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(color: statusColor.withAlpha(30), borderRadius: BorderRadius.circular(10)),
-                        child: Text(status.toUpperCase(), style: TextStyle(color: statusColor, fontSize: 8, fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                  subtitle: Text("Rs. ${data['price']} / ${data['unit']}"),
-                  contentPadding: const EdgeInsets.all(12),
                   leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(8),
                     child: CachedNetworkImage(
                       imageUrl: data['image'] ?? '',
-                      width: 60, height: 60, fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(color: Colors.grey[200]),
+                      width: 50, height: 50, fit: BoxFit.cover,
                       errorWidget: (context, url, error) => const Icon(Icons.eco, color: Colors.green),
                     ),
                   ),
-                  title: Text(data['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("Rs. ${data['price']} / ${data['unit'] ?? 'kg'}"),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(icon: const Icon(Icons.edit_outlined, color: Colors.blue), onPressed: () => _editProduct(data, docs[i].id)),
-                      IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _deleteProduct(docs[i].id)),
-                    ],
+                  title: Text(data['name'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text("Rs. ${data['price']} / ${data['unit']}"),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () => FirebaseFirestore.instance.collection('products').doc(docs[i].id).delete(),
                   ),
                 ),
               );
@@ -717,32 +432,13 @@ class _ProductsTabState extends State<_ProductsTab> {
       ),
     );
   }
-
-  Future<void> _deleteProduct(String id) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Delete Product?"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("Delete", style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-
-    if (ok == true) {
-      await FirebaseFirestore.instance.collection('products').doc(id).delete();
-    }
-  }
 }
 
 class _ProductForm extends StatefulWidget {
   final String uid, farmName;
   final double? farmerLat, farmerLng;
-  final Map<String, dynamic>? existingProduct;
-  final String? productId;
 
-  const _ProductForm({required this.uid, required this.farmName, this.farmerLat, this.farmerLng, this.existingProduct, this.productId});
+  const _ProductForm({required this.uid, required this.farmName, this.farmerLat, this.farmerLng});
 
   @override
   State<_ProductForm> createState() => _ProductFormState();
@@ -751,203 +447,52 @@ class _ProductForm extends StatefulWidget {
 class _ProductFormState extends State<_ProductForm> {
   final name = TextEditingController();
   final price = TextEditingController();
-  final stock = TextEditingController();
   final unit = TextEditingController(text: 'kg');
   XFile? selectedImage;
   bool isUploading = false;
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.existingProduct != null) {
-      name.text = widget.existingProduct!['name'] ?? '';
-      price.text = widget.existingProduct!['price']?.toString() ?? '';
-      stock.text = widget.existingProduct!['stock']?.toString() ?? '100';
-      unit.text = widget.existingProduct!['unit'] ?? 'kg';
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    bool isEditing = widget.existingProduct != null;
-    String productId = widget.productId ?? '';
-    final existingProduct = widget.existingProduct ?? {};
-
     return Container(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
       decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(isEditing ? "Edit Product" : "Add New Product", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const Text("Add New Product", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
-            if (!isEditing) Center(
-              child: GestureDetector(
-                onTap: () async {
-                  final img = await ImagePicker().pickImage(source: ImageSource.gallery);
-                  if (img != null) setState(() => selectedImage = img);
-                },
-                child: Container(
-                  width: 100, height: 100,
-                  decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(15)),
-                  child: selectedImage != null
-                      ? ClipRRect(borderRadius: BorderRadius.circular(15), child: Image.file(File(selectedImage!.path), fit: BoxFit.cover))
-                      : const Icon(Icons.add_a_photo, color: Colors.grey),
-                ),
+            GestureDetector(
+              onTap: () async {
+                final img = await ImagePicker().pickImage(source: ImageSource.gallery);
+                if (img != null) setState(() => selectedImage = img);
+              },
+              child: Container(
+                width: 100, height: 100,
+                decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(15)),
+                child: selectedImage != null
+                    ? ClipRRect(borderRadius: BorderRadius.circular(15), child: Image.file(File(selectedImage!.path), fit: BoxFit.cover))
+                    : const Icon(Icons.add_a_photo, color: Colors.grey),
               ),
             ),
             const SizedBox(height: 20),
-            TextField(controller: name, decoration: const InputDecoration(labelText: "Product Name", border: OutlineInputBorder())),
+            TextField(controller: name, decoration: const InputDecoration(labelText: "Name", border: OutlineInputBorder())),
             const SizedBox(height: 15),
             Row(
               children: [
-                Expanded(child: TextField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Price (Rs.)", border: OutlineInputBorder()))),
+                Expanded(child: TextField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Price", border: OutlineInputBorder()))),
                 const SizedBox(width: 15),
-                Expanded(child: TextField(controller: unit, decoration: const InputDecoration(labelText: "Unit (e.g. kg, bundle)", border: OutlineInputBorder()))),
+                Expanded(child: TextField(controller: unit, decoration: const InputDecoration(labelText: "Unit", border: OutlineInputBorder()))),
               ],
             ),
-            const SizedBox(height: 15),
-            TextField(controller: stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Initial Stock Quantity", border: OutlineInputBorder())),
             const SizedBox(height: 25),
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                onPressed: isUploading ? null : () async {
-                  if (name.text.isEmpty || price.text.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fill all required fields")));
-                    return;
-                  }
-
-                  final double? priceVal = double.tryParse(price.text);
-                  if (priceVal == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please enter a valid numeric price")));
-                    return;
-                  }
-
-                  setModalState(() => isUploading = true);
-
-                  try {
-                    if (isEditing) {
-                      await FirebaseFirestore.instance.collection('price_requests').add({
-                        'productId': productId,
-                        'productName': name.text,
-                        'farmerUid': widget.uid,
-                        'farmName': widget.farmName,
-                        'oldPrice': double.tryParse(existingProduct['price']?.toString() ?? '0') ?? 0,
-                        'newPrice': priceVal,
-                        'oldUnit': existingProduct['unit'] ?? 'kg',
-                        'newUnit': unit.text,
-                        'status': 'pending',
-                        'createdAt': FieldValue.serverTimestamp(),
-                      });
-                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Price update request sent to admin")));
-                    } else {
-                      if (selectedImage == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select an image")));
-                        setModalState(() => isUploading = false);
-                        return;
-                      }
-
-                      String? imageUrl;
-                      try {
-                        if (isEditing) {
-                          await FirebaseFirestore.instance.collection('price_requests').add({
-                            'productId': productId,
-                            'productName': name.text,
-                            'farmerUid': widget.uid,
-                            'farmName': widget.farmName,
-                            'oldPrice': double.tryParse(existingProduct['price']?.toString() ?? '0') ?? 0,
-                            'newPrice': priceVal,
-                            'oldUnit': existingProduct['unit'] ?? 'kg',
-                            'newUnit': unit.text,
-                            'status': 'pending',
-                            'createdAt': FieldValue.serverTimestamp(),
-                          });
-                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Price update request sent to admin")));
-                        } else {
-                          if (selectedImage == null) {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select an image")));
-                            setModalState(() => isUploading = false);
-                            return;
-                          }
-
-                          String? imageUrl;
-                          String? s3Key;
-                          try {
-                            final storageService = StorageService();
-                            
-                            // Direct upload to S3
-                            s3Key = await storageService.uploadToS3(selectedImage!, 'products');
-                            
-                            if (s3Key == null) throw "S3 Upload failed";
-                            
-                            imageUrl = AWSConfig.getImageUrl(s3Key);
-                          } catch (e) {
-                            String errorMsg = "Error uploading image: $e";
-                            throw errorMsg;
-                          }
-
-                          // Add to products collection with 'pending' status
-                          await FirebaseFirestore.instance.collection('products').add({
-                            'name': name.text,
-                            'title': name.text,
-                            'price': priceVal,
-                            'farmerUid': widget.uid,
-                            'farmName': widget.farmName,
-                            'farmerLat': widget.farmerLat,
-                            'farmerLng': widget.farmerLng,
-                            'unit': unit.text,
-                            's3Url': s3Key, 
-                            'imageUrl': imageUrl, 
-                            'image': imageUrl, 
-                            'description': description.text,
-                            'longDescription': description.text,
-                            'category': 'General',
-                            'status': 'pending', // Requires admin approval
-                            'createdAt': FieldValue.serverTimestamp(),
-                          });
-                          
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Product submitted for admin approval"))
-                            );
-                          }
-                        }
-                        if (context.mounted) Navigator.pop(context);
-                        final storageService = StorageService();
-                        imageUrl = await storageService.uploadImage(selectedImage!, 'products');
-                        if (imageUrl == null) throw "Upload failed";
-                      } catch (e) {
-                        String errorMsg = "Error uploading image: $e";
-                        throw errorMsg;
-                      }
-
-                      await FirebaseFirestore.instance.collection('products').add({
-                        'name': name.text,
-                        'title': name.text, // Added for compatibility with Product model
-                        'price': priceVal,
-                        'farmerUid': widget.uid,
-                        'farmName': widget.farmName,
-                        'farmerLat': widget.farmerLat,
-                        'farmerLng': widget.farmerLng,
-                        'unit': unit.text,
-                        'stock': int.tryParse(stock.text) ?? 100,
-                        'image': imageUrl,
-                        'createdAt': FieldValue.serverTimestamp(),
-                      });
-                    }
-                    if (context.mounted) Navigator.pop(context);
-                  } catch (e) {
-                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-                  } finally {
-                    setModalState(() => isUploading = false);
-                  }
-                },
-                child: isUploading ? const CircularProgressIndicator(color: Colors.white) : Text(isEditing ? "Request Price Update" : "List Product", style: const TextStyle(color: Colors.white)),
+                onPressed: isUploading ? null : _submit,
+                child: isUploading ? const CircularProgressIndicator(color: Colors.white) : const Text("List Product", style: TextStyle(color: Colors.white)),
               ),
             ),
             const SizedBox(height: 30),
@@ -957,8 +502,37 @@ class _ProductFormState extends State<_ProductForm> {
     );
   }
 
-  void setModalState(VoidCallback fn) {
-    if (mounted) setState(fn);
+  Future<void> _submit() async {
+    if (name.text.isEmpty || price.text.isEmpty || selectedImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("All fields are required")));
+      return;
+    }
+
+    setState(() => isUploading = true);
+    try {
+      final storageService = StorageService();
+      final imageUrl = await storageService.uploadImage(selectedImage!, 'products');
+      if (imageUrl == null) throw "Upload failed";
+
+      await FirebaseFirestore.instance.collection('products').add({
+        'name': name.text,
+        'title': name.text,
+        'price': double.parse(price.text),
+        'farmerUid': widget.uid,
+        'farmName': widget.farmName,
+        'farmerLat': widget.farmerLat,
+        'farmerLng': widget.farmerLng,
+        'unit': unit.text,
+        'image': imageUrl,
+        'status': 'approved',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    } finally {
+      if (mounted) setState(() => isUploading = false);
+    }
   }
 }
 
@@ -969,24 +543,18 @@ class _DeliveryTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
+      length: 2,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: const TabBar(
           labelColor: Colors.green,
-          unselectedLabelColor: Colors.grey,
           indicatorColor: Colors.green,
-          tabs: [
-            Tab(text: "Pending"),
-            Tab(text: "Completed"),
-            Tab(text: "Cancelled"),
-          ],
+          tabs: [Tab(text: "Active"), Tab(text: "History")],
         ),
         body: TabBarView(
           children: [
-            _OrderList(uid: uid, statuses: ['Pending Farmer', 'Farmer Accepted', 'Awaiting Pickup', 'Processing']),
+            _OrderList(uid: uid, statuses: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way']),
             _OrderList(uid: uid, statuses: ['Delivered']),
-            _OrderList(uid: uid, statuses: ['Cancelled']),
           ],
         ),
       ),
@@ -1008,236 +576,33 @@ class _OrderList extends StatelessWidget {
           .where('status', whereIn: statuses)
           .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         final docs = snapshot.data!.docs;
-        if (docs.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.eco_outlined, size: 80, color: Colors.green.withAlpha(50)),
-                const SizedBox(height: 16),
-                const Text("No deliveries to show yet!", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey)),
-                const SizedBox(height: 8),
-                const Text("Your crops are growing and orders will come soon.", style: TextStyle(color: Colors.grey)),
-              ],
-            ),
-          );
-        }
+        if (docs.isEmpty) return const Center(child: Text("No orders found", style: TextStyle(color: Colors.grey)));
 
         return ListView.builder(
           padding: const EdgeInsets.all(12),
           itemCount: docs.length,
           itemBuilder: (context, i) {
             final data = docs[i].data() as Map<String, dynamic>;
-            return _DeliveryCard(orderId: docs[i].id, data: data, docRef: docs[i].reference);
+            final status = data['status'] ?? 'Pending';
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              child: ListTile(
+                title: Text("Order #${docs[i].id.substring(0, 8)}"),
+                subtitle: Text(data['itemsSummary'] ?? 'Products'),
+                trailing: status == 'Farmer Accepted'
+                    ? ElevatedButton(
+                        onPressed: () => docs[i].reference.update({'status': 'Awaiting Pickup'}),
+                        child: const Text("Pack & Ready"),
+                      )
+                    : Text(status, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+              ),
+            );
           },
         );
       },
-    );
-  }
-}
-
-class _DeliveryCard extends StatelessWidget {
-  final String orderId;
-  final Map<String, dynamic> data;
-  final DocumentReference docRef;
-  const _DeliveryCard({required this.orderId, required this.data, required this.docRef});
-
-  @override
-  Widget build(BuildContext context) {
-    String status = data['status'] ?? 'Pending';
-    Color statusColor = Colors.orange;
-    if (status == 'Delivered') statusColor = Colors.green;
-    if (status == 'Cancelled') statusColor = Colors.red;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Text("Order #$orderId", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: statusColor.withAlpha(30), borderRadius: BorderRadius.circular(20)),
-                  child: Text(status, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            Text(data['itemsSummary'] ?? 'Products ordered', style: const TextStyle(fontSize: 14), maxLines: 2, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 8),
-            Text("Total: Rs. ${data['total'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-            const SizedBox(height: 16),
-            if (status == 'Farmer Accepted')
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                  onPressed: () async {
-                    await docRef.update({'status': 'Awaiting Pickup'});
-
-                    final userId = data['userId'];
-                    if (userId != null) {
-                      await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
-                        'title': 'Order Ready for Pickup',
-                        'body': 'Your order has been packed and is ready for the delivery person.',
-                        'createdAt': FieldValue.serverTimestamp(),
-                        'isRead': false,
-                        'type': 'delivery_status',
-                        'status': 'Awaiting Pickup',
-                        'orderId': orderId,
-                      });
-                    }
-
-                    // Notify all Delivery Persons that a new pickup is available
-                    final ridersSnap = await FirebaseFirestore.instance
-                        .collection('users')
-                        .where('role', isEqualTo: 'Delivery Person')
-                        .get();
-
-                    for (var rDoc in ridersSnap.docs) {
-                      await FirebaseFirestore.instance.collection('users').doc(rDoc.id).collection('notifications').add({
-                        'title': 'New Pickup Available!',
-                        'body': 'A package is ready for pickup at ${data['farmName'] ?? 'a nearby farm'}.',
-                        'createdAt': FieldValue.serverTimestamp(),
-                        'isRead': false,
-                        'type': 'pickup_alert',
-                        'orderId': orderId,
-                      });
-                    }
-                  },
-                  child: const Text("Ready for Pickup", style: TextStyle(color: Colors.white)),
-                ),
-              ),
-            if (data['deliveryId'] != null && data['deliveryId'] != "") ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => _TrackRiderMapScreen(
-                          orderId: orderId,
-                          riderId: data['deliveryId'],
-                          orderData: data,
-                        ),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.map, size: 18),
-                  label: const Text("Track Rider"),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.green,
-                    side: const BorderSide(color: Colors.green),
-                  ),
-                ),
-              ),
-            ]
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _OrderAcceptanceTile extends StatelessWidget {
-  final String orderId;
-  final Map<String, dynamic> data;
-  final String currentFarmerUid;
-  final String currentFarmName;
-  final double? farmerLat, farmerLng;
-  const _OrderAcceptanceTile({
-    required this.orderId,
-    required this.data,
-    required this.currentFarmerUid,
-    required this.currentFarmName,
-    this.farmerLat,
-    this.farmerLng,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.green.shade200),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(data['itemsSummary'] ?? 'New Order', style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text("Total: Rs. ${data['total'] is num ? (data['total'] as num).toStringAsFixed(2) : data['total'] ?? 0}", style: const TextStyle(color: Colors.green, fontSize: 13)),
-                    Text("Customer: ${data['userName']}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                    Text("Address: ${data['deliveryAddress']}", style: const TextStyle(color: Colors.grey, fontSize: 11), maxLines: 1, overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Text("NEW REQUEST", style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold, fontSize: 10)),
-            ],
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            width: double.infinity,
-            height: 40,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-              onPressed: () async {
-                // Check if already taken
-                final freshDoc = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
-                if (freshDoc.data()?['farmerUid'] != null) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Too late! Another farm already accepted this order.")));
-                  }
-                  return;
-                }
-
-                await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-                  'status': 'Farmer Accepted',
-                  'farmerUid': currentFarmerUid,
-                  'farmName': currentFarmName,
-                  'farmerLat': farmerLat,
-                  'farmerLng': farmerLng,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                });
-
-                final userId = data['userId'];
-                if (userId != null) {
-                  await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
-                    'title': 'Farmer Accepted Your Order',
-                    'body': '$currentFarmName has accepted your order and is preparing it.',
-                    'createdAt': FieldValue.serverTimestamp(),
-                    'isRead': false,
-                    'type': 'delivery_status',
-                  });
-                }
-              },
-              child: const Text("Accept & Prepare", style: TextStyle(color: Colors.white)),
-            ),
-          )
-        ],
-      ),
     );
   }
 }
@@ -1248,80 +613,31 @@ class _StockTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7F5),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        title: const Text("Stock Inventory", style: TextStyle(color: Colors.black)),
-      ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final docs = snapshot.data!.docs;
-
-          if (docs.isEmpty) {
-            return const Center(child: Text("No products found"));
-          }
-
-          return GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.8, crossAxisSpacing: 12, mainAxisSpacing: 12),
-            itemCount: docs.length,
-            itemBuilder: (ctx, i) {
-              final d = docs[i].data() as Map<String, dynamic>;
-              final String name = d['name'] ?? 'Product';
-              final String image = d['image'] ?? '';
-              final int stock = d['stock'] ?? 0;
-
-              return Card(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: image.isNotEmpty
-                          ? CachedNetworkImage(
-                        imageUrl: image,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(color: Colors.grey[200]),
-                        errorWidget: (context, url, error) => _fallbackImage(),
-                      )
-                          : _fallbackImage(),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(name, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          const SizedBox(height: 4),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text("Qty: $stock", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                              const Icon(Icons.inventory_2, size: 16, color: Colors.grey),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _fallbackImage() {
-    return Container(
-      color: Colors.green.withAlpha(20),
-      child: const Center(child: Icon(Icons.eco, size: 40, color: Colors.green)),
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final docs = snapshot.data!.docs;
+        return GridView.builder(
+          padding: const EdgeInsets.all(16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.8, crossAxisSpacing: 12, mainAxisSpacing: 12),
+          itemCount: docs.length,
+          itemBuilder: (ctx, i) {
+            final d = docs[i].data() as Map<String, dynamic>;
+            return Card(
+              child: Column(
+                children: [
+                  Expanded(child: CachedNetworkImage(imageUrl: d['image'] ?? '', fit: BoxFit.cover, errorWidget: (_,__,___) => const Icon(Icons.eco))),
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Text(d['name'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -1351,139 +667,31 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _TrackRiderMapScreen extends StatefulWidget {
+class _OrderAcceptanceTile extends StatelessWidget {
   final String orderId;
-  final String riderId;
-  final Map<String, dynamic> orderData;
-
-  const _TrackRiderMapScreen({
-    required this.orderId,
-    required this.riderId,
-    required this.orderData,
-  });
-
-  @override
-  State<_TrackRiderMapScreen> createState() => _TrackRiderMapScreenState();
-}
-
-class _TrackRiderMapScreenState extends State<_TrackRiderMapScreen> {
-  MapLibreMapController? _mapController;
-  LatLng? _riderPos;
-  Symbol? _riderSymbol;
-  StreamSubscription? _riderSub;
-
-  @override
-  void initState() {
-    super.initState();
-    _listenToRider();
-  }
-
-  void _listenToRider() {
-    _riderSub = FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.riderId)
-        .snapshots()
-        .listen((doc) {
-      if (doc.exists && mounted) {
-        final data = doc.data() as Map<String, dynamic>;
-        final lat = (data['lat'] as num?)?.toDouble();
-        final lng = (data['lng'] as num?)?.toDouble();
-
-        if (lat != null && lng != null) {
-          final newPos = LatLng(lat, lng);
-          setState(() => _riderPos = newPos);
-          _updateRiderMarker();
-        }
-      }
-    });
-  }
-
-  void _updateRiderMarker() {
-    if (_mapController != null && _riderPos != null) {
-      if (_riderSymbol == null) {
-        _mapController!.addSymbol(SymbolOptions(
-          geometry: _riderPos!,
-          iconImage: "airport-15",
-          iconRotate: 90,
-          iconColor: "#4CAF50",
-          iconSize: 2.5,
-          textField: "Rider",
-          textSize: 10,
-          textOffset: const Offset(0, 1.2),
-        )).then((s) => _riderSymbol = s);
-      } else {
-        _mapController!.updateSymbol(_riderSymbol!, SymbolOptions(
-          geometry: _riderPos!,
-        ));
-      }
-    }
-  }
-
-  void _onMapCreated(MapLibreMapController controller) async {
-    _mapController = controller;
-
-    // Add Farmer (Self)
-    final fLat = (widget.orderData['farmerLat'] as num?)?.toDouble();
-    final fLng = (widget.orderData['farmerLng'] as num?)?.toDouble();
-    if (fLat != null && fLng != null) {
-      await _mapController!.addSymbol(SymbolOptions(
-        geometry: LatLng(fLat, fLng),
-        iconImage: "restaurant-15",
-        iconColor: "#FFA000",
-        iconSize: 2.0,
-        textField: "My Hub",
-        textSize: 10,
-        textOffset: const Offset(0, 1.2),
-      ));
-    }
-
-    // Add Customer
-    final cLat = (widget.orderData['customerLat'] as num?)?.toDouble() ?? (widget.orderData['lat'] as num?)?.toDouble();
-    final cLng = (widget.orderData['customerLng'] as num?)?.toDouble() ?? (widget.orderData['lng'] as num?)?.toDouble();
-    if (cLat != null && cLng != null) {
-      await _mapController!.addSymbol(SymbolOptions(
-        geometry: LatLng(cLat, cLng),
-        iconImage: "marker-15",
-        iconColor: "#FF5252",
-        iconSize: 2.0,
-        textField: "Customer",
-        textSize: 10,
-        textOffset: const Offset(0, 1.2),
-      ));
-    }
-
-    _updateRiderMarker();
-  }
-
-  @override
-  void dispose() {
-    _riderSub?.cancel();
-    super.dispose();
-  }
+  final Map<String, dynamic> data;
+  final String currentFarmerUid;
+  final String currentFarmName;
+  final double? farmerLat, farmerLng;
+  const _OrderAcceptanceTile({required this.orderId, required this.data, required this.currentFarmerUid, required this.currentFarmName, this.farmerLat, this.farmerLng});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Track Rider Location", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.black), onPressed: () => Navigator.pop(context)),
-      ),
-      body: Stack(
-        children: [
-          MapLibreMap(
-            initialCameraPosition: CameraPosition(
-              target: _riderPos ?? const LatLng(27.7172, 85.3240),
-              zoom: 13,
-            ),
-            onMapCreated: _onMapCreated,
-            myLocationEnabled: true,
-            styleString: "https://tiles.openfreemap.org/styles/positron",
-          ),
-          if (_riderPos == null)
-            const Center(child: CircularProgressIndicator(color: Colors.green)),
-        ],
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        title: Text(data['itemsSummary'] ?? 'New Order'),
+        subtitle: Text("Total: Rs. ${data['total']} • ${data['deliveryAddress']}"),
+        trailing: ElevatedButton(
+          onPressed: () => FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+            'status': 'Farmer Accepted',
+            'farmerUid': currentFarmerUid,
+            'farmName': currentFarmName,
+            'farmerLat': farmerLat,
+            'farmerLng': farmerLng,
+          }),
+          child: const Text("Accept"),
+        ),
       ),
     );
   }

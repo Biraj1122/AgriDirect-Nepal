@@ -38,43 +38,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? phone;
   String? fullName;
   String? profileImageUrl;
-  
-  late PageController _bannerController;
-  int _currentBannerIndex = 0;
-  late List<String> _bannerImages;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _fetchUserData();
-    _bannerController = PageController();
-    _bannerImages = [
-      "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1000",
-      "https://images.unsplash.com/photo-1464226184884-fa280b87c399?q=80&w=1000",
-      "https://images.unsplash.com/photo-1495107333211-6ca9c24ad996?q=80&w=1000",
-    ]..shuffle();
-    
-    Future.delayed(const Duration(seconds: 3), _animateBanner);
-  }
-
-  void _animateBanner() {
-    if (!mounted || !_bannerController.hasClients) return;
-    _currentBannerIndex = (_currentBannerIndex + 1) % _bannerImages.length;
-    _bannerController.animateToPage(
-      _currentBannerIndex,
-      duration: const Duration(seconds: 1),
-      curve: Curves.easeInOut,
-    );
-    Future.delayed(const Duration(seconds: 5), _animateBanner);
-  }
-
-  @override
-  void dispose() {
-    _bannerController.dispose();
-    super.dispose();
   }
 
   Future<void> _fetchUserData() async {
+    setState(() => _isLoading = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
@@ -89,6 +62,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (e) {
       debugPrint("Error fetching user data: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -102,6 +77,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -109,114 +86,93 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _handleBack(context);
       },
       child: Scaffold(
-        backgroundColor: const Color(0xffF7F8F3),
-        body: SingleChildScrollView(
-          child: Column(
-            children: [
-              Container(
-                height: 240,
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: Color(0xffE8F5E9),
+        backgroundColor: const Color(0xffF8FAF8),
+        body: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            SliverAppBar(
+              expandedHeight: 220,
+              pinned: true,
+              stretch: true,
+              backgroundColor: Colors.green,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => _handleBack(context),
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                  onPressed: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => EditProfileScreen(
+                          currentName: fullName ?? widget.userName,
+                          currentPhone: phone ?? "Not set",
+                        ),
+                      ),
+                    );
+                    if (result == true) {
+                      _fetchUserData();
+                    }
+                  },
                 ),
-                child: Stack(
+              ],
+              flexibleSpace: FlexibleSpaceBar(
+                stretchModes: const [
+                  StretchMode.zoomBackground,
+                  StretchMode.blurBackground,
+                ],
+                background: Stack(
+                  fit: StackFit.expand,
                   children: [
-                    Positioned.fill(
-                      child: PageView.builder(
-                        controller: _bannerController,
-                        itemCount: _bannerImages.length,
-                        itemBuilder: (context, index) {
-                          return CachedNetworkImage(
-                            imageUrl: _bannerImages[index],
-                            fit: BoxFit.cover,
-                            color: Colors.black.withValues(alpha: 0.2),
-                            colorBlendMode: BlendMode.darken,
-                            placeholder: (context, url) => Container(
-                              color: Colors.green.shade100,
-                              child: const Center(
-                                child: CircularProgressIndicator(color: Colors.green),
-                              ),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              color: Colors.green.shade100,
-                              child: const Icon(Icons.agriculture, size: 50, color: Colors.green),
-                            ),
-                          );
-                        },
+                    CachedNetworkImage(
+                      imageUrl: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1000",
+                      fit: BoxFit.cover,
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.4),
+                            Colors.green.withValues(alpha: 0.8),
+                          ],
+                        ),
                       ),
                     ),
                     Positioned(
-                      top: 50,
-                      left: 15,
-                      child: IconButton(
-                        icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-                        onPressed: () => _handleBack(context),
-                      ),
-                    ),
-                    Positioned(
-                      top: 50,
+                      bottom: 40,
+                      left: 20,
                       right: 20,
-                      child: IconButton(
-                        icon: const Icon(Icons.edit_outlined, color: Colors.white),
-                        onPressed: () async {
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => EditProfileScreen(
-                                currentName: fullName ?? widget.userName,
-                                currentPhone: phone ?? "Not set",
-                              ),
-                            ),
-                          );
-                          if (result == true) {
-                            _fetchUserData();
-                          }
-                        },
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 30,
-                      left: 25,
                       child: Row(
                         children: [
-                          Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 3),
-                            ),
-                            child: CircleAvatar(
-                              radius: 40,
-                              backgroundColor: Colors.white,
-                              backgroundImage: profileImageUrl != null && profileImageUrl!.isNotEmpty
-                                  ? CachedNetworkImageProvider(profileImageUrl!)
-                                  : null,
-                              child: profileImageUrl == null || profileImageUrl!.isEmpty
-                                  ? const Icon(Icons.person, size: 45, color: Colors.green)
-                                  : null,
-                            ),
-                          ),
-                          const SizedBox(width: 15),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                fullName ?? widget.userName,
-                                style: const TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  shadows: [Shadow(color: Colors.black, blurRadius: 10)],
+                          _buildProfileImage(),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  fullName ?? widget.userName,
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                              Text(
-                                phone ?? "Add phone number",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w500,
-                                  shadows: [Shadow(color: Colors.black, blurRadius: 10)],
+                                Text(
+                                  phone ?? "Add phone number",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -224,194 +180,203 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              Container(
-                color: Colors.white,
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    menuItem(
-                      Icons.location_on_outlined,
-                      "My Addresses",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MyAddressesScreen(),
-                          ),
-                        );
-                      },
-                    ),
+                    _buildSectionHeader("Account Overview"),
+                    _buildMenuCard([
+                      _buildMenuItem(
+                        icon: Icons.shopping_bag_outlined,
+                        title: "Order History",
+                        color: Colors.blue,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderHistoryScreen())),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.location_on_outlined,
+                        title: "My Addresses",
+                        color: Colors.orange,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAddressesScreen())),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.payment_outlined,
+                        title: "Payment Methods",
+                        color: Colors.purple,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsScreen(subtotal: 0, deliveryFee: 0, total: 0))),
+                      ),
+                    ]),
+                    
+                    const SizedBox(height: 24),
+                    _buildSectionHeader("Personalization"),
+                    _buildMenuCard([
+                      _buildMenuItem(
+                        icon: Icons.favorite_border,
+                        title: "My Favorites",
+                        color: Colors.red,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => MyFavouritesScreen(onFavouriteToggle: widget.onFavouriteToggle ?? (item) {}))),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.notifications_none_outlined,
+                        title: "Notifications",
+                        color: Colors.amber,
+                        badgeStream: FirebaseAuth.instance.currentUser?.uid != null
+                            ? FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(FirebaseAuth.instance.currentUser!.uid)
+                                .collection('notifications')
+                                .where('isRead', isEqualTo: false)
+                                .snapshots()
+                            : null,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+                      ),
+                    ]),
 
-                    menuItem(
-                      Icons.history,
-                      "Order History",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const OrderHistoryScreen(),
-                          ),
-                        );
-                      },
-                    ),
+                    const SizedBox(height: 24),
+                    _buildSectionHeader("Support & Info"),
+                    _buildMenuCard([
+                      _buildMenuItem(
+                        icon: Icons.help_outline,
+                        title: "Help & Support",
+                        color: Colors.teal,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportScreen())),
+                      ),
+                      _buildMenuItem(
+                        icon: Icons.info_outline,
+                        title: "About AgriDirect",
+                        color: Colors.indigo,
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutUsScreen())),
+                      ),
+                    ]),
 
-                    menuItem(
-                      Icons.payment_outlined,
-                      "Payment Methods",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const PaymentMethodsScreen(
-                              subtotal: 0,
-                              deliveryFee: 0,
-                              total: 0,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    menuItem(
-                      Icons.favorite_border,
-                      "My Favorites",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => MyFavouritesScreen(
-                              onFavouriteToggle:
-                              widget.onFavouriteToggle ?? (item) {},
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    menuItem(
-                      Icons.notifications,
-                      "Notifications",
-                      badgeStream: FirebaseAuth.instance.currentUser?.uid != null
-                          ? FirebaseFirestore.instance
-                              .collection('users')
-                              .doc(FirebaseAuth.instance.currentUser!.uid)
-                              .collection('notifications')
-                              .where('isRead', isEqualTo: false)
-                              .snapshots()
-                          : null,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const NotificationsScreen(),
-                          ),
-                        );
-                      },
-                    ),
-
-                    menuItem(
-                      Icons.help_outline,
-                      "Help & Support",
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const HelpSupportScreen(),
-                          ),
-                        );
-                      },
-                    ),
-
-                    menuItem(
-                      Icons.info_outline,
-                      "About Us",
-                      isLast: true,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const AboutUsScreen(),
-                          ),
-                        );
-                      },
-                    ),
+                    const SizedBox(height: 32),
+                    _buildLogoutButton(context),
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
-
-              const SizedBox(height: 20),
-
-              GestureDetector(
-                onTap: () async {
-                  await FirebaseAuth.instance.signOut();
-                  if (context.mounted) {
-                    Navigator.pushAndRemoveUntil(
-                      context,
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
-                      (r) => false,
-                    );
-                  }
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(15),
-                  color: Colors.white,
-                  child: const Row(
-                    children: [
-                      Icon(Icons.logout, color: Colors.red),
-                      SizedBox(width: 10),
-                      Text(
-                        "Logout",
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget menuItem(
-      IconData icon,
-      String title, {
-        VoidCallback? onTap,
-        bool isLast = false,
-        Stream<QuerySnapshot>? badgeStream,
-      }) {
+  Widget _buildProfileImage() {
+    return Container(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: CircleAvatar(
+        radius: 40,
+        backgroundColor: Colors.white,
+        backgroundImage: profileImageUrl != null && profileImageUrl!.isNotEmpty
+            ? CachedNetworkImageProvider(profileImageUrl!)
+            : null,
+        child: profileImageUrl == null || profileImageUrl!.isEmpty
+            ? const Icon(Icons.person, size: 40, color: Colors.green)
+            : null,
+      ),
+    );
+  }
 
-    return Column(
-      children: [
-        ListTile(
-          leading: Icon(icon),
-          title: Text(title),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, bottom: 12),
+      child: Text(
+        title.toUpperCase(),
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: Colors.grey.shade600,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuCard(List<Widget> items) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        children: items,
+      ),
+    );
+  }
+
+  Widget _buildMenuItem({
+    required IconData icon,
+    required String title,
+    required Color color,
+    required VoidCallback onTap,
+    Stream<QuerySnapshot>? badgeStream,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
             children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xff2D3142),
+                  ),
+                ),
+              ),
               if (badgeStream != null)
                 StreamBuilder<QuerySnapshot>(
                   stream: badgeStream,
                   builder: (context, snapshot) {
                     if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
                       return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
+                        margin: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.2),
+                          color: Colors.red,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
                           "${snapshot.data!.docs.length}",
                           style: const TextStyle(
-                            color: Colors.red,
-                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
                             fontSize: 12,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       );
@@ -419,13 +384,70 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     return const SizedBox();
                   },
                 ),
-              const Icon(Icons.arrow_forward_ios, size: 14),
+              Icon(Icons.chevron_right, color: Colors.grey.shade400),
             ],
           ),
-          onTap: onTap,
         ),
-        if (!isLast) const Divider(height: 1),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: () => _showLogoutDialog(context),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.red,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: Colors.red.withValues(alpha: 0.2)),
+          ),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.logout_rounded),
+            SizedBox(width: 12),
+            Text(
+              "Logout Account",
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Logout"),
+        content: const Text("Are you sure you want to log out?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (context.mounted) {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (r) => false,
+                );
+              }
+            },
+            child: const Text("Logout", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
   }
 }

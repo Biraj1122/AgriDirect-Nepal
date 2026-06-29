@@ -2,11 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // --- OPEN ACCESS DURING DEVELOPMENT ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
-    // Allow anyone (guests and users) to read all data.
-    // This ensures Home items, Categories, and Farmer profiles always load.
-    match /{document=**} {
     function userExists() {
       return exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
@@ -26,21 +25,31 @@ service cloud.firestore {
       return isSignedIn() && userExists() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('role', 'Customer') == 'Delivery Person';
     }
 
-    // Users collection
+    // --- USERS ---
     match /users/{userId} {
-      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      // Prevent role escalation: users cannot create themselves as Admin or change their role to Admin
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId ||
+        isAdmin() ||
+        get(/databases/$(database)/documents/users/$(userId)).data.get('role', 'Customer') == 'Farmer' ||
+        get(/databases/$(database)/documents/users/$(userId)).data.get('role', 'Customer') == 'Delivery Person'
+      );
+
       allow create: if isSignedIn() && request.auth.uid == userId &&
-                    request.resource.data.get('role', 'Customer') != 'Admin';
+                    (request.resource.data.get('role', 'Customer') != 'Admin' || request.auth.token.email == 'agrifarmadmin@gmail.com');
+
       allow update: if isSignedIn() && (
         isAdmin() ||
         (request.auth.uid == userId && request.resource.data.get('role', resource.data.get('role', 'Customer')) == resource.data.get('role', 'Customer'))
       );
 
-      // Notifications subcollection
       match /notifications/{notificationId} {
         allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-        allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow create: if isSignedIn();
+        allow update, delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      }
+
+      match /favorites/{favoriteId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
       }
     }
 
@@ -54,11 +63,19 @@ service cloud.firestore {
       allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
-    // --- PRODUCTS (Farmer Access) ---
+    // --- PRODUCTS & CATALOG ---
     match /products/{productId} {
       allow read: if true;
       allow create: if isFarmer() || isAdmin();
       allow update, delete: if (isFarmer() && resource.data.farmerUid == request.auth.uid) || isAdmin();
+    }
+    match /master_catalog/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // --- ORDERS ---
@@ -69,39 +86,42 @@ service cloud.firestore {
         resource.data.userId == request.auth.uid ||
         resource.data.farmerUid == request.auth.uid ||
         resource.data.deliveryId == request.auth.uid ||
-        (isDeliveryPerson() && resource.data.status in ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived']) ||
-        (isFarmer() && resource.data.status == 'Pending Farmer')
+        resource.data.deliveryPersonId == request.auth.uid ||
+        (isDeliveryPerson() && (resource.data.status in ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'] || resource.data.deliveryId == null || resource.data.deliveryId == "")) ||
+        (isFarmer() && (resource.data.status == 'Pending Farmer' || resource.data.farmerUid == request.auth.uid))
       );
       allow update: if isSignedIn() && (
         isAdmin() ||
         resource.data.userId == request.auth.uid ||
         resource.data.farmerUid == request.auth.uid ||
         resource.data.deliveryId == request.auth.uid ||
-        (isFarmer() && resource.data.status == 'Pending Farmer' && (resource.data.farmerUid == null || resource.data.farmerUid == "")) ||
-        (isDeliveryPerson() && resource.data.status in ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'] && (resource.data.deliveryId == null || resource.data.deliveryId == "" || resource.data.deliveryId == request.auth.uid))
+        resource.data.deliveryPersonId == request.auth.uid ||
+        (isFarmer() && resource.data.status == 'Pending Farmer') ||
+        (isDeliveryPerson() && resource.data.status in ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived']) ||
+        (isDeliveryPerson() && (resource.data.deliveryId == null || resource.data.deliveryId == "") && request.resource.data.deliveryId == request.auth.uid)
       );
       allow delete: if isAdmin();
     }
 
-    // --- DELIVERY ALERTS ---
+    // --- MISC ---
+    match /price_requests/{requestId} {
+      allow read: if isAdmin() || (isFarmer() && resource.data.farmerUid == request.auth.uid);
+      allow create: if isFarmer();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
     match /delivery_alerts/{alertId} {
       allow read: if isDeliveryPerson() || isAdmin();
       allow create: if isFarmer() || isAdmin();
       allow update, delete: if isAdmin();
     }
-
-    // Products (Master Catalog)
-    match /master_catalog/{productId} {
+    match /settings/{settingId} {
       allow read: if true;
+      allow write: if isAdmin();
     }
-
-    // Allow any authenticated user to write to any document.
-    // This fixes the "Order Placement" issue where customers need to:
-    // 1. Create an Order document.
-    // 2. Query the 'users' collection for farmers.
-    // 3. Write notification documents into farmers' sub-collections.
-    match /{document=**} {
-      allow write: if request.auth != null;
+    match /research_submissions/{submissionId} {
+      allow read: if isAdmin();
+      allow create: if isFarmer();
     }
   }
 }

@@ -1476,10 +1476,8 @@ class _EarningsTabState extends State<_EarningsTab> {
           if (snapshot.hasData) {
             for (var doc in snapshot.data!.docs) {
               final data = doc.data() as Map<String, dynamic>;
-              // Use new delivery revenue field (80% share).
-              // Legacy orders will result in 0, effectively resetting the dashboard.
-              final earning = (data['deliveryRevenue'] ?? 0).toDouble();
-              final earning = (data['deliveryFee'] ?? 100).toDouble();
+              // Use new delivery revenue field (80% share) with fallback to fee
+              final earning = (data['deliveryRevenue'] ?? data['deliveryFee'] ?? 100).toDouble();
               totalEarnings += earning;
               recentEarnings.add({
                 'id': doc.id.substring(0, min(6, doc.id.length)),
