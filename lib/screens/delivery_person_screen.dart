@@ -758,6 +758,7 @@ class DeliveryRouteMapScreen extends StatefulWidget {
 class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> with TickerProviderStateMixin {
   MapLibreMapController? _mapController;
   LatLng? _driverPos;
+  Symbol? _driverSymbol;
   StreamSubscription<Position>? _positionSub;
 
   static const LatLng _kDefaultCenter = LatLng(27.7172, 85.3240);
@@ -800,6 +801,22 @@ class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> with Ti
     if (!mounted) return;
     final latlng = LatLng(pos.latitude, pos.longitude);
     setState(() => _driverPos = latlng);
+
+    if (_mapController != null) {
+      if (_driverSymbol == null) {
+        _mapController!.addSymbol(SymbolOptions(
+          geometry: latlng,
+          iconImage: "airport-15",
+          iconRotate: 90,
+          iconColor: "#4CAF50",
+          iconSize: 2.5,
+        )).then((s) => _driverSymbol = s);
+      } else {
+        _mapController!.updateSymbol(_driverSymbol!, SymbolOptions(
+          geometry: latlng,
+        ));
+      }
+    }
   }
 
   void _onMapCreated(MapLibreMapController controller) async {
@@ -818,6 +835,16 @@ class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> with Ti
         ),
       );
       _updateAddress(LatLng(customerLat, customerLng));
+    }
+
+    if (_driverPos != null) {
+      _driverSymbol = await _mapController!.addSymbol(SymbolOptions(
+        geometry: _driverPos!,
+        iconImage: "airport-15",
+        iconRotate: 90,
+        iconColor: "#4CAF50",
+        iconSize: 2.5,
+      ));
     }
   }
 
