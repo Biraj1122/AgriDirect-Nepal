@@ -63,18 +63,20 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow create: if isSignedIn();
       allow read: if isSignedIn() && (
+        isAdmin() ||
         resource.data.userId == request.auth.uid ||
         resource.data.farmerUid == request.auth.uid ||
         resource.data.deliveryId == request.auth.uid ||
-        (isDeliveryPerson() && (resource.data.deliveryId == null || resource.data.deliveryId == "")) ||
-        isAdmin()
+        (isDeliveryPerson() && resource.data.status in ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived']) ||
+        (isFarmer() && resource.data.status == 'Pending Farmer')
       );
       allow update: if isSignedIn() && (
         isAdmin() ||
         resource.data.userId == request.auth.uid ||
         resource.data.farmerUid == request.auth.uid ||
         resource.data.deliveryId == request.auth.uid ||
-        (isDeliveryPerson() && (resource.data.deliveryId == null || resource.data.deliveryId == "" || resource.data.deliveryId == request.auth.uid))
+        (isFarmer() && resource.data.status == 'Pending Farmer' && (resource.data.farmerUid == null || resource.data.farmerUid == "")) ||
+        (isDeliveryPerson() && resource.data.status in ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'] && (resource.data.deliveryId == null || resource.data.deliveryId == "" || resource.data.deliveryId == request.auth.uid))
       );
       allow delete: if isAdmin();
     }

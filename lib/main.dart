@@ -12,13 +12,15 @@ void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     
+    // Initialize Firebase
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
+    // Optimized Firestore Settings for compatibility
     if (kIsWeb) {
       FirebaseFirestore.instance.settings = const Settings(
-        persistenceEnabled: false,
+        persistenceEnabled: false, // Disable on Web to prevent INTERNAL ASSERTION FAILED
       );
     } else {
       FirebaseFirestore.instance.settings = const Settings(

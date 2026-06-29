@@ -19,6 +19,12 @@ subprojects {
         if (project.plugins.hasPlugin("com.android.library") || project.plugins.hasPlugin("com.android.application")) {
             val android = project.extensions.findByName("android")
             if (android != null) {
+                val baseExtension = android as? com.android.build.gradle.BaseExtension
+                baseExtension?.compileOptions {
+                    sourceCompatibility = JavaVersion.VERSION_17
+                    targetCompatibility = JavaVersion.VERSION_17
+                }
+
                 try {
                     val getNamespace = android.javaClass.getMethod("getNamespace")
                     val setNamespace = android.javaClass.getMethod("setNamespace", String::class.java)
@@ -29,6 +35,12 @@ subprojects {
                     }
                 } catch (e: Exception) {
                     // Ignore if methods don't exist
+                }
+            }
+
+            project.tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+                kotlinOptions {
+                    jvmTarget = "17"
                 }
             }
         }
