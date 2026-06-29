@@ -37,6 +37,15 @@ class ProductDetailScreen extends StatelessWidget {
               map['farm'] = product.farmName ?? 'Local Farm';
               map['rating'] = 4.5;
               onToggleFavourite(map);
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(isFavourite ? "Removed from Favourites" : "Added to Favourites"),
+                  duration: const Duration(seconds: 1),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: isFavourite ? Colors.black87 : Colors.redAccent,
+                ),
+              );
             },
             icon: Icon(
               isFavourite ? Icons.favorite : Icons.favorite_border,

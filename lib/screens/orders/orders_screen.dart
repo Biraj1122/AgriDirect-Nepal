@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
@@ -35,8 +36,14 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
 
   Symbol? riderSymbol;
   Symbol? customerSymbol;
+  Symbol? farmerSymbol;
+  Circle? riderCircle;
+  Circle? customerCircle;
+  Circle? farmerCircle;
+  Line? routeLine;
   LatLng? riderPosition;
   LatLng? customerPosition;
+  LatLng? farmerPosition;
   Timer? _trackingTimer;
   StreamSubscription? _orderSubscription;
   StreamSubscription? _riderLocationSubscription;
@@ -115,8 +122,10 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         final newRiderName = data['deliveryName'] ?? "Assigning...";
         final newRiderPhone = data['deliveryPhone'] ?? data['userPhone'];
         final newDeliveryId = data['deliveryId'];
-        final double? custLat = (data['customerLat'] as num?)?.toDouble();
-        final double? custLng = (data['customerLng'] as num?)?.toDouble();
+        final double? custLat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
+        final double? custLng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
+        final double? fLat = (data['farmerLat'] as num?)?.toDouble();
+        final double? fLng = (data['farmerLng'] as num?)?.toDouble();
 
         if (widget.orderId == null && (newStatus == 'Delivered' || newStatus == 'Cancelled')) {
           setState(() {
@@ -138,6 +147,10 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
           if (custLat != null && custLng != null) {
             customerPosition = LatLng(custLat, custLng);
             _updateCustomerMarker();
+          }
+          if (fLat != null && fLng != null) {
+            farmerPosition = LatLng(fLat, fLng);
+            _updateFarmerMarker();
           }
         });
 
@@ -166,7 +179,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
             riderPosition = newPos;
             final targetLat = customerPosition?.latitude ?? UserData.defaultLat;
             final targetLng = customerPosition?.longitude ?? UserData.defaultLng;
-            
+
             if (targetLat != null && targetLng != null) {
               distance = _locationService.calculateDistance(
                 lat, lng, targetLat, targetLng,
@@ -175,9 +188,9 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
             }
           });
           _updateRiderMarker();
-          
+
           if (_riderCardController.status == AnimationStatus.dismissed) {
-             _riderCardController.forward();
+            _riderCardController.forward();
           }
         }
       }
@@ -210,24 +223,107 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     if (mapController == null) return;
 
     _updateCustomerMarker();
+    _updateFarmerMarker();
     _updateRiderMarker();
   }
 
   void _updateRiderMarker() {
-    if (mapController != null && riderPosition != null) {
-      if (riderSymbol == null) {
-        mapController!.addSymbol(SymbolOptions(
-          geometry: riderPosition!,
-          iconImage: "airport-15",
-          iconRotate: 90,
-          iconColor: "#4CAF50",
-          iconSize: 2.5,
-        )).then((s) => riderSymbol = s);
-      } else {
-        mapController!.updateSymbol(riderSymbol!, SymbolOptions(
+    if (mapController == null || riderPosition == null) return;
+
+    if (riderSymbol == null) {
+      // First time adding rider
+      mapController!.addCircle(CircleOptions(
+        geometry: riderPosition!,
+        circleRadius: 10.0,
+        circleColor: "#2E7D32",
+        circleStrokeWidth: 3.0,
+        circleStrokeColor: "#FFFFFF",
+      )).then((c) => riderCircle = c);
+
+      mapController!.addSymbol(SymbolOptions(
+        geometry: riderPosition!,
+        textField: "Rider is Here",
+        textSize: 12,
+        textColor: "#2E7D32",
+        textHaloColor: "#FFFFFF",
+        textHaloWidth: 2.0,
+        textOffset: const Offset(0, -1.8),
+        textAnchor: "bottom",
+      )).then((s) {
+        riderSymbol = s;
+        _fitCameraToMarkers();
+      });
+    } else {
+      // Update existing rider marker
+      mapController!.updateSymbol(riderSymbol!, SymbolOptions(
+        geometry: riderPosition!,
+      ));
+      if (riderCircle != null) {
+        mapController!.updateCircle(riderCircle!, CircleOptions(
           geometry: riderPosition!,
         ));
       }
+    }
+    _updateRouteLine();
+    _fitCameraToMarkers();
+  }
+
+  void _fitCameraToMarkers() {
+    if (mapController == null || customerPosition == null || riderPosition == null) return;
+
+    List<LatLng> points = [riderPosition!, customerPosition!];
+    if (farmerPosition != null) points.add(farmerPosition!);
+
+    double south = points[0].latitude;
+    double north = points[0].latitude;
+    double west = points[0].longitude;
+    double east = points[0].longitude;
+
+    for (var p in points) {
+      if (p.latitude < south) south = p.latitude;
+      if (p.latitude > north) north = p.latitude;
+      if (p.longitude < west) west = p.longitude;
+      if (p.longitude > east) east = p.longitude;
+    }
+
+    mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(southwest: LatLng(south, west), northeast: LatLng(north, east)),
+        left: 80,
+        right: 80,
+        top: 120,
+        bottom: 250,
+      ),
+    );
+  }
+
+  void _updateRouteLine() async {
+    if (mapController == null || riderPosition == null || customerPosition == null) return;
+    if (status != "On the way" && status != "Arrived" && status != "Picked Up") return;
+
+    final routeData = await _locationService.getRouteData(
+      riderPosition!.latitude,
+      riderPosition!.longitude,
+      customerPosition!.latitude,
+      customerPosition!.longitude,
+    );
+
+    final List<dynamic> points = routeData['points'];
+    final lineCoords = points.map((p) => LatLng(p[0], p[1])).toList();
+
+    if (!mounted) return;
+
+    if (routeLine == null) {
+      mapController!.addLine(
+        LineOptions(
+          geometry: lineCoords,
+          lineColor: "#2E7D32",
+          lineWidth: 4.0,
+          lineOpacity: 0.8,
+        ),
+      ).then((l) => routeLine = l);
+    } else {
+      mapController!.updateLine(routeLine!, LineOptions(geometry: lineCoords));
     }
   }
 
@@ -235,19 +331,76 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     final lat = customerPosition?.latitude ?? UserData.defaultLat;
     final lng = customerPosition?.longitude ?? UserData.defaultLng;
 
-    if (mapController != null && lat != null && lng != null) {
-      final pos = LatLng(lat, lng);
-      if (customerSymbol == null) {
-        mapController!.addSymbol(SymbolOptions(
-          geometry: pos,
-          iconImage: "marker-15",
-          iconColor: "#FF0000",
-          iconSize: 2.0,
-        )).then((s) => customerSymbol = s);
-      } else {
-        mapController!.updateSymbol(customerSymbol!, SymbolOptions(
+    if (mapController == null || lat == null || lng == null) return;
+    final pos = LatLng(lat, lng);
+
+    if (customerSymbol == null) {
+      mapController!.addCircle(CircleOptions(
+        geometry: pos,
+        circleRadius: 10.0,
+        circleColor: "#D32F2F",
+        circleStrokeWidth: 3.0,
+        circleStrokeColor: "#FFFFFF",
+      )).then((c) => customerCircle = c);
+
+      mapController!.addSymbol(SymbolOptions(
+        geometry: pos,
+        textField: "My Location",
+        textSize: 12,
+        textColor: "#D32F2F",
+        textHaloColor: "#FFFFFF",
+        textHaloWidth: 2.0,
+        textOffset: const Offset(0, -1.8),
+        textAnchor: "bottom",
+      )).then((s) {
+        customerSymbol = s;
+        _fitCameraToMarkers();
+      });
+    } else {
+      mapController!.updateSymbol(customerSymbol!, SymbolOptions(
+        geometry: pos,
+      ));
+      if (customerCircle != null) {
+        mapController!.updateCircle(customerCircle!, CircleOptions(
           geometry: pos,
         ));
+      }
+    }
+  }
+
+  void _updateFarmerMarker() {
+    if (mapController != null && farmerPosition != null) {
+      if (farmerSymbol == null) {
+        mapController!.addCircle(CircleOptions(
+          geometry: farmerPosition!,
+          circleRadius: 10.0,
+          circleColor: "#FFA000",
+          circleStrokeWidth: 3.0,
+          circleStrokeColor: "#FFFFFF",
+        )).then((c) => farmerCircle = c);
+
+        mapController!.addSymbol(SymbolOptions(
+          geometry: farmerPosition!,
+          textField: "Farmer/Hub",
+          textSize: 12,
+          textColor: "#FFA000",
+          textHaloColor: "#FFFFFF",
+          textHaloWidth: 2.0,
+          textOffset: const Offset(0, -1.8),
+          textAnchor: "bottom",
+        )).then((s) {
+          farmerSymbol = s;
+          _fitCameraToMarkers();
+        });
+      } else {
+        mapController!.updateSymbol(farmerSymbol!, SymbolOptions(
+          geometry: farmerPosition!,
+        ));
+        if (farmerCircle != null) {
+          mapController!.updateCircle(farmerCircle!, CircleOptions(
+            geometry: farmerPosition!,
+          ));
+        }
       }
     }
   }
@@ -297,7 +450,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
             }
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => target),
-              (route) => false,
+                  (route) => false,
             );
           }
         }
@@ -315,8 +468,8 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
 
   bool _canCancelOrder() {
     return status != 'Delivered' &&
-           status != 'Cancelled' &&
-           (deliveryId == null || deliveryId!.isEmpty);
+        status != 'Cancelled' &&
+        (deliveryId == null || deliveryId!.isEmpty);
   }
 
   Future<void> _cancelOrder() async {
@@ -397,7 +550,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
           'status': 'Delivered',
           'receivedAt': FieldValue.serverTimestamp(),
         });
-        
+
         if (deliveryId != null) {
           await FirebaseFirestore.instance.collection('users').doc(deliveryId).collection('notifications').add({
             'title': 'Delivery Confirmed',
@@ -461,7 +614,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                   onMapCreated: _onMapCreated,
                   styleString: "https://tiles.openfreemap.org/styles/positron",
                 ),
-                
+
                 if (status != "Delivered" && status != "Cancelled")
                   Positioned(
                     top: 20,
@@ -565,9 +718,9 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                             backgroundColor: Colors.orange,
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                           ),
-                          child: _isConfirmingReceipt 
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text("I have Received my Product", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          child: _isConfirmingReceipt
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : const Text("I have Received my Product", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ),

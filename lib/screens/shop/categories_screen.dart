@@ -275,7 +275,17 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     top: 8,
                     right: 8,
                     child: GestureDetector(
-                      onTap: () => widget.onExternalFavouriteToggle(product),
+                      onTap: () {
+                        widget.onExternalFavouriteToggle(product);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(isFavorite ? "Removed from Favourites" : "Added to Favourites"),
+                            duration: const Duration(seconds: 1),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: isFavorite ? Colors.black87 : Colors.redAccent,
+                          ),
+                        );
+                      },
                       child: CircleAvatar(
                         radius: 14,
                         backgroundColor: Colors.white.withValues(alpha: 0.8),

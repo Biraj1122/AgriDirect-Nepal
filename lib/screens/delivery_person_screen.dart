@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
@@ -26,12 +27,39 @@ class DeliveryPersonScreen extends StatefulWidget {
 
 class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
   int _tab = 0;
+  final LocationService _locationService = LocationService();
+  StreamSubscription<Position>? _positionSub;
 
   @override
   void initState() {
     super.initState();
     _checkRole();
     _setupFCM();
+    _startGlobalLocationTracking();
+  }
+
+  Future<void> _startGlobalLocationTracking() async {
+    bool granted = await _locationService.requestPermission();
+    if (!granted) return;
+
+    _positionSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
+    ).listen((pos) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'lat': pos.latitude,
+          'lng': pos.longitude,
+          'lastSeen': FieldValue.serverTimestamp(),
+        }).catchError((_) {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _checkRole() async {
@@ -57,7 +85,7 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (_) => const LoginScreen()),
-            (route) => false,
+                (route) => false,
           );
         }
       });
@@ -168,10 +196,11 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
 
   LatLng? _driverPos;
   LatLng? _customPickupPoint;
-  StreamSubscription<Position>? _positionSub;
+  StreamSubscription<Position>? _localPosSub;
   StreamSubscription<QuerySnapshot>? _orderSub;
-  
+
   final List<Symbol> _customerSymbols = [];
+  final List<Circle> _customerCircles = [];
 
   String _currentAddress = "Fetching location...";
   bool _isMoving = false;
@@ -191,7 +220,7 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
     _pinAnimation = Tween<double>(begin: 0, end: -15).animate(
       CurvedAnimation(parent: _pinController, curve: Curves.easeOut),
     );
-    _startLocationTracking();
+    _startLocalTracking();
     _listenToActiveOrders();
     _loadCustomPickupPoint();
   }
@@ -208,27 +237,17 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
     }
   }
 
-  Future<void> _startLocationTracking() async {
-    bool granted = await _locationService.requestPermission();
-    if (!granted) return;
-
+  Future<void> _startLocalTracking() async {
     try {
-      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
-      _updateDriverPosition(pos);
-      _updateAddress(LatLng(pos.latitude, pos.longitude));
+      final pos = await Geolocator.getCurrentPosition();
+      if (mounted) setState(() => _driverPos = LatLng(pos.latitude, pos.longitude));
     } catch (_) {}
 
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 8),
-    ).listen(_updateDriverPosition);
-  }
-
-  void _updateDriverPosition(Position pos) {
-    if (!mounted) return;
-    final latlng = LatLng(pos.latitude, pos.longitude);
-    setState(() => _driverPos = latlng);
-
-    FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({'lat': pos.latitude, 'lng': pos.longitude}).catchError((_) {});
+    _localPosSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
+    ).listen((pos) {
+      if (mounted) setState(() => _driverPos = LatLng(pos.latitude, pos.longitude));
+    });
   }
 
   Future<void> _updateAddress(LatLng position) async {
@@ -246,17 +265,23 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
   void _listenToActiveOrders() {
     _orderSub = FirebaseFirestore.instance
         .collection('orders')
-        .where('deliveryId', isEqualTo: widget.user.uid)
-        .where('status', whereIn: ['Picked Up', 'On the way'])
+        .where('status', whereIn: ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
         .snapshots()
         .listen((snap) {
       if (!mounted || _mapController == null) return;
 
-      _updateMarkersOnMap(snap.docs);
+      final myUid = widget.user.uid;
+      final relevantDocs = snap.docs.where((doc) {
+        final data = doc.data();
+        final dId = data['deliveryId'];
+        return dId == null || dId == '' || dId == myUid;
+      }).toList();
+
+      _updateMarkersOnMap(relevantDocs);
     });
   }
 
-  Future<void> _updateMarkersOnMap(List<QueryDocumentSnapshot> docs) async {
+  Future<void> _updateMarkersOnMap(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) async {
     if (_mapController == null) return;
 
     for (var s in _customerSymbols) {
@@ -264,18 +289,73 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
     }
     _customerSymbols.clear();
 
+    for (var c in _customerCircles) {
+      await _mapController!.removeCircle(c);
+    }
+    _customerCircles.clear();
+
     for (final doc in docs) {
-      final data = doc.data() as Map<String, dynamic>;
-      final lat = (data['customerLat'] as num?)?.toDouble();
-      final lng = (data['customerLng'] as num?)?.toDouble();
+      final data = doc.data();
+      
+      // Customer Marker (Red Pinpoint)
+      final lat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
+      final lng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
 
       if (lat != null && lng != null) {
+        final pos = LatLng(lat, lng);
+        
+        final circle = await _mapController!.addCircle(
+          CircleOptions(
+            geometry: pos,
+            circleRadius: 8.0,
+            circleColor: "#FF5252",
+            circleStrokeWidth: 2.0,
+            circleStrokeColor: "#FFFFFF",
+          ),
+        );
+        _customerCircles.add(circle);
+
         final symbol = await _mapController!.addSymbol(
           SymbolOptions(
-            geometry: LatLng(lat, lng),
-            iconImage: "marker-15",
-            iconColor: "#FF5252",
-            iconSize: 2.0,
+            geometry: pos,
+            textField: "Customer",
+            textSize: 10,
+            textColor: "#FF5252",
+            textHaloColor: "#FFFFFF",
+            textHaloWidth: 1.0,
+            textOffset: const Offset(0, 1.5),
+          ),
+        );
+        _customerSymbols.add(symbol);
+      }
+
+      // Farmer Marker (Orange)
+      final fLat = (data['farmerLat'] as num?)?.toDouble();
+      final fLng = (data['farmerLng'] as num?)?.toDouble();
+
+      if (fLat != null && fLng != null) {
+        final fPos = LatLng(fLat, fLng);
+
+        final circle = await _mapController!.addCircle(
+          CircleOptions(
+            geometry: fPos,
+            circleRadius: 8.0,
+            circleColor: "#FFA000",
+            circleStrokeWidth: 2.0,
+            circleStrokeColor: "#FFFFFF",
+          ),
+        );
+        _customerCircles.add(circle);
+
+        final symbol = await _mapController!.addSymbol(
+          SymbolOptions(
+            geometry: fPos,
+            textField: "Farmer/Hub",
+            textSize: 10,
+            textColor: "#FFA000",
+            textHaloColor: "#FFFFFF",
+            textHaloWidth: 1.0,
+            textOffset: const Offset(0, 1.5),
           ),
         );
         _customerSymbols.add(symbol);
@@ -283,14 +363,25 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
     }
 
     if (_customPickupPoint != null) {
+      final circle = await _mapController!.addCircle(
+        CircleOptions(
+          geometry: _customPickupPoint!,
+          circleRadius: 8.0,
+          circleColor: "#2E7D32",
+          circleStrokeWidth: 2.0,
+          circleStrokeColor: "#FFFFFF",
+        ),
+      );
+      _customerCircles.add(circle);
+
       final symbol = await _mapController!.addSymbol(
         SymbolOptions(
           geometry: _customPickupPoint!,
-          iconImage: "harbor-15",
-          iconColor: "#FFA000",
-          iconSize: 2.0,
-          textField: "Pickup",
+          textField: "Saved Pickup",
           textSize: 10,
+          textColor: "#2E7D32",
+          textHaloColor: "#FFFFFF",
+          textHaloWidth: 1.0,
           textOffset: const Offset(0, 1.5),
         ),
       );
@@ -302,10 +393,18 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
     _mapController = controller;
     FirebaseFirestore.instance
         .collection('orders')
-        .where('deliveryId', isEqualTo: widget.user.uid)
-        .where('status', whereIn: ['Picked Up', 'On the way'])
+        .where('status', whereIn: ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
         .get()
-        .then((snap) => _updateMarkersOnMap(snap.docs));
+        .then((snap) {
+      if (!mounted) return;
+      final myUid = widget.user.uid;
+      final relevantDocs = snap.docs.where((doc) {
+        final data = doc.data();
+        final dId = data['deliveryId'];
+        return dId == null || dId == '' || dId == myUid;
+      }).toList();
+      _updateMarkersOnMap(relevantDocs);
+    });
   }
 
   void _onCameraIdle() {
@@ -357,7 +456,7 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
   void _confirmPickupLocation() async {
     if (_mapController == null) return;
     final point = _mapController!.cameraPosition!.target;
-    
+
     setState(() {
       _customPickupPoint = point;
     });
@@ -405,7 +504,7 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
 
   @override
   void dispose() {
-    _positionSub?.cancel();
+    _localPosSub?.cancel();
     _orderSub?.cancel();
     _searchController.dispose();
     _pinController.dispose();
@@ -435,7 +534,7 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
             onMapLongClick: (point, latlng) => _handleMapLongPress(latlng),
             styleString: "https://tiles.openfreemap.org/styles/positron",
           ),
-          
+
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -453,9 +552,9 @@ class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin 
                       decoration: InputDecoration(
                         hintText: "Search pickup/delivery point...",
                         prefixIcon: const Icon(Icons.search, color: Colors.green),
-                        suffixIcon: _isSearching 
-                          ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
-                          : null,
+                        suffixIcon: _isSearching
+                            ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
+                            : null,
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(vertical: 15),
                       ),
@@ -758,28 +857,72 @@ class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> with Ti
   MapLibreMapController? _mapController;
   LatLng? _driverPos;
   Symbol? _driverSymbol;
+  Symbol? _customerSymbol;
+  Symbol? _farmerSymbol;
+  Circle? _customerCircle;
+  Circle? _driverCircle;
+  Line? _routeLine;
   StreamSubscription<Position>? _positionSub;
+  StreamSubscription<DocumentSnapshot>? _orderSub;
 
   static const LatLng _kDefaultCenter = LatLng(27.7172, 85.3240);
-  
-  bool _isMoving = false;
+
   String _currentAddress = "Fetching destination...";
   final LocationService _locationService = LocationService();
 
-  late AnimationController _pinController;
-  late Animation<double> _pinAnimation;
+  // Live order data (replaces the frozen widget.orderData for lat/lng)
+  LatLng? _customerPos;
+  LatLng? _farmerPos;
+  String _status = "Processing";
+  String _distanceText = "";
+  String _durationText = "";
 
   @override
   void initState() {
     super.initState();
-    _pinController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    _pinAnimation = Tween<double>(begin: 0, end: -15).animate(
-      CurvedAnimation(parent: _pinController, curve: Curves.easeOut),
-    );
+
+    // Seed initial values from the snapshot passed in (so UI isn't blank
+    // before the live stream below returns its first event).
+    final cLat = (widget.orderData['customerLat'] as num?)?.toDouble() ?? (widget.orderData['lat'] as num?)?.toDouble();
+    final cLng = (widget.orderData['customerLng'] as num?)?.toDouble() ?? (widget.orderData['lng'] as num?)?.toDouble();
+    if (cLat != null && cLng != null) _customerPos = LatLng(cLat, cLng);
+
+    final fLat = (widget.orderData['farmerLat'] as num?)?.toDouble();
+    final fLng = (widget.orderData['farmerLng'] as num?)?.toDouble();
+    if (fLat != null && fLng != null) _farmerPos = LatLng(fLat, fLng);
+
+    _status = widget.orderData['status'] ?? 'Processing';
+
     _startLocationTracking();
+    _listenToOrderLive();
+  }
+
+  // NEW: keep customer/farmer/status live instead of frozen from constructor
+  void _listenToOrderLive() {
+    _orderSub = FirebaseFirestore.instance
+        .collection('orders')
+        .doc(widget.orderId)
+        .snapshots()
+        .listen((snap) {
+      if (!snap.exists || !mounted) return;
+      final data = snap.data() as Map<String, dynamic>;
+
+      final cLat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
+      final cLng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
+      final fLat = (data['farmerLat'] as num?)?.toDouble();
+      final fLng = (data['farmerLng'] as num?)?.toDouble();
+
+      setState(() {
+        _status = data['status'] ?? _status;
+        if (cLat != null && cLng != null) _customerPos = LatLng(cLat, cLng);
+        if (fLat != null && fLng != null) _farmerPos = LatLng(fLat, fLng);
+      });
+
+      if (_customerPos != null) _updateAddress(_customerPos!);
+      _updateCustomerSymbol();
+      _updateFarmerSymbol();
+      _updateRouteLine();
+    });
   }
 
   Future<void> _startLocationTracking() async {
@@ -801,50 +944,219 @@ class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> with Ti
     final latlng = LatLng(pos.latitude, pos.longitude);
     setState(() => _driverPos = latlng);
 
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+        'lat': pos.latitude,
+        'lng': pos.longitude,
+        'lastSeen': FieldValue.serverTimestamp(),
+      }).catchError((_) {});
+    }
+
     if (_mapController != null) {
       if (_driverSymbol == null) {
+        _mapController!.addCircle(CircleOptions(
+          geometry: latlng,
+          circleRadius: 10.0,
+          circleColor: "#2E7D32",
+          circleStrokeWidth: 3.0,
+          circleStrokeColor: "#FFFFFF",
+        )).then((c) => _driverCircle = c);
+
         _mapController!.addSymbol(SymbolOptions(
           geometry: latlng,
-          iconImage: "airport-15",
-          iconRotate: 90,
-          iconColor: "#4CAF50",
-          iconSize: 2.5,
-        )).then((s) => _driverSymbol = s);
+          textField: "Me (Rider)",
+          textSize: 12,
+          textColor: "#2E7D32",
+          textHaloColor: "#FFFFFF",
+          textHaloWidth: 2.0,
+          textOffset: const Offset(0, -1.8),
+          textAnchor: "bottom",
+        )).then((s) {
+          _driverSymbol = s;
+          _fitCameraToBounds();
+        });
       } else {
-        _mapController!.updateSymbol(_driverSymbol!, SymbolOptions(
-          geometry: latlng,
-        ));
+        _mapController!.updateSymbol(_driverSymbol!, SymbolOptions(geometry: latlng));
+        if (_driverCircle != null) {
+          _mapController!.updateCircle(_driverCircle!, CircleOptions(geometry: latlng));
+        }
+      }
+    }
+    _updateRouteLine();
+    _fitCameraToBounds();
+  }
+
+  // NEW: draws/updates a road-following route line using OSRM
+  // for a much more realistic delivery experience.
+  DateTime _lastRouteUpdate = DateTime.now();
+
+  void _updateRouteLine() async {
+    if (_mapController == null || _driverPos == null || _customerPos == null) return;
+
+    // Throttle routing requests to OSRM (e.g., every 5 seconds) to avoid rate limits
+    if (DateTime.now().difference(_lastRouteUpdate).inSeconds < 5 && _routeLine != null) return;
+    _lastRouteUpdate = DateTime.now();
+
+    final routeData = await _locationService.getRouteData(
+      _driverPos!.latitude,
+      _driverPos!.longitude,
+      _customerPos!.latitude,
+      _customerPos!.longitude,
+    );
+
+    final List<dynamic> points = routeData['points'];
+    final lineCoords = points.map((p) => LatLng(p[0], p[1])).toList();
+
+    if (!mounted) return;
+
+    setState(() {
+      double distKm = (routeData['distance'] as num) / 1000;
+      double durMin = (routeData['duration'] as num) / 60;
+      _distanceText = "${distKm.toStringAsFixed(1)} km";
+      _durationText = durMin < 1 ? "< 1 min" : "${durMin.toStringAsFixed(0)} mins";
+    });
+
+    if (_routeLine == null) {
+      _mapController!.addLine(
+        LineOptions(
+          geometry: lineCoords,
+          lineColor: "#2E7D32",
+          lineWidth: 5.0,
+          lineOpacity: 0.8,
+        ),
+      ).then((l) => _routeLine = l);
+    } else {
+      _mapController!.updateLine(_routeLine!, LineOptions(geometry: lineCoords));
+    }
+  }
+
+  void _updateCustomerSymbol() {
+    if (_mapController == null || _customerPos == null) return;
+    if (_customerSymbol == null) {
+      _mapController!.addCircle(CircleOptions(
+        geometry: _customerPos!,
+        circleRadius: 10.0,
+        circleColor: "#D32F2F",
+        circleStrokeWidth: 3.0,
+        circleStrokeColor: "#FFFFFF",
+      )).then((c) => _customerCircle = c);
+
+      _mapController!.addSymbol(SymbolOptions(
+        geometry: _customerPos!,
+        textField: "Customer Point",
+        textSize: 12,
+        textColor: "#D32F2F",
+        textHaloColor: "#FFFFFF",
+        textHaloWidth: 2.0,
+        textOffset: const Offset(0, -1.8),
+        textAnchor: "bottom",
+      )).then((s) {
+        _customerSymbol = s;
+        _fitCameraToBounds();
+      });
+    } else {
+      _mapController!.updateSymbol(_customerSymbol!, SymbolOptions(geometry: _customerPos!));
+      if (_customerCircle != null) {
+        _mapController!.updateCircle(_customerCircle!, CircleOptions(geometry: _customerPos!));
       }
     }
   }
 
+  void _updateFarmerSymbol() {
+    if (_mapController == null || _farmerPos == null) return;
+    if (_farmerSymbol == null) {
+      _mapController!.addCircle(CircleOptions(
+        geometry: _farmerPos!,
+        circleRadius: 10.0,
+        circleColor: "#F57C00",
+        circleStrokeWidth: 3.0,
+        circleStrokeColor: "#FFFFFF",
+      )).then((c) => _mapController!.addSymbol(SymbolOptions(
+            geometry: _farmerPos!,
+            textField: "Farmer/Hub",
+            textSize: 12,
+            textColor: "#F57C00",
+            textHaloColor: "#FFFFFF",
+            textHaloWidth: 2.0,
+            textOffset: const Offset(0, -1.8),
+            textAnchor: "bottom",
+          )).then((s) {
+            _farmerSymbol = s;
+            _fitCameraToBounds();
+          }));
+    } else {
+      _mapController!.updateSymbol(_farmerSymbol!, SymbolOptions(geometry: _farmerPos!));
+    }
+  }
+
+  // NEW: keeps rider, customer, and farmer visible on screen
+  void _fitCameraToBounds() {
+    if (_mapController == null || _driverPos == null || _customerPos == null) return;
+
+    List<LatLng> points = [_driverPos!, _customerPos!];
+    if (_farmerPos != null) points.add(_farmerPos!);
+
+    double south = points[0].latitude;
+    double north = points[0].latitude;
+    double west = points[0].longitude;
+    double east = points[0].longitude;
+
+    for (var p in points) {
+      if (p.latitude < south) south = p.latitude;
+      if (p.latitude > north) north = p.latitude;
+      if (p.longitude < west) west = p.longitude;
+      if (p.longitude > east) east = p.longitude;
+    }
+
+    _mapController!.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(southwest: LatLng(south, west), northeast: LatLng(north, east)),
+        left: 80,
+        right: 80,
+        top: 180,
+        bottom: 280,
+      ),
+    );
+  }
+
   void _onMapCreated(MapLibreMapController controller) async {
     _mapController = controller;
-    
-    final customerLat = (widget.orderData['customerLat'] as num?)?.toDouble();
-    final customerLng = (widget.orderData['customerLng'] as num?)?.toDouble();
-    
-    if (customerLat != null && customerLng != null) {
-      await _mapController!.addSymbol(
-        SymbolOptions(
-          geometry: LatLng(customerLat, customerLng),
-          iconImage: "marker-15",
-          iconColor: "#FF5252",
-          iconSize: 2.0,
-        ),
-      );
-      _updateAddress(LatLng(customerLat, customerLng));
+
+    // Give the map a moment to load
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    if (_farmerPos != null) {
+      _updateFarmerSymbol();
+    }
+
+    if (_customerPos != null) {
+      _updateCustomerSymbol();
     }
 
     if (_driverPos != null) {
+      _mapController!.addCircle(CircleOptions(
+        geometry: _driverPos!,
+        circleRadius: 8.0,
+        circleColor: "#2E7D32",
+        circleStrokeWidth: 2.0,
+        circleStrokeColor: "#FFFFFF",
+      )).then((c) => _driverCircle = c);
+
       _driverSymbol = await _mapController!.addSymbol(SymbolOptions(
         geometry: _driverPos!,
-        iconImage: "airport-15",
-        iconRotate: 90,
-        iconColor: "#4CAF50",
-        iconSize: 2.5,
+        textField: "Me (Rider)",
+        textSize: 10,
+        textColor: "#FFFFFF",
+        textHaloColor: "#2E7D32",
+        textHaloWidth: 2.0,
+        textOffset: const Offset(0, -1.5),
+        textAnchor: "bottom",
       ));
     }
+
+    _updateRouteLine();
+    _fitCameraToBounds();
   }
 
   Future<void> _updateAddress(LatLng position) async {
@@ -862,13 +1174,13 @@ class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> with Ti
   @override
   void dispose() {
     _positionSub?.cancel();
-    _pinController.dispose();
+    _orderSub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final status = widget.orderData['status'] ?? 'Processing';
+    final status = _status;
     final shortId = widget.orderId.substring(0, min(6, widget.orderId.length));
 
     return Scaffold(
@@ -882,16 +1194,6 @@ class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> with Ti
               tilt: 45,
             ),
             myLocationEnabled: true,
-            onCameraMove: (pos) {
-              if (!_isMoving) {
-                setState(() => _isMoving = true);
-                _pinController.forward();
-              }
-            },
-            onCameraIdle: () {
-              setState(() => _isMoving = false);
-              _pinController.reverse();
-            },
             styleString: "https://tiles.openfreemap.org/styles/positron",
           ),
 
@@ -926,25 +1228,18 @@ class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> with Ti
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text("Rider: ${widget.deliveryPersonName}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                        Text(status, style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                        Text("${_distanceText.isNotEmpty ? '$_distanceText • ' : ''}${_durationText.isNotEmpty ? _durationText : 'Calculating...'}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen, fontSize: 13)),
+                        Text("Rider: ${widget.deliveryPersonName} ($status)", style: const TextStyle(color: Colors.grey, fontSize: 11)),
                       ],
                     ),
                   ),
+                  // NEW: quick recenter-on-both button
+                  IconButton(
+                    icon: const Icon(Icons.center_focus_strong, color: _kGreen),
+                    onPressed: _fitCameraToBounds,
+                  ),
                 ],
               ),
-            ),
-          ),
-
-          Center(
-            child: AnimatedBuilder(
-              animation: _pinAnimation,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, _pinAnimation.value - 20),
-                  child: const Icon(Icons.location_on, size: 45, color: Colors.redAccent),
-                );
-              },
             ),
           ),
 
@@ -1065,8 +1360,8 @@ class _NotificationsTab extends StatelessWidget {
                       ],
                     ),
                   )
-               );
-              },
+              );
+            },
           );
         },
       ),
@@ -1135,7 +1430,7 @@ class _EarningsTabState extends State<_EarningsTab> {
     if (pickedFile != null) {
       final storageService = StorageService();
       final imageUrl = await storageService.uploadImage(pickedFile, 'qrcodes');
-      
+
       if (imageUrl != null) {
         setState(() {
           _qrCodeImgPath = imageUrl;
@@ -1181,9 +1476,7 @@ class _EarningsTabState extends State<_EarningsTab> {
           if (snapshot.hasData) {
             for (var doc in snapshot.data!.docs) {
               final data = doc.data() as Map<String, dynamic>;
-              // Use new deliveryRevenue field (80% share). 
-              // Legacy orders will result in 0, effectively resetting the dashboard.
-              final earning = (data['deliveryRevenue'] ?? 0).toDouble();
+              final earning = (data['deliveryFee'] ?? 100).toDouble();
               totalEarnings += earning;
               recentEarnings.add({
                 'id': doc.id.substring(0, min(6, doc.id.length)),
@@ -1242,11 +1535,11 @@ class _EarningsTabState extends State<_EarningsTab> {
                               borderRadius: BorderRadius.circular(8),
                               child: kIsWeb || _qrCodeImgPath!.startsWith('http')
                                   ? CachedNetworkImage(
-                                      imageUrl: _qrCodeImgPath!,
-                                      fit: BoxFit.contain,
-                                      placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-                                      errorWidget: (context, url, error) => const Icon(Icons.error),
-                                    )
+                                imageUrl: _qrCodeImgPath!,
+                                fit: BoxFit.contain,
+                                placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                                errorWidget: (context, url, error) => const Icon(Icons.error),
+                              )
                                   : Image.file(File(_qrCodeImgPath!), fit: BoxFit.contain),
                             ),
                           )
@@ -1504,11 +1797,11 @@ class _ProfileTabState extends State<_ProfileTab> {
                     height: 110,
                     child: kIsWeb || _licenseImgPath!.startsWith('http')
                         ? CachedNetworkImage(
-                            imageUrl: _licenseImgPath!,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-                            errorWidget: (context, url, error) => const Icon(Icons.error),
-                          )
+                      imageUrl: _licenseImgPath!,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                      errorWidget: (context, url, error) => const Icon(Icons.error),
+                    )
                         : Image.file(File(_licenseImgPath!), fit: BoxFit.cover),
                   ),
                 )
@@ -1634,26 +1927,29 @@ class _OrderCard extends StatelessWidget {
   }
 
   Future<void> _advance(BuildContext context, String orderId, String status, Map<String, dynamic> data, String riderUid) async {
-    String next = 'Delivered';
+    String next = status;
     if (status == 'Awaiting Pickup') {
       next = 'Picked Up';
     } else if (status == 'Picked Up') {
       next = 'On the way';
     } else if (status == 'On the way') {
       next = 'Arrived';
+    } else if (status == 'Arrived') {
+      next = 'Delivered';
     }
 
     try {
-      final riderDoc = await FirebaseFirestore.instance.collection('riders').doc(riderUid).get();
-      final riderData = riderDoc.exists
-          ? riderDoc.data()
-          : (await FirebaseFirestore.instance.collection('users').doc(riderUid).get()).data();
-
-      final riderName = riderData?['fullName'] ?? riderData?['name'] ?? "Rider";
-      final riderPhone = riderData?['phone'] ?? "";
+      // Direct user data fetching
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(riderUid).get();
+      final userData = userDoc.data();
+      
+      final riderName = userData?['fullName'] ?? userData?['name'] ?? "Rider";
+      final riderPhone = userData?['phone'] ?? "";
 
       final freshSnap = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
       final freshData = freshSnap.data();
+      
+      // Safety check for already assigned orders
       if (freshData != null &&
           freshData['deliveryId'] != null &&
           freshData['deliveryId'] != "" &&
@@ -1666,13 +1962,16 @@ class _OrderCard extends StatelessWidget {
         return;
       }
 
-      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+      final Map<String, dynamic> updates = {
         'status': next,
         'deliveryId': riderUid,
-        'deliveryName': riderName, 
+        'deliveryPersonId': riderUid, // Dual compatibility
+        'deliveryName': riderName,
         'deliveryPhone': riderPhone,
         'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      await FirebaseFirestore.instance.collection('orders').doc(orderId).update(updates);
 
       final shortId = orderId.substring(0, min(6, orderId.length));
       final customerId = data['userId'];
