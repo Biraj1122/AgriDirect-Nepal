@@ -34,8 +34,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final PageController _featuredPageController = PageController();
   int _currentFeaturedIndex = 0;
   Timer? _featuredTimer;
-  int _itemCount = 0;
-
   int _featuredCount = 0;
 
   @override
@@ -47,9 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _startFeaturedTimer() {
     _featuredTimer?.cancel();
     _featuredTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (_featuredPageController.hasClients && _itemCount > 1) {
-        int nextIndex = (_currentFeaturedIndex + 1) % _itemCount;
-      if (_featuredPageController.hasClients && _featuredCount > 0) {
+      if (_featuredPageController.hasClients && _featuredCount > 1) {
         int nextIndex = (_currentFeaturedIndex + 1) % _featuredCount;
         _featuredPageController.animateToPage(
           nextIndex,
@@ -72,322 +68,219 @@ class _HomeScreenState extends State<HomeScreen> {
     final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      backgroundColor: const Color(0xffF7F8F3),
+      backgroundColor: const Color(0xffF8FAF8),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Hello, ${widget.userName}",
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(_getTimeBasedGreeting(), style: const TextStyle(color: Colors.grey)),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      IconButton(
-                        onPressed: widget.onFavoritesTap,
-                        icon: const Icon(Icons.favorite_border, color: Colors.red),
-                      ),
-                      Stack(
-                        children: [
-                          IconButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-                              );
-                            },
-                            icon: const Icon(Icons.notifications_none),
-                          ),
-                          if (user != null)
-                            StreamBuilder<QuerySnapshot>(
-                              stream: FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(user.uid)
-                                  .collection('notifications')
-                                  .where('isRead', isEqualTo: false)
-                                  .snapshots(),
-                              builder: (context, snapshot) {
-                                if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                                  return Positioned(
-                                    right: 8,
-                                    top: 8,
-                                    child: Container(
-                                      padding: const EdgeInsets.all(5),
-                                      decoration: const BoxDecoration(
-                                        color: Colors.red,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Text(
-                                        "${snapshot.data!.docs.length}",
-                                        style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
-                                      ),
-                                    ),
-                                  );
-                                }
-                                return const SizedBox();
-                              },
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 15),
-
-              if (user != null)
-                StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('orders')
-                      .where('userId', isEqualTo: user.uid)
-                      .where('status', whereIn: ['Pending Farmer', 'Farmer Accepted', 'Picked Up', 'On the way', 'Arrived'])
-                      // Removed orderBy to avoid index requirement
-                      .limit(5)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      debugPrint("Firestore Order Stream Error: ${snapshot.error}");
-                      return const SizedBox();
-                    }
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return const SizedBox();
-                    }
-
-                    // Sort in memory
-                    final docs = snapshot.data!.docs.toList();
-                    docs.sort((a, b) {
-                      final aTime = ((a.data() as Map)['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
-                      final bTime = ((b.data() as Map)['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
-                      return bTime.compareTo(aTime);
-                    });
-
-                    final order = docs.first.data() as Map<String, dynamic>;
-                    final status = order['status'] ?? 'Pending';
-                    final orderId = docs.first.id;
-
-                    return GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => OrderScreen(
-                              orderId: orderId,
-                              onBackToHome: () => Navigator.pop(context),
-                            ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.local_shipping, color: Colors.green, size: 28),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text("Your Order is Moving!", style: TextStyle(fontWeight: FontWeight.bold)),
-                                  Text(
-                                    _getStatusMessage(status),
-                                    style: const TextStyle(color: Colors.grey, fontSize: 13),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.green),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-
-              const SizedBox(height: 20),
-
-              const Text("Featured Items", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 180,
-                child: StreamBuilder<QuerySnapshot>(
-                  // Try master_catalog first, then fall back to products if empty
-                  stream: FirebaseFirestore.instance.collection('master_catalog').limit(6).snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: Colors.green));
-                    }
-                    if (snapshot.hasError) {
-                      return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(fontSize: 12)));
-                    }
-                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.grey.shade200),
-                        ),
-                        child: const Center(child: Text("No featured items available", style: TextStyle(color: Colors.grey))),
-                      );
-                    }
-                    final products = snapshot.data!.docs;
-                    _itemCount = products.length;
-
-                    return NotificationListener<ScrollNotification>(
-                      onNotification: (notification) {
-                        if (notification is ScrollStartNotification) {
-                          _featuredTimer?.cancel();
-                        } else if (notification is ScrollEndNotification) {
-                          _startFeaturedTimer();
-                        }
-                        return false;
-                      },
-                      child: PageView.builder(
-                        controller: _featuredPageController,
-                        onPageChanged: (idx) => _currentFeaturedIndex = idx,
-                        itemCount: products.length,
-                        physics: const BouncingScrollPhysics(),
-                        itemBuilder: (context, index) {
-                          final data = products[index].data() as Map<String, dynamic>;
-                          final product = Product.fromMap(data, docId: products[index].id);
-                          return _buildFeaturedCard(context, product);
-                        },
-                      ),
-                    );
-                    }
-                    
-                    if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      // Fallback to regular products if master_catalog is empty
-                      return StreamBuilder<QuerySnapshot>(
-                        stream: FirebaseFirestore.instance.collection('products').limit(6).snapshots(),
-                        builder: (context, prodSnapshot) {
-                          if (!prodSnapshot.hasData || prodSnapshot.data!.docs.isEmpty) {
-                            return _buildDefaultFeatured();
-                          }
-                          return _buildFeaturedPager(prodSnapshot.data!.docs);
-                        },
-                      );
-                    }
-                    
-                    return _buildFeaturedPager(snapshot.data!.docs);
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              const Text("Promos & Offers", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 120,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _buildPromoCard("10% OFF", "On all organic vegetables", Colors.orange, Icons.percent),
-                    _buildPromoCard("FREE DELIVERY", "Orders above Rs. 2000", Colors.blue, Icons.local_shipping),
-                    _buildPromoCard("COMBO DEALS", "Get freebies on every purchase", Colors.purple, Icons.card_giftcard),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 25),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text("Categories", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
-                  TextButton(
-                    onPressed: () => widget.onCategoryTap(""),
-                    child: const Text("See all", style: TextStyle(color: Colors.green)),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 90,
-                child: StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance.collection('categories').snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator(color: Colors.green));
-                    }
-                    
-                    final List<Map<String, dynamic>> fallbackCategories = [
-                      {"name": "Vegetables", "icon": Icons.eco_outlined},
-                      {"name": "Fruits", "icon": Icons.apple_outlined},
-                      {"name": "Grains", "icon": Icons.grain},
-                      {"name": "Dairy", "icon": Icons.local_drink_outlined},
-                      {"name": "Pulses", "icon": Icons.lens_blur},
-                      {"name": "Mushrooms", "icon": Icons.spa},
-                      {"name": "Tea & Coffee", "icon": Icons.local_cafe_outlined},
-                      {"name": "Spices", "icon": Icons.flare},
-                      {"name": "Specialty", "icon": Icons.star_border},
-                    ];
-
-                    if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: fallbackCategories.length,
-                        itemBuilder: (context, index) => categoryItem(
-                          context, 
-                          fallbackCategories[index]['icon'] as IconData, 
-                          fallbackCategories[index]['name']
-                        ),
-                       return const Center(child: CircularProgressIndicator(color: Colors.green, strokeWidth: 2));
-                    }
-
-                    if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                      return ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          categoryItem(context, Icons.eco_outlined, "Vegetables"),
-                          categoryItem(context, Icons.apple_outlined, "Fruits"),
-                          categoryItem(context, Icons.grain, "Grains"),
-                          categoryItem(context, Icons.local_drink_outlined, "Dairy"),
-                          categoryItem(context, Icons.lens_blur, "Pulses"),
-                        ],
-                      );
-                    }
-
-                    return ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: snapshot.data!.docs.length,
-                      itemBuilder: (context, index) {
-                        final cat = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-                        final name = cat['name'] ?? 'Category';
-                        final iconCode = cat['iconCode'] as int?;
-
-                        final displayIcon = iconCode != null
-                            ? IconData(iconCode, fontFamily: 'MaterialIcons')
-                            : Icons.category_rounded;
-
-                        return categoryItem(context, displayIcon, name);
-                      },
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 30),
-            ],
+        child: RefreshIndicator(
+          onRefresh: () async {
+            setState(() {});
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(user),
+                const SizedBox(height: 15),
+                _buildActiveOrderBanner(user),
+                const SizedBox(height: 20),
+                const Text("Featured Items", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                const SizedBox(height: 12),
+                _buildFeaturedSection(),
+                const SizedBox(height: 25),
+                const Text("Promos & Offers", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                const SizedBox(height: 12),
+                _buildPromoSection(),
+                const SizedBox(height: 25),
+                _buildCategoriesHeader(),
+                const SizedBox(height: 12),
+                _buildCategoriesSection(),
+                const SizedBox(height: 30),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(User? user) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Hello, ${widget.userName}",
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 2),
+            Text(_getTimeBasedGreeting(), style: TextStyle(color: Colors.grey.shade600)),
+          ],
+        ),
+        Row(
+          children: [
+            IconButton(
+              onPressed: widget.onFavoritesTap,
+              icon: const Icon(Icons.favorite_border, color: Colors.red),
+            ),
+            _buildNotificationIcon(user),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotificationIcon(User? user) {
+    return Stack(
+      children: [
+        IconButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+            );
+          },
+          icon: const Icon(Icons.notifications_none_outlined),
+        ),
+        if (user != null)
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .collection('notifications')
+                .where('isRead', isEqualTo: false)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                return Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                    child: Text(
+                      "${snapshot.data!.docs.length}",
+                      style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox();
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildActiveOrderBanner(User? user) {
+    if (user == null) return const SizedBox();
+    
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('orders')
+          .where('userId', isEqualTo: user.uid)
+          .where('status', whereIn: ['Pending Farmer', 'Farmer Accepted', 'Picked Up', 'On the way', 'Arrived'])
+          .limit(1)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox();
+        }
+
+        final orderDoc = snapshot.data!.docs.first;
+        final order = orderDoc.data() as Map<String, dynamic>;
+        final status = order['status'] ?? 'Pending';
+        final orderId = orderDoc.id;
+
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => OrderScreen(
+                  orderId: orderId,
+                  onBackToHome: () => Navigator.pop(context),
+                ),
+              ),
+            );
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.green.shade600, Colors.green.shade800],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(color: Colors.green.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4)),
+              ],
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.local_shipping_outlined, color: Colors.white, size: 30),
+                const SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Track Your Delivery",
+                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
+                      ),
+                      Text(
+                        _getStatusMessage(status),
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFeaturedSection() {
+    return SizedBox(
+      height: 200,
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('master_catalog').limit(6).snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Colors.green));
+          }
+          
+          List<DocumentSnapshot> docs = snapshot.hasData ? snapshot.data!.docs : [];
+          
+          if (docs.isEmpty) {
+            // Fallback to products collection if master_catalog is empty
+            return StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('products').limit(6).snapshots(),
+              builder: (context, prodSnapshot) {
+                if (prodSnapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Colors.green));
+                }
+                final pDocs = prodSnapshot.hasData ? prodSnapshot.data!.docs : <DocumentSnapshot>[];
+                if (pDocs.isEmpty) return _buildDefaultFeatured();
+                return _buildFeaturedPager(pDocs.cast<DocumentSnapshot>());
+              },
+            );
+          }
+          
+          return _buildFeaturedPager(docs);
+        },
       ),
     );
   }
@@ -399,15 +292,26 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
 
-    return PageView.builder(
-      controller: _featuredPageController,
-      onPageChanged: (idx) => setState(() => _currentFeaturedIndex = idx),
-      itemCount: docs.length,
-      itemBuilder: (context, index) {
-        final data = docs[index].data() as Map<String, dynamic>;
-        final product = Product.fromMap(data, docId: docs[index].id);
-        return _buildFeaturedCard(context, product);
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollStartNotification) {
+          _featuredTimer?.cancel();
+        } else if (notification is ScrollEndNotification) {
+          _startFeaturedTimer();
+        }
+        return false;
       },
+      child: PageView.builder(
+        controller: _featuredPageController,
+        onPageChanged: (idx) => _currentFeaturedIndex = idx,
+        itemCount: docs.length,
+        physics: const BouncingScrollPhysics(),
+        itemBuilder: (context, index) {
+          final data = docs[index].data() as Map<String, dynamic>;
+          final product = Product.fromMap(data, docId: docs[index].id);
+          return _buildFeaturedCard(context, product);
+        },
+      ),
     );
   }
 
@@ -434,44 +338,23 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color: Colors.grey.shade200,
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4)),
+          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: Stack(
             children: [
-              Positioned.fill(
-                child: product.image.startsWith('http')
-                    ? CachedNetworkImage(
-                        imageUrl: product.image,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => const Center(child: CircularProgressIndicator(color: Colors.white)),
-                        errorWidget: (context, url, error) => Image.asset('assets/images/placeholder.png', fit: BoxFit.cover),
-                      )
-                    : Image.asset(
-                        product.image.isNotEmpty ? product.image : 'assets/images/placeholder.png',
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Image.asset('assets/images/placeholder.png', fit: BoxFit.cover),
-                      ),
-              ),
+              Positioned.fill(child: _buildSafeFeaturedImage(product.image)),
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.7),
-                      ],
+                      colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
                     ),
-              _buildSafeFeaturedImage(product.image),
-              Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.7)],
                   ),
                 ),
               ),
@@ -503,19 +386,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     productMap['farm'] = product.farmName ?? 'Local Farm';
                     productMap['rating'] = 4.8;
                     widget.onFavouriteToggle(productMap);
-
-                    // Add feedback
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(isFavourite ? "Removed from Favourites" : "Added to Favourites"),
-                        duration: const Duration(seconds: 1),
-                        behavior: SnackBarBehavior.floating,
-                        backgroundColor: isFavourite ? Colors.black87 : Colors.redAccent,
-                      ),
-                    );
                   },
                   child: CircleAvatar(
-                    backgroundColor: Colors.white.withValues(alpha: 0.8),
+                    backgroundColor: Colors.white.withValues(alpha: 0.9),
                     radius: 18,
                     child: Icon(
                       isFavourite ? Icons.favorite : Icons.favorite_border,
@@ -538,25 +411,18 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     
     if (image.startsWith('http')) {
-      return Image.network(
-        image,
+      return CachedNetworkImage(
+        imageUrl: image,
         width: double.infinity,
         height: double.infinity,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => Container(
-          color: Colors.grey.shade300,
-          child: const Center(child: Icon(Icons.broken_image, color: Colors.white, size: 40)),
-        ),
+        placeholder: (context, url) => Container(color: Colors.grey.shade200),
+        errorWidget: (context, url, error) => Container(color: Colors.grey.shade300, child: const Icon(Icons.broken_image)),
       );
     }
     
-    String assetPath = image;
-    if (!assetPath.startsWith('assets/')) {
-      assetPath = 'assets/images/$image';
-    }
-    
     return Image.asset(
-      assetPath,
+      image.startsWith('assets/') ? image : 'assets/images/$image',
       width: double.infinity,
       height: double.infinity,
       fit: BoxFit.cover,
@@ -587,15 +453,30 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildPromoSection() {
+    return SizedBox(
+      height: 120,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        children: [
+          _buildPromoCard("10% OFF", "On all organic vegetables", Colors.orange, Icons.percent),
+          _buildPromoCard("FREE DELIVERY", "Orders above Rs. 2000", Colors.blue, Icons.local_shipping),
+          _buildPromoCard("COMBO DEALS", "Get freebies on every purchase", Colors.purple, Icons.card_giftcard),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPromoCard(String title, String subtitle, Color color, IconData icon) {
     return Container(
-      width: 200,
+      width: 220,
       margin: const EdgeInsets.only(right: 15),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -603,64 +484,120 @@ class _HomeScreenState extends State<HomeScreen> {
           Icon(icon, color: color, size: 28),
           const Spacer(),
           Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 11)),
+          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCategoriesHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text("Categories", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        TextButton(
+          onPressed: () => widget.onCategoryTap(""),
+          child: const Text("See all", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoriesSection() {
+    return SizedBox(
+      height: 100,
+      child: StreamBuilder<QuerySnapshot>(
+        stream: FirebaseFirestore.instance.collection('categories').snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: Colors.green));
+          }
+          
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                categoryItem(Icons.eco_outlined, "Vegetables"),
+                categoryItem(Icons.apple_outlined, "Fruits"),
+                categoryItem(Icons.grain, "Grains"),
+                categoryItem(Icons.local_drink_outlined, "Dairy"),
+                categoryItem(Icons.lens_blur, "Pulses"),
+              ],
+            );
+          }
+
+          return ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: snapshot.data!.docs.length,
+            itemBuilder: (context, index) {
+              final cat = snapshot.data!.docs[index].data() as Map<String, dynamic>;
+              final name = cat['name'] ?? 'Category';
+              
+              // Use category name to determine icon since dynamic IconData(code) 
+              // is often restricted by icon tree-shaking lints.
+              final displayIcon = _getCategoryIcon(name);
+
+              return categoryItem(displayIcon, name);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  IconData _getCategoryIcon(String name) {
+    switch (name.toLowerCase()) {
+      case 'vegetables': return Icons.eco_outlined;
+      case 'fruits': return Icons.apple_outlined;
+      case 'grains': return Icons.grain;
+      case 'dairy': return Icons.local_drink_outlined;
+      case 'pulses': return Icons.lens_blur;
+      default: return Icons.category_rounded;
+    }
+  }
+
+  Widget categoryItem(IconData icon, String title) {
+    return GestureDetector(
+      onTap: () => widget.onCategoryTap(title),
+      child: Container(
+        margin: const EdgeInsets.only(right: 16),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Icon(icon, color: Colors.green, size: 28),
+            ),
+            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
       ),
     );
   }
 
   String _getStatusMessage(String status) {
     switch (status) {
-      case 'Pending Farmer':
-        return "Routing to nearest farm...";
-      case 'Farmer Accepted':
-        return "Farm is preparing items...";
-      case 'Picked Up':
-        return "Rider picked up from farm";
-      case 'On the way':
-        return "Rider is on the way to you";
-      case 'Arrived':
-        return "Order almost delivered!";
-      default:
-        return "Order in progress";
+      case 'Pending Farmer': return "Waiting for farm confirmation...";
+      case 'Farmer Accepted': return "Farm is packing your order...";
+      case 'Picked Up': return "Rider has collected your items";
+      case 'On the way': return "Rider is heading your way!";
+      case 'Arrived': return "Rider has arrived at your location";
+      default: return "Processing your order...";
     }
   }
 
   String _getTimeBasedGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) {
-      return "Good morning";
-    } else if (hour < 17) {
-      return "Good afternoon";
-    } else {
-      return "Good evening";
-    }
-  }
-
-  Widget categoryItem(BuildContext context, IconData icon, String title) {
-    return GestureDetector(
-      onTap: () => widget.onCategoryTap(title),
-      child: Container(
-        margin: const EdgeInsets.only(right: 12),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(color: Colors.grey.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, 2)),
-                ],
-              ),
-              child: Icon(icon, color: Colors.green, size: 28),
-            ),
-            const SizedBox(height: 6),
-            Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-          ],
-        ),
-      ),
-    );
+    if (hour < 12) return "Good morning";
+    if (hour < 17) return "Good afternoon";
+    return "Good evening";
   }
 }

@@ -1,9 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../firebase_options.dart';
 import '../../models/user_data.dart';
 import '../auth/login_screen.dart';
+import '../home/navigation_screen.dart';
+import 'farmer_screen.dart';
+import '../delivery_person_screen.dart';
+import '../admin_page.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -71,7 +77,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
     _mainController.forward();
     
-    _skipTimer = Timer(const Duration(seconds: 6), () {
+    _skipTimer = Timer(const Duration(seconds: 8), () {
       if (mounted) {
         setState(() => _showSkipButton = true);
       }
@@ -85,20 +91,22 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   Future<void> _initApp() async {
     final stopwatch = Stopwatch()..start();
     try {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      ).timeout(const Duration(seconds: 15));
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp(
+          options: DefaultFirebaseOptions.currentPlatform,
+        ).timeout(const Duration(seconds: 15));
+      }
 
       await UserData.init();
       
       final int elapsed = stopwatch.elapsedMilliseconds;
-      final int remaining = 4000 - elapsed;
+      final int remaining = 2500 - elapsed;
 
       if (remaining > 0) {
         await Future.delayed(Duration(milliseconds: remaining));
       }
       
-      _navigateToLogin();
+      _handleNavigation();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -108,6 +116,45 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     } finally {
       stopwatch.stop();
     }
+  }
+
+  void _handleNavigation() async {
+    if (!mounted || _isNavigated) return;
+    
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get()
+            .timeout(const Duration(seconds: 5));
+
+        if (doc.exists && mounted) {
+          final role = doc.data()?['role'] ?? 'Customer';
+          final name = doc.data()?['fullName'] ?? user.displayName ?? "User";
+          
+          Widget target;
+          if (role == 'Farmer') {
+            target = const FarmerScreen();
+          } else if (role == 'Delivery Person') {
+            target = const DeliveryPersonScreen();
+          } else if (role == 'Admin') {
+            target = const AdminPage();
+          } else {
+            target = NavigationScreen(userName: name);
+          }
+          
+          _isNavigated = true;
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => target));
+          return;
+        }
+      } catch (e) {
+        debugPrint("Auto-login error: $e");
+      }
+    }
+    
+    _navigateToLogin();
   }
 
   void _navigateToLogin() {
@@ -164,14 +211,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                 child: Icon(Icons.eco, size: isLargeScreen ? 300 : 200, color: Colors.white),
               ),
             ),
-            Positioned(
-              bottom: -30,
-              left: -30,
-              child: Opacity(
-                opacity: 0.05,
-                child: Icon(Icons.agriculture, size: isLargeScreen ? 250 : 180, color: Colors.white),
-              ),
-            ),
             
             SafeArea(
               child: Center(
@@ -185,13 +224,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                         child: FadeTransition(
                           opacity: _logoOpacity,
                           child: Container(
-                            padding: EdgeInsets.all(isLargeScreen ? 10 : 8),
-                            decoration: BoxDecoration(
+                            padding: const EdgeInsets.all(12),
+                            decoration: const BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.15),
+                                  color: Colors.black12,
                                   blurRadius: 30,
                                   spreadRadius: 2,
                                 ),
@@ -200,19 +239,19 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                             child: Hero(
                               tag: 'app_logo',
                               child: Image.asset(
-                                "assets/images/logo_adaptive.png",
-                                height: isLargeScreen ? 160 : 160,
-                                width: isLargeScreen ? 160 : 160,
+                                "assets/images/logo_full.png",
+                                height: 120,
+                                width: 120,
                                 fit: BoxFit.contain,
                                 errorBuilder: (context, error, stackTrace) =>
-                                    Icon(Icons.eco, size: isLargeScreen ? 100 : 80, color: Colors.green),
+                                    const Icon(Icons.eco, size: 80, color: Colors.green),
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                    SizedBox(height: isLargeScreen ? 40 : 30),
+                    const SizedBox(height: 30),
                     
                     FadeTransition(
                       opacity: _textOpacity,
@@ -221,43 +260,33 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           Text(
                             "Farmtech",
                             style: TextStyle(
-                              fontSize: 54,
+                              fontSize: 48,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
-                              letterSpacing: 2.0,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black26,
-                                  offset: Offset(0, 2),
-                                  blurRadius: 4,
-                                ),
-                              ],
+                              letterSpacing: 1.5,
                             ),
                           ),
-                          SizedBox(height: 12),
                           Text(
                             "AgriDirect Nepal",
                             style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w400,
-                              color: Colors.white,
-                              letterSpacing: 1.5,
+                              fontSize: 18,
+                              color: Colors.white70,
+                              letterSpacing: 1.2,
                             ),
                           ),
                         ],
                       ),
                     ),
                     
-                    SizedBox(height: isLargeScreen ? 80 : 60),
+                    const SizedBox(height: 60),
                     
                     if (_errorMessage == null) ...[
-                      SizedBox(
-                        width: 40,
-                        height: 40,
+                      const SizedBox(
+                        width: 30,
+                        height: 30,
                         child: CircularProgressIndicator(
-                          valueColor: const AlwaysStoppedAnimation(Colors.white),
-                          strokeWidth: 2.5,
-                          backgroundColor: Colors.white.withValues(alpha: 0.2),
+                          valueColor: AlwaysStoppedAnimation(Colors.white),
+                          strokeWidth: 2,
                         ),
                       ),
                       if (_showSkipButton)
@@ -265,12 +294,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           padding: const EdgeInsets.only(top: 30),
                           child: TextButton(
                             onPressed: _navigateToLogin,
-                            style: TextButton.styleFrom(
-                              foregroundColor: Colors.white70,
-                            ),
                             child: const Text(
-                              "Continue to App",
-                              style: TextStyle(decoration: TextDecoration.underline),
+                              "Continue to Login",
+                              style: TextStyle(color: Colors.white70, decoration: TextDecoration.underline),
                             ),
                           ),
                         ),
@@ -279,49 +305,23 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                         padding: const EdgeInsets.symmetric(horizontal: 40),
                         child: Column(
                           children: [
-                            const Icon(Icons.error_outline, color: Colors.white70, size: 40),
-                            const SizedBox(height: 16),
                             Text(
                               "Startup Issue: $_errorMessage",
                               textAlign: TextAlign.center,
                               style: const TextStyle(color: Colors.white70, fontSize: 13),
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 20),
                             ElevatedButton(
                               onPressed: () {
                                 setState(() => _errorMessage = null);
                                 _initApp();
                               },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: Colors.green.shade900,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                              ),
                               child: const Text("Retry"),
                             ),
                           ],
                         ),
                       ),
                   ],
-                ),
-              ),
-            ),
-            
-            Positioned(
-              bottom: 40,
-              left: 0,
-              right: 0,
-              child: FadeTransition(
-                opacity: _subtitleOpacity,
-                child: const Text(
-                  "Connecting Farmers, Empowering Nepal",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white60,
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic,
-                  ),
                 ),
               ),
             ),
