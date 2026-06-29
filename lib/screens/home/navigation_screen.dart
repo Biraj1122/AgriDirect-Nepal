@@ -74,18 +74,22 @@ class _NavigationScreenState extends State<NavigationScreen> {
     }
 
     try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      // Add a 6-second timeout to prevent the app from hanging if Firestore is unresponsive
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get()
+          .timeout(const Duration(seconds: 6));
+          
       final role = doc.data()?['role'];
 
       if (mounted) {
-        if (role != 'Customer' && role != null) {
+        if (role != 'Customer' && role != null && role != 'Admin') {
           Widget target;
           if (role == 'Farmer') {
             target = const FarmerScreen();
           } else if (role == 'Delivery Person') {
             target = const DeliveryPersonScreen();
-          } else if (role == 'Admin') {
-            target = const AdminPage();
           } else {
             setState(() => _isCheckingRole = false);
             return;
@@ -97,7 +101,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         setState(() => _isCheckingRole = false);
       }
     } catch (e) {
-      debugPrint("Error checking role: $e");
+      debugPrint("Role check timed out or failed: $e. Defaulting to Customer.");
       if (mounted) {
         _listenToFavorites();
         setState(() => _isCheckingRole = false);
