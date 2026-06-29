@@ -83,6 +83,16 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             _setInitialCategoryIndex();
           });
         }
+      } else {
+        _useFallbackCategories();
+      }
+    } catch (e) {
+      debugPrint("Error fetching categories: $e");
+      _useFallbackCategories();
+    }
+  }
+
+  void _useFallbackCategories() {
         return;
       }
     } catch (e) {
@@ -102,6 +112,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           {'name': 'Mushrooms', 'icon': Icons.spa},
           {'name': 'Tea & Coffee', 'icon': Icons.local_cafe_outlined},
           {'name': 'Spices', 'icon': Icons.flare},
+          {'name': 'Specialty', 'icon': Icons.star_border},
         ];
         _isLoadingCategories = false;
         _setInitialCategoryIndex();
@@ -120,12 +131,35 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       return [];
     }
     final selectedCategory = _categories[_selectedCategoryIndex]['name'];
-    return liveProducts.where((product) {
-      final matchesCategory = selectedCategory == 'All' || product['category'] == selectedCategory;
-      final name = (product['name'] ?? '').toString().toLowerCase();
-      final matchesSearch = _searchQuery.isEmpty || name.contains(_searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    }).toList();
+    
+    // Use a Map to deduplicate by product name
+    final Map<String, Map<String, dynamic>> uniqueProducts = {};
+
+    for (var product in liveProducts) {
+      final String name = (product['name'] ?? product['title'] ?? '').toString();
+      if (name.isEmpty) continue;
+
+      final String category = (product['category'] ?? '').toString();
+      
+      final bool matchesCategory = selectedCategory == 'All' || category == selectedCategory;
+      final bool matchesSearch = _searchQuery.isEmpty || 
+          name.toLowerCase().contains(_searchQuery.toLowerCase());
+
+      if (matchesCategory && matchesSearch) {
+        if (!uniqueProducts.containsKey(name)) {
+          uniqueProducts[name] = product;
+        } else {
+          // If a duplicate exists, keep the one with the lower price
+          final double existingPrice = double.tryParse(uniqueProducts[name]!['price'].toString()) ?? double.infinity;
+          final double currentPrice = double.tryParse(product['price'].toString()) ?? double.infinity;
+          if (currentPrice < existingPrice) {
+            uniqueProducts[name] = product;
+          }
+        }
+      }
+    }
+
+    return uniqueProducts.values.toList();
   }
 
   void _addToCart(Map<String, dynamic> product) {
@@ -373,8 +407,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       backgroundColor: const Color(0xFFF5F5F5),
       body: SafeArea(
         child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('products').snapshots(),
+          // Querying master_catalog for global items, and products for farmer items
+          stream: FirebaseFirestore.instance.collection('master_catalog').snapshots(),
           builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              debugPrint("Firestore Categories Error: ${snapshot.error}");
+              // We don't return early here so the UI still builds search/categories
+            }
+
             List<Map<String, dynamic>> allProducts = [];
             if (snapshot.hasData) {
               allProducts = snapshot.data!.docs.map((doc) {
@@ -411,6 +451,29 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 Expanded(
                   child: snapshot.connectionState == ConnectionState.waiting
                       ? const Center(child: CircularProgressIndicator(color: Colors.green))
+                      : (filteredProducts.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.search_off, size: 60, color: Colors.grey.shade300),
+                                  const SizedBox(height: 10),
+                                  const Text("No products found", style: TextStyle(color: Colors.grey)),
+                                  if (snapshot.hasError)
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.red, fontSize: 10)),
+                                    ),
+                                ],
+                              ),
+                            )
+                          : GridView.builder(
+                              padding: const EdgeInsets.all(16),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                childAspectRatio: 0.72,
+                                crossAxisSpacing: 14,
+                                mainAxisSpacing: 14,
                       : (allProducts.isEmpty 
                           ? const Center(
                               child: Column(

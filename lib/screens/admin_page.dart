@@ -11,8 +11,22 @@ import '../models/research_submission_model.dart';
 import '../models/price_request_model.dart';
 import 'auth/login_screen.dart';
 
-class AdminPage extends StatelessWidget {
+class AdminPage extends StatefulWidget {
   const AdminPage({super.key});
+
+  @override
+  State<AdminPage> createState() => _AdminPageState();
+}
+
+class _AdminPageState extends State<AdminPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Ensure the role check runs when the page loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminViewModel>().refreshAdminState();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +60,7 @@ class AdminPage extends StatelessWidget {
         children: [
           if (isWide) _buildPersistentPanel(context, viewModel),
           Expanded(
-            child: viewModel.currentIndex < 8 
+            child: viewModel.currentIndex < 9 
               ? IndexedStack(
                 index: viewModel.currentIndex,
                 children: [
@@ -58,6 +72,7 @@ class AdminPage extends StatelessWidget {
                   _buildResearchManager(context, viewModel),
                   _buildRevenueAnalyticsPage(context, viewModel),
                   _buildPriceApprovalsList(context, viewModel),
+                  _buildProductApprovalsList(context, viewModel),
                 ],
               )
               : const Center(child: Text("Page Not Found")),
@@ -77,7 +92,7 @@ class AdminPage extends StatelessWidget {
           BottomNavigationBarItem(icon: Icon(Icons.shopping_bag), label: "Orders"),
           BottomNavigationBarItem(icon: Icon(Icons.inventory), label: "Products"),
           BottomNavigationBarItem(icon: Icon(Icons.people), label: "Users"),
-          BottomNavigationBarItem(icon: Icon(Icons.health_and_safety), label: "Research"),
+          BottomNavigationBarItem(icon: Icon(Icons.campaign), label: "Announcements"),
         ],
       ),
     );
@@ -114,6 +129,7 @@ class AdminPage extends StatelessWidget {
           _panelItem(context, viewModel, 4, Icons.campaign, "Announcements"),
           _panelItem(context, viewModel, 5, Icons.health_and_safety, "Research Data"),
           _panelItem(context, viewModel, 7, Icons.price_check, "Price Approvals"),
+          _panelItem(context, viewModel, 8, Icons.approval, "Product Approvals"),
           const Divider(),
           const Padding(
             padding: EdgeInsets.all(15.0),
@@ -161,6 +177,20 @@ class AdminPage extends StatelessWidget {
     );
   }
 
+  Widget _sideDrawerItem(BuildContext context, AdminViewModel viewModel, int index, IconData icon, String label) {
+    bool selected = viewModel.currentIndex == index;
+    return ListTile(
+      selected: selected,
+      selectedTileColor: Colors.green.withValues(alpha: 0.1),
+      leading: Icon(icon, color: selected ? Colors.green : Colors.grey),
+      title: Text(label, style: TextStyle(color: selected ? Colors.green : Colors.black)),
+      onTap: () {
+        viewModel.setCurrentIndex(index);
+        Navigator.pop(context);
+      },
+    );
+  }
+
   Widget _buildSidePanel(BuildContext context, AdminViewModel viewModel) {
     return Drawer(
       child: SingleChildScrollView(
@@ -176,10 +206,13 @@ class AdminPage extends StatelessWidget {
               ),
               decoration: const BoxDecoration(color: Colors.green),
             ),
-            _panelItem(context, viewModel, 0, Icons.dashboard, "Main Dashboard"),
-            _panelItem(context, viewModel, 1, Icons.shopping_bag, "Order Management"),
-            _panelItem(context, viewModel, 2, Icons.inventory_2, "Inventory / Products"),
-            _panelItem(context, viewModel, 3, Icons.people, "User Registry"),
+            _sideDrawerItem(context, viewModel, 0, Icons.dashboard, "Main Dashboard"),
+            _sideDrawerItem(context, viewModel, 1, Icons.shopping_bag, "Order Management"),
+            _sideDrawerItem(context, viewModel, 2, Icons.inventory_2, "Inventory / Products"),
+            _sideDrawerItem(context, viewModel, 3, Icons.people, "User Registry"),
+            _sideDrawerItem(context, viewModel, 5, Icons.health_and_safety, "Research Data"),
+            _sideDrawerItem(context, viewModel, 7, Icons.price_check, "Price Approvals"),
+            _sideDrawerItem(context, viewModel, 8, Icons.approval, "Product Approvals"),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.image, color: Colors.green),
@@ -654,6 +687,83 @@ class AdminPage extends StatelessWidget {
     );
   }
 
+  Widget _buildProductApprovalsList(BuildContext context, AdminViewModel viewModel) {
+    return StreamBuilder<List<Product>>(
+      stream: viewModel.getPendingProducts(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        final products = snapshot.data!;
+
+        if (products.isEmpty) {
+          return const Center(child: Text("No pending product approvals."));
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(20),
+          itemCount: products.length,
+          itemBuilder: (context, index) {
+            final product = products[index];
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImage(
+                            imageUrl: product.image,
+                            width: 60,
+                            height: 60,
+                            fit: BoxFit.cover,
+                            errorWidget: (context, url, error) => const Icon(Icons.image),
+                          ),
+                        ),
+                        const SizedBox(width: 15),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(product.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              Text("Farm: ${product.farmName ?? 'N/A'}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                              Text("Price: Rs. ${product.price} / ${product.unit}", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(product.description, style: const TextStyle(fontSize: 13, color: Colors.black87), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 15),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => viewModel.rejectProduct(product),
+                          child: const Text("Reject", style: TextStyle(color: Colors.red)),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton(
+                          onPressed: () => viewModel.approveProduct(product),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                          child: const Text("Approve", style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    )
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _priceChangeChip(String label, double price, String unit, Color color) {
     return Container(
       margin: const EdgeInsets.only(right: 8),
@@ -798,12 +908,23 @@ class AdminPage extends StatelessWidget {
       await viewModel.seedDatabase();
       if (context.mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Database seeded successfully")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Database seeded successfully! Items added to catalog and products."),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (context.mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Seed error: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Seed error: $e"),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     }
   }

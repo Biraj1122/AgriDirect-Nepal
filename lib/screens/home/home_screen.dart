@@ -6,6 +6,7 @@ import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/orders_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -33,6 +34,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final PageController _featuredPageController = PageController();
   int _currentFeaturedIndex = 0;
   Timer? _featuredTimer;
+  int _itemCount = 0;
 
   int _featuredCount = 0;
 
@@ -43,7 +45,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startFeaturedTimer() {
+    _featuredTimer?.cancel();
     _featuredTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_featuredPageController.hasClients && _itemCount > 1) {
+        int nextIndex = (_currentFeaturedIndex + 1) % _itemCount;
       if (_featuredPageController.hasClients && _featuredCount > 0) {
         int nextIndex = (_currentFeaturedIndex + 1) % _featuredCount;
         _featuredPageController.animateToPage(
@@ -51,9 +56,6 @@ class _HomeScreenState extends State<HomeScreen> {
           duration: const Duration(milliseconds: 800),
           curve: Curves.easeInOut,
         );
-        setState(() {
-          _currentFeaturedIndex = nextIndex;
-        });
       }
     });
   }
@@ -152,21 +154,29 @@ class _HomeScreenState extends State<HomeScreen> {
                       .collection('orders')
                       .where('userId', isEqualTo: user.uid)
                       .where('status', whereIn: ['Pending Farmer', 'Farmer Accepted', 'Picked Up', 'On the way', 'Arrived'])
-                      .orderBy('createdAt', descending: true)
-                      .limit(1)
+                      // Removed orderBy to avoid index requirement
+                      .limit(5)
                       .snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.hasError) {
-                      debugPrint("Firestore Error: ${snapshot.error}");
+                      debugPrint("Firestore Order Stream Error: ${snapshot.error}");
                       return const SizedBox();
                     }
                     if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                       return const SizedBox();
                     }
 
-                    final order = snapshot.data!.docs.first.data() as Map<String, dynamic>;
+                    // Sort in memory
+                    final docs = snapshot.data!.docs.toList();
+                    docs.sort((a, b) {
+                      final aTime = ((a.data() as Map)['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+                      final bTime = ((b.data() as Map)['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
+                      return bTime.compareTo(aTime);
+                    });
+
+                    final order = docs.first.data() as Map<String, dynamic>;
                     final status = order['status'] ?? 'Pending';
-                    final orderId = snapshot.data!.docs.first.id;
+                    final orderId = docs.first.id;
 
                     return GestureDetector(
                       onTap: () {
@@ -224,6 +234,44 @@ class _HomeScreenState extends State<HomeScreen> {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator(color: Colors.green));
                     }
+                    if (snapshot.hasError) {
+                      return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(fontSize: 12)));
+                    }
+                    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: const Center(child: Text("No featured items available", style: TextStyle(color: Colors.grey))),
+                      );
+                    }
+                    final products = snapshot.data!.docs;
+                    _itemCount = products.length;
+
+                    return NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification is ScrollStartNotification) {
+                          _featuredTimer?.cancel();
+                        } else if (notification is ScrollEndNotification) {
+                          _startFeaturedTimer();
+                        }
+                        return false;
+                      },
+                      child: PageView.builder(
+                        controller: _featuredPageController,
+                        onPageChanged: (idx) => _currentFeaturedIndex = idx,
+                        itemCount: products.length,
+                        physics: const BouncingScrollPhysics(),
+                        itemBuilder: (context, index) {
+                          final data = products[index].data() as Map<String, dynamic>;
+                          final product = Product.fromMap(data, docId: products[index].id);
+                          return _buildFeaturedCard(context, product);
+                        },
+                      ),
+                    );
+                    }
                     
                     if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
                       // Fallback to regular products if master_catalog is empty
@@ -278,6 +326,30 @@ class _HomeScreenState extends State<HomeScreen> {
                   stream: FirebaseFirestore.instance.collection('categories').snapshots(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator(color: Colors.green));
+                    }
+                    
+                    final List<Map<String, dynamic>> fallbackCategories = [
+                      {"name": "Vegetables", "icon": Icons.eco_outlined},
+                      {"name": "Fruits", "icon": Icons.apple_outlined},
+                      {"name": "Grains", "icon": Icons.grain},
+                      {"name": "Dairy", "icon": Icons.local_drink_outlined},
+                      {"name": "Pulses", "icon": Icons.lens_blur},
+                      {"name": "Mushrooms", "icon": Icons.spa},
+                      {"name": "Tea & Coffee", "icon": Icons.local_cafe_outlined},
+                      {"name": "Spices", "icon": Icons.flare},
+                      {"name": "Specialty", "icon": Icons.star_border},
+                    ];
+
+                    if (snapshot.hasError || !snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                      return ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: fallbackCategories.length,
+                        itemBuilder: (context, index) => categoryItem(
+                          context, 
+                          fallbackCategories[index]['icon'] as IconData, 
+                          fallbackCategories[index]['name']
+                        ),
                        return const Center(child: CircularProgressIndicator(color: Colors.green, strokeWidth: 2));
                     }
 
@@ -362,11 +434,37 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
+          color: Colors.grey.shade200,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: Stack(
             children: [
+              Positioned.fill(
+                child: product.image.startsWith('http')
+                    ? CachedNetworkImage(
+                        imageUrl: product.image,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => const Center(child: CircularProgressIndicator(color: Colors.white)),
+                        errorWidget: (context, url, error) => Image.asset('assets/images/placeholder.png', fit: BoxFit.cover),
+                      )
+                    : Image.asset(
+                        product.image.isNotEmpty ? product.image : 'assets/images/placeholder.png',
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Image.asset('assets/images/placeholder.png', fit: BoxFit.cover),
+                      ),
+              ),
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.7),
+                      ],
+                    ),
               _buildSafeFeaturedImage(product.image),
               Container(
                 decoration: BoxDecoration(

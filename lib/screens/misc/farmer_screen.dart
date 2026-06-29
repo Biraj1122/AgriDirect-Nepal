@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/services/storage_service.dart';
+import 'package:farmtech_agridirect/config/aws_config.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -23,11 +24,67 @@ class _FarmerScreenState extends State<FarmerScreen> {
   int _currentIndex = 0;
   Map<String, dynamic>? _farmerData;
   bool _loading = true;
+  StreamSubscription? _notificationSubscription;
+  StreamSubscription? _orderSubscription;
+  int _unreadCount = 0;
+  int _pendingOrderCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadFarmerData();
+    _setupGlobalListeners();
+  }
+
+  @override
+  void dispose() {
+    _notificationSubscription?.cancel();
+    _orderSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _setupGlobalListeners() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    // Listen to personal notifications
+    _notificationSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('notifications')
+        .where('isRead', isEqualTo: false)
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() => _unreadCount = snapshot.docs.length);
+      }
+    });
+
+    // Listen to broadcasted "Pending Farmer" orders
+    _orderSubscription = FirebaseFirestore.instance
+        .collection('orders')
+        .where('status', isEqualTo: 'Pending Farmer')
+        .snapshots()
+        .listen((snapshot) {
+      final pendingOrders = snapshot.docs.where((d) => (d.data() as Map)['farmerUid'] == null).toList();
+      final currentCount = pendingOrders.length;
+      
+      if (mounted) {
+        if (currentCount > _pendingOrderCount && _currentIndex != 0) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text("New order request available! Check Dashboard."),
+              backgroundColor: Colors.orange,
+              action: SnackBarAction(label: "VIEW", textColor: Colors.white, onPressed: () {
+                setState(() => _currentIndex = 0);
+              }),
+            )
+          );
+        }
+        setState(() => _pendingOrderCount = currentCount);
+      }
+    });
   }
 
   Future<void> _loadFarmerData() async {
@@ -111,11 +168,33 @@ class _FarmerScreenState extends State<FarmerScreen> {
         type: BottomNavigationBarType.fixed,
         selectedItemColor: Colors.green,
         unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
-          BottomNavigationBarItem(icon: Icon(Icons.storefront_outlined), label: 'Products'),
-          BottomNavigationBarItem(icon: Icon(Icons.local_shipping_outlined), label: 'Deliveries'),
-          BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), label: 'Stock'),
+        items: [
+          BottomNavigationBarItem(
+            icon: Stack(
+              children: [
+                const Icon(Icons.dashboard_outlined),
+                if (_unreadCount + _pendingOrderCount > 0)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                      constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                      child: Text(
+                        '${_unreadCount + _pendingOrderCount}',
+                        style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            label: 'Dashboard',
+          ),
+          const BottomNavigationBarItem(icon: Icon(Icons.storefront_outlined), label: 'Products'),
+          const BottomNavigationBarItem(icon: Icon(Icons.local_shipping_outlined), label: 'Deliveries'),
+          const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), label: 'Stock'),
         ],
       ),
     );
@@ -142,6 +221,7 @@ class _DashboardTabState extends State<_DashboardTab> {
   final PageController _pageController = PageController();
   int _currentCarouselIndex = 0;
   Timer? _carouselTimer;
+  int _carouselItemCount = 0;
 
   @override
   void initState() {
@@ -157,6 +237,12 @@ class _DashboardTabState extends State<_DashboardTab> {
   }
 
   void _startCarousel() {
+    _carouselTimer?.cancel();
+    _carouselTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (_pageController.hasClients && _carouselItemCount > 1) {
+        int nextIndex = (_currentCarouselIndex + 1) % _carouselItemCount;
+        _pageController.animateToPage(
+          nextIndex,
     _carouselTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
       if (_pageController.hasClients) {
         int next = _currentCarouselIndex + 1;
@@ -217,6 +303,92 @@ class _DashboardTabState extends State<_DashboardTab> {
               height: 160,
               child: Stack(
                 children: [
+                  const Icon(Icons.agriculture, color: Colors.white, size: 30),
+                  const SizedBox(height: 10),
+                  Text(widget.farmName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(widget.farmLocation, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 25),
+            
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(widget.uid)
+                  .collection('notifications')
+                  .orderBy('createdAt', descending: true)
+                  .limit(4)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final notifications = snapshot.data?.docs ?? [];
+                _carouselItemCount = notifications.isEmpty ? 1 : notifications.length;
+                
+                return Container(
+                  height: 180,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: Colors.black.withAlpha(20), blurRadius: 10, offset: const Offset(0, 5))],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Stack(
+                      children: [
+                        Image.asset(
+                          "assets/images/vegetables.png",
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                        Container(color: Colors.black.withAlpha(80)),
+                        
+                        NotificationListener<ScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification is ScrollStartNotification) {
+                              _carouselTimer?.cancel();
+                            } else if (notification is ScrollEndNotification) {
+                              _startCarousel();
+                            }
+                            return false;
+                          },
+                          child: PageView.builder(
+                            controller: _pageController,
+                            onPageChanged: (i) => setState(() => _currentCarouselIndex = i),
+                            itemCount: _carouselItemCount,
+                            itemBuilder: (context, i) {
+                              if (notifications.isEmpty) {
+                                return _buildCarouselSlide(
+                                  "Fresh Harvest Awaits", 
+                                  "Keep track of your products and orders efficiently.",
+                                  Icons.eco,
+                                );
+                              }
+                              final data = notifications[i].data() as Map<String, dynamic>;
+                              return _buildCarouselSlide(
+                                data['title'] ?? 'Notification',
+                                data['body'] ?? '',
+                                Icons.info_outline,
+                              );
+                            },
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 15,
+                          right: 20,
+                          child: Row(
+                            children: List.generate(
+                              notifications.isEmpty ? 1 : notifications.length,
+                              (index) => Container(
+                                margin: const EdgeInsets.only(left: 4),
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: _currentCarouselIndex == index ? Colors.white : Colors.white.withAlpha(100),
+                                ),
+                              ),
+                            ),
                   PageView.builder(
                     controller: _pageController,
                     onPageChanged: (i) => setState(() => _currentCarouselIndex = i),
@@ -263,6 +435,65 @@ class _DashboardTabState extends State<_DashboardTab> {
 
         const SizedBox(height: 20),
 
+            const SizedBox(height: 20),
+            
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('orders')
+                  .where('status', isEqualTo: 'Pending Farmer')
+                  .snapshots(),
+              builder: (context, snap) {
+                if (snap.hasError) return Text("Error: ${snap.error}");
+                if (!snap.hasData) return const Center(child: CircularProgressIndicator(color: Colors.green));
+                
+                final docs = snap.data!.docs;
+                // Only show orders that haven't been picked by another farmer AND are not cancelled
+                final availableDocs = docs.where((d) {
+                  final data = d.data() as Map;
+                  return data['farmerUid'] == null && data['status'] != 'Cancelled';
+                }).toList();
+
+                if (availableDocs.isEmpty) return const SizedBox();
+                
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Available Orders (Unassigned)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
+                    const SizedBox(height: 12),
+                    ...availableDocs.map((doc) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      return _OrderAcceptanceTile(orderId: doc.id, data: data, currentFarmerUid: widget.uid, currentFarmName: widget.farmName);
+                    }),
+                    const SizedBox(height: 20),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            const Text("Recent Orders", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
+            const SizedBox(height: 12),
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).snapshots(),
+              builder: (context, snapshot) {
+                final allDocs = snapshot.data?.docs ?? [];
+                // Filter out cancelled orders from the dashboard overview to avoid "flooding"
+                final docs = allDocs.where((d) => (d.data() as Map)['status'] != 'Cancelled').toList();
+                
+                double totalEarnings = 0;
+                int pendingCount = 0;
+                
+                for (var doc in docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  // Only count revenue from Delivered orders and use the new 80% share field
+                  if (data['status'] == 'Delivered') {
+                    totalEarnings += (data['farmerRevenue'] ?? 0).toDouble();
+                  }
+                  
+                  String status = (data['status'] ?? '').toString().toLowerCase();
+                  if (status.contains('pending') || status.contains('accepted')) {
+                    pendingCount++;
+                  }
+                }
         StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('settings').doc('announcement').snapshots(),
           builder: (context, snapshot) {
@@ -424,10 +655,41 @@ class _ProductsTabState extends State<_ProductsTab> {
             itemCount: docs.length,
             itemBuilder: (context, i) {
               final data = docs[i].data() as Map<String, dynamic>;
+              final String? imageUrl = data['imageUrl'] ?? data['image'];
+              final String status = data['status'] ?? 'approved';
+              
+              Color statusColor = Colors.green;
+              if (status == 'pending') statusColor = Colors.orange;
+              if (status == 'rejected') statusColor = Colors.red;
+
               return Card(
                 margin: const EdgeInsets.only(bottom: 15),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                 child: ListTile(
+                  leading: imageUrl != null && imageUrl.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: CachedNetworkImage(
+                            imageUrl: imageUrl,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const CircularProgressIndicator(strokeWidth: 2),
+                            errorWidget: (context, url, error) => const Icon(Icons.eco, color: Colors.green),
+                          ),
+                        )
+                      : const Icon(Icons.eco, color: Colors.green),
+                  title: Row(
+                    children: [
+                      Expanded(child: Text(data['name'] ?? 'Product')),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: statusColor.withAlpha(30), borderRadius: BorderRadius.circular(10)),
+                        child: Text(status.toUpperCase(), style: TextStyle(color: statusColor, fontSize: 8, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  subtitle: Text("Rs. ${data['price']} / ${data['unit']}"),
                   contentPadding: const EdgeInsets.all(12),
                   leading: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
@@ -592,6 +854,70 @@ class _ProductFormState extends State<_ProductForm> {
 
                       String? imageUrl;
                       try {
+                        if (isEditing) {
+                          await FirebaseFirestore.instance.collection('price_requests').add({
+                            'productId': productId,
+                            'productName': name.text,
+                            'farmerUid': widget.uid,
+                            'farmName': widget.farmName,
+                            'oldPrice': double.tryParse(existingProduct['price']?.toString() ?? '0') ?? 0,
+                            'newPrice': priceVal,
+                            'oldUnit': existingProduct['unit'] ?? 'kg',
+                            'newUnit': unit.text,
+                            'status': 'pending',
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
+                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Price update request sent to admin")));
+                        } else {
+                          if (selectedImage == null) {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select an image")));
+                            setModalState(() => isUploading = false);
+                            return;
+                          }
+
+                          String? imageUrl;
+                          String? s3Key;
+                          try {
+                            final storageService = StorageService();
+                            
+                            // Direct upload to S3
+                            s3Key = await storageService.uploadToS3(selectedImage!, 'products');
+                            
+                            if (s3Key == null) throw "S3 Upload failed";
+                            
+                            imageUrl = AWSConfig.getImageUrl(s3Key);
+                          } catch (e) {
+                            String errorMsg = "Error uploading image: $e";
+                            throw errorMsg;
+                          }
+
+                          // Add to products collection with 'pending' status
+                          await FirebaseFirestore.instance.collection('products').add({
+                            'name': name.text,
+                            'title': name.text,
+                            'price': priceVal,
+                            'farmerUid': widget.uid,
+                            'farmName': widget.farmName,
+                            'farmerLat': widget.farmerLat,
+                            'farmerLng': widget.farmerLng,
+                            'unit': unit.text,
+                            's3Url': s3Key, 
+                            'imageUrl': imageUrl, 
+                            'image': imageUrl, 
+                            'description': description.text,
+                            'longDescription': description.text,
+                            'category': 'General',
+                            'status': 'pending', // Requires admin approval
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
+                          
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Product submitted for admin approval"))
+                            );
+                          }
+                        }
+                        if (context.mounted) Navigator.pop(context);
                         final storageService = StorageService();
                         imageUrl = await storageService.uploadImage(selectedImage!, 'products');
                         if (imageUrl == null) throw "Upload failed";

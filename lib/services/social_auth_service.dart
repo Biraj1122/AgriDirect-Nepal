@@ -1,6 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
@@ -43,31 +42,6 @@ class SocialAuthService {
       }
     } catch (e) {
       debugPrint("Google Sign-In Error: $e");
-      rethrow;
-    }
-  }
-
-  // Sign in with Facebook
-  Future<UserCredential?> signInWithFacebook() async {
-    try {
-      if (kIsWeb) {
-        // Use Firebase Popup for Web to avoid plugin issues
-        FacebookAuthProvider facebookProvider = FacebookAuthProvider();
-        final UserCredential userCredential = await _auth.signInWithPopup(facebookProvider);
-        await _updateUserData(userCredential.user);
-        return userCredential;
-      } else {
-        final LoginResult result = await FacebookAuth.instance.login();
-        if (result.status == LoginStatus.success) {
-          final AuthCredential credential = FacebookAuthProvider.credential(result.accessToken!.tokenString);
-          final UserCredential userCredential = await _auth.signInWithCredential(credential);
-          await _updateUserData(userCredential.user);
-          return userCredential;
-        }
-        return null;
-      }
-    } catch (e) {
-      debugPrint("Facebook Sign-In Error: $e");
       rethrow;
     }
   }
