@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/services/storage_service.dart';
@@ -18,7 +19,6 @@ class FarmerScreen extends StatefulWidget {
 
 class _FarmerScreenState extends State<FarmerScreen> {
   static const Color primaryTeal = Color(0xFF1D9E75);
-  static const Color secondaryBlue = Color(0xFF2E5BFF);
   
   int _currentIndex = 0;
   Map<String, dynamic>? _farmerData;
@@ -61,7 +61,6 @@ class _FarmerScreenState extends State<FarmerScreen> {
         .where('status', isEqualTo: 'Pending Farmer')
         .snapshots()
         .listen((snapshot) {
-      // Filter out orders that already have a farmerUid (assigned to someone else)
       final pendingOrders = snapshot.docs.where((d) => (d.data() as Map)['farmerUid'] == null).toList();
       final currentCount = pendingOrders.length;
       
@@ -286,6 +285,78 @@ class _DashboardTabState extends State<_DashboardTab> {
     );
   }
 
+  void _showRevenueDetails(BuildContext context, List<QueryDocumentSnapshot> docs, double total) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Heading(title: "Income Details", subtitle: "Breakdown of your earnings (80% share)"),
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                itemCount: docs.length,
+                itemBuilder: (context, i) {
+                  final data = docs[i].data() as Map<String, dynamic>;
+                  final subtotal = (data['subtotal'] ?? 0).toDouble();
+                  final net = subtotal * 0.8;
+                  final fee = subtotal * 0.2;
+                  
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text("Order #${docs[i].id.substring(0,8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.bold)),
+                            Text("Rs. ${subtotal.toStringAsFixed(0)}", style: const TextStyle(color: Colors.grey)),
+                          ],
+                        ),
+                        const Divider(height: 24),
+                        _incomeRow("Gross Sale Amount", subtotal),
+                        _incomeRow("App Commission (20%)", -fee, isNegative: true),
+                        const Divider(height: 24),
+                        _incomeRow("Your Earnings", net, isBold: true, color: const Color(0xFF1D9E75)),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _incomeRow(String label, double amount, {bool isBold = false, bool isNegative = false, Color? color}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(color: Colors.grey.shade600, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+        Text(
+          "${isNegative ? '-' : ''}Rs. ${amount.abs().toStringAsFixed(2)}",
+          style: TextStyle(fontWeight: isBold ? FontWeight.bold : FontWeight.w600, color: color ?? (isNegative ? Colors.redAccent : Colors.black)),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -385,13 +456,14 @@ class _DashboardTabState extends State<_DashboardTab> {
           stream: FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).snapshots(),
           builder: (context, snapshot) {
             final docs = snapshot.data?.docs ?? [];
-            double totalEarnings = 0;
+            final deliveredDocs = docs.where((d) => (d.data() as Map)['status'] == 'Delivered').toList();
+            double totalNetEarnings = 0;
             int pendingCount = 0;
 
             for (var doc in docs) {
               final data = doc.data() as Map<String, dynamic>;
               if (data['status'] == 'Delivered') {
-                totalEarnings += (data['farmerRevenue'] ?? (data['total'] ?? 0) * 0.8).toDouble();
+                totalNetEarnings += ((data['subtotal'] ?? 0) * 0.8).toDouble();
               } else if (data['status'] != 'Cancelled') {
                 pendingCount++;
               }
@@ -399,7 +471,13 @@ class _DashboardTabState extends State<_DashboardTab> {
 
             return Row(
               children: [
-                _StatCard(title: "Total Revenue", value: "Rs. ${totalEarnings.toStringAsFixed(0)}", icon: Icons.payments_rounded, color: const Color(0xFF1D9E75)),
+                _StatCard(
+                  title: "Total Revenue", 
+                  value: "Rs. ${totalNetEarnings.toStringAsFixed(0)}", 
+                  icon: Icons.payments_rounded, 
+                  color: const Color(0xFF1D9E75),
+                  onTap: () => _showRevenueDetails(context, deliveredDocs, totalNetEarnings),
+                ),
                 const SizedBox(width: 16),
                 _StatCard(title: "Active Tasks", value: "$pendingCount", icon: Icons.pending_actions_rounded, color: const Color(0xFF2E5BFF)),
               ],
@@ -452,14 +530,18 @@ class _ProductsTabState extends State<_ProductsTab> {
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF1D9E75)));
                 final docs = snapshot.data!.docs;
       
-                if (docs.isEmpty) return Center(child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.storefront_rounded, size: 64, color: Colors.grey.shade300),
-                    const SizedBox(height: 16),
-                    const Text("No products yet", style: TextStyle(color: Colors.grey)),
-                  ],
-                ));
+                if (docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.storefront_rounded, size: 64, color: Colors.grey.shade300),
+                        const SizedBox(height: 16),
+                        const Text("No products yet", style: TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                  );
+                }
       
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -646,7 +728,7 @@ class _DeliveryTab extends StatelessWidget {
           Expanded(
             child: TabBarView(
               children: [
-                _OrderList(uid: uid, statuses: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way']),
+                _OrderList(uid: uid, statuses: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived', 'Confirm Received']),
                 _OrderList(uid: uid, statuses: ['Delivered', 'Cancelled']),
               ],
             ),
@@ -673,14 +755,18 @@ class _OrderList extends StatelessWidget {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF1D9E75)));
         final docs = snapshot.data!.docs;
-        if (docs.isEmpty) return Center(child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.receipt_long_rounded, size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            const Text("No orders found", style: TextStyle(color: Colors.grey)),
-          ],
-        ));
+        if (docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.receipt_long_rounded, size: 64, color: Colors.grey.shade300),
+                const SizedBox(height: 16),
+                const Text("No orders found", style: TextStyle(color: Colors.grey)),
+              ],
+            ),
+          );
+        }
 
         return ListView.builder(
           padding: const EdgeInsets.all(24),
@@ -714,7 +800,7 @@ class _OrderList extends StatelessWidget {
     Color color = Colors.grey;
     if (status == 'Delivered') color = Colors.green;
     if (status == 'Cancelled') color = Colors.red;
-    if (status == 'Picked Up' || status == 'On the way') color = Colors.blue;
+    if (status == 'Picked Up' || status == 'On the way' || status == 'Confirm Received') color = Colors.blue;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -775,22 +861,33 @@ class _StatCard extends StatelessWidget {
   final String title, value;
   final IconData icon;
   final Color color;
-  const _StatCard({required this.title, required this.value, required this.icon, required this.color});
+  final VoidCallback? onTap;
+  const _StatCard({required this.title, required this.value, required this.icon, required this.color, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)]),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            IconBadge(teal: color, blue: color.withValues(alpha: 0.7), icon: icon),
-            const SizedBox(height: 16),
-            Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-            Text(title, style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600)),
-          ],
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  IconBadge(teal: color, blue: color.withValues(alpha: 0.7), icon: icon),
+                  if (onTap != null) const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: Colors.grey),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+              Text(title, style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600)),
+            ],
+          ),
         ),
       ),
     );
@@ -805,6 +902,42 @@ class _OrderAcceptanceTile extends StatelessWidget {
   final double? farmerLat, farmerLng;
   const _OrderAcceptanceTile({required this.orderId, required this.data, required this.currentFarmerUid, required this.currentFarmName, this.farmerLat, this.farmerLng});
 
+  Future<void> _acceptOrder() async {
+    final double? customerLat = (data['customerLat'] as num?)?.toDouble();
+    final double? customerLng = (data['customerLng'] as num?)?.toDouble();
+    
+    double deliveryFee = 40.0;
+    
+    if (customerLat != null && customerLng != null && farmerLat != null && farmerLng != null) {
+      final double distance = Geolocator.distanceBetween(
+        farmerLat!, farmerLng!,
+        customerLat, customerLng,
+      ) / 1000;
+      
+      if (distance >= 1 && distance <= 3) {
+        deliveryFee = 50.0;
+      } else if (distance > 3) {
+        deliveryFee = 15.0 * distance;
+      }
+    }
+
+    final double subtotal = (data['subtotal'] as num?)?.toDouble() ?? 0.0;
+    final double total = subtotal + deliveryFee;
+
+    await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+      'status': 'Farmer Accepted',
+      'farmerUid': currentFarmerUid,
+      'farmName': currentFarmName,
+      'farmerLat': farmerLat,
+      'farmerLng': farmerLng,
+      'deliveryFee': deliveryFee,
+      'total': total,
+      'farmerRevenue': subtotal * 0.8,
+      'adminRevenue': (subtotal * 0.2) + (deliveryFee * 0.2),
+      'deliveryRevenue': deliveryFee * 0.8,
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -816,20 +949,14 @@ class _OrderAcceptanceTile extends StatelessWidget {
         children: [
           Text(data['itemsSummary'] ?? 'New Order', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
           const SizedBox(height: 4),
-          Text("Total: Rs. ${data['total']} • ${data['deliveryAddress']}", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+          Text("Subtotal: Rs. ${data['subtotal']} • ${data['deliveryAddress']}", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
           const SizedBox(height: 16),
           GradientButton(
             label: "Accept Order", 
             icon: Icons.check_circle_rounded, 
             isLoading: false, 
             teal: const Color(0xFF1D9E75), blue: const Color(0xFF2E5BFF), 
-            onTap: () => FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-              'status': 'Farmer Accepted',
-              'farmerUid': currentFarmerUid,
-              'farmName': currentFarmName,
-              'farmerLat': farmerLat,
-              'farmerLng': farmerLng,
-            }),
+            onTap: _acceptOrder,
           ),
         ],
       ),
