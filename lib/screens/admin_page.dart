@@ -528,13 +528,18 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                         child: Text("Customer: ${order.userName ?? 'Guest'} • Items: ${order.items?.length ?? 0}", 
                           style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
                       ),
-                      trailing: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text("Rs. ${order.total}", style: const TextStyle(fontWeight: FontWeight.w800, color: primaryTeal, fontSize: 16)),
-                          const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-                        ],
+                      trailing: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 140),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text("Rs. ${order.total.toStringAsFixed(2)}", 
+                              style: const TextStyle(fontWeight: FontWeight.w800, color: primaryTeal, fontSize: 14),
+                              overflow: TextOverflow.ellipsis),
+                            const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
+                          ],
+                        ),
                       ),
                       onTap: () => _showOrderDetails(context, order, viewModel),
                     ),

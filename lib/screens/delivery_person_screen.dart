@@ -115,7 +115,7 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
     final pages = [
       _HomeMapTab(user: user),
       _ShipmentsTab(user: user),
-      _NotificationsTab(user: user),
+      _TasksTab(user: user),
       _EarningsTab(user: user),
       _ProfileTab(user: user, logoutCallback: _logout),
     ];
@@ -235,86 +235,115 @@ class _ShipmentsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Heading(title: "Active Shipments", subtitle: "Manage your current delivery tasks"),
-        ),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('orders')
-                .where('status', whereIn: ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
-                .snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
-              final docs = snapshot.data!.docs.where((d) {
-                final data = d.data() as Map;
-                return data['deliveryId'] == null || data['deliveryId'] == user.uid;
-              }).toList();
-
-              if (docs.isEmpty) {
-                return Center(child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.local_shipping_outlined, size: 64, color: Colors.grey.shade300),
-                    const SizedBox(height: 16),
-                    const Text("No active shipments", style: TextStyle(color: Colors.grey)),
-                  ],
-                ));
-              }
-
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                itemCount: docs.length,
-                itemBuilder: (context, i) {
-                  final data = docs[i].data() as Map<String, dynamic>;
-                  final isMyOrder = data['deliveryId'] == user.uid;
-                  
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade100)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text("Order #${docs[i].id.substring(0, 8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                            _statusChip(data['status'] ?? 'Pending'),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        _infoItem(Icons.storefront_rounded, data['farmName'] ?? 'Pickup location'),
-                        _infoItem(Icons.location_on_rounded, data['deliveryAddress'] ?? 'Delivery address'),
-                        const SizedBox(height: 20),
-                        if (!isMyOrder)
-                          GradientButton(
-                            label: "Accept Shipment", 
-                            icon: Icons.check_rounded, 
-                            isLoading: false, 
-                            teal: primaryTeal, blue: secondaryBlue, 
-                            onTap: () => _acceptOrder(context, docs[i].id, user.uid)
-                          )
-                        else
-                          GradientButton(
-                            label: _getNextStatusLabel(data['status']), 
-                            icon: Icons.arrow_forward_rounded, 
-                            isLoading: false, 
-                            teal: primaryTeal, blue: secondaryBlue, 
-                            onTap: () => _updateStatus(context, docs[i].id, data['status'])
-                          ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(24, 24, 24, 8),
+            child: Heading(title: "Shipments", subtitle: "Manage your delivery workload"),
           ),
-        ),
-      ],
+          TabBar(
+            labelColor: primaryTeal,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: primaryTeal,
+            indicatorWeight: 3,
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+            tabs: const [
+              Tab(text: "Active"),
+              Tab(text: "History"),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildOrderList(context, ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'], true),
+                _buildOrderList(context, ['Delivered', 'Cancelled'], false),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOrderList(BuildContext context, List<String> statuses, bool isActionable) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('orders')
+          .where('status', whereIn: statuses)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
+        final docs = snapshot.data!.docs.where((d) {
+          final data = d.data() as Map;
+          return data['deliveryId'] == null || data['deliveryId'] == user.uid;
+        }).toList();
+
+        if (docs.isEmpty) {
+          return Center(child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(isActionable ? Icons.local_shipping_outlined : Icons.history_rounded, size: 64, color: Colors.grey.shade300),
+              const SizedBox(height: 16),
+              Text(isActionable ? "No active shipments" : "No delivery history", style: const TextStyle(color: Colors.grey)),
+            ],
+          ));
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          itemCount: docs.length,
+          itemBuilder: (context, i) {
+            final data = docs[i].data() as Map<String, dynamic>;
+            final isMyOrder = data['deliveryId'] == user.uid;
+            
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade100)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Order #${docs[i].id.substring(0, 8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                      _statusChip(data['status'] ?? 'Pending'),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _infoItem(Icons.storefront_rounded, data['farmName'] ?? 'Pickup location'),
+                  _infoItem(Icons.location_on_rounded, data['deliveryAddress'] ?? 'Delivery address'),
+                  if (isActionable) ...[
+                    const SizedBox(height: 20),
+                    if (!isMyOrder)
+                      GradientButton(
+                        label: "Accept Shipment", 
+                        icon: Icons.check_rounded, 
+                        isLoading: false, 
+                        teal: primaryTeal, blue: secondaryBlue, 
+                        onTap: () => _acceptOrder(context, docs[i].id, user.uid)
+                      )
+                    else
+                      GradientButton(
+                        label: _getNextStatusLabel(data['status']), 
+                        icon: Icons.arrow_forward_rounded, 
+                        isLoading: false, 
+                        teal: primaryTeal, blue: secondaryBlue, 
+                        onTap: () => _updateStatus(context, docs[i].id, data['status'])
+                      ),
+                  ] else ...[
+                     const SizedBox(height: 12),
+                     Text("Completed: ${data['updatedAt'] != null ? (data['updatedAt'] as Timestamp).toDate().toString().substring(0, 16) : 'N/A'}", 
+                          style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+                  ]
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -376,9 +405,55 @@ class _ShipmentsTab extends StatelessWidget {
   }
 }
 
-class _NotificationsTab extends StatelessWidget {
+class _TasksTab extends StatefulWidget {
   final User user;
-  const _NotificationsTab({required this.user});
+  const _TasksTab({required this.user});
+
+  @override
+  State<_TasksTab> createState() => _TasksTabState();
+}
+
+class _TasksTabState extends State<_TasksTab> {
+  bool _isOnline = true;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchDutyStatus();
+  }
+
+  Future<void> _fetchDutyStatus() async {
+    final doc = await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).get();
+    if (mounted) {
+      setState(() {
+        _isOnline = doc.data()?['isOnline'] ?? true;
+      });
+    }
+  }
+
+  Future<void> _toggleDuty() async {
+    setState(() => _isLoading = true);
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
+        'isOnline': !_isOnline,
+        'lastDutyToggle': FieldValue.serverTimestamp(),
+      });
+      setState(() => _isOnline = !_isOnline);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(_isOnline ? "You are now ONLINE" : "You are now OFFLINE"),
+            backgroundColor: _isOnline ? primaryTeal : Colors.grey,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -386,37 +461,155 @@ class _NotificationsTab extends StatelessWidget {
       children: [
         const Padding(
           padding: EdgeInsets.all(24.0),
-          child: Heading(title: "Tasks & Alerts", subtitle: "Stay updated with system notifications"),
+          child: Heading(title: "Duty & Stats", subtitle: "Manage your availability and performance"),
         ),
         Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('users').doc(user.uid).collection('notifications').orderBy('createdAt', descending: true).snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
-              final docs = snapshot.data!.docs;
-              if (docs.isEmpty) return const Center(child: Text("No notifications"));
-
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                itemCount: docs.length,
-                itemBuilder: (context, i) {
-                  final data = docs[i].data() as Map<String, dynamic>;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.all(16),
-                      leading: IconBadge(teal: primaryTeal, blue: secondaryBlue, icon: Icons.notifications_rounded),
-                      title: Text(data['title'] ?? 'Alert', style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text(data['body'] ?? ''),
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            children: [
+              // Duty Toggle Card
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: (_isOnline ? primaryTeal : Colors.grey).withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(_isOnline ? Icons.bolt_rounded : Icons.power_settings_new_rounded, 
+                                 color: _isOnline ? primaryTeal : Colors.grey),
                     ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_isOnline ? "On Duty" : "Off Duty", 
+                               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                          Text(_isOnline ? "Receiving new orders" : "Resting mode", 
+                               style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                    if (_isLoading)
+                      const CircularProgressIndicator(color: primaryTeal, strokeWidth: 2)
+                    else
+                      Switch.adaptive(
+                        value: _isOnline, 
+                        onChanged: (_) => _toggleDuty(),
+                        activeTrackColor: primaryTeal,
+                        activeThumbColor: Colors.white,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              const FieldLabel(label: "DAILY PERFORMANCE"),
+              const SizedBox(height: 12),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('orders')
+                    .where('deliveryId', isEqualTo: widget.user.uid)
+                    .where('status', isEqualTo: 'Delivered')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  final docs = snapshot.data?.docs ?? [];
+                  // In a real app, we'd filter by today's date
+                  final todayDocs = docs.where((d) {
+                    final data = d.data() as Map;
+                    if (data['updatedAt'] == null) return false;
+                    final date = (data['updatedAt'] as Timestamp).toDate();
+                    final now = DateTime.now();
+                    return date.year == now.year && date.month == now.month && date.day == now.day;
+                  }).toList();
+
+                  double earnings = 0;
+                  for (var d in todayDocs) {
+                    earnings += (d.data() as Map)['deliveryRevenue'] ?? 100.0;
+                  }
+
+                  return Row(
+                    children: [
+                      _statCard("Deliveries", "${todayDocs.length}", Icons.check_circle_rounded, Colors.blue),
+                      const SizedBox(width: 16),
+                      _statCard("Earnings", "Rs. ${earnings.toStringAsFixed(0)}", Icons.account_balance_wallet_rounded, Colors.green),
+                    ],
                   );
-                },
-              );
-            },
+                }
+              ),
+              const SizedBox(height: 32),
+              const FieldLabel(label: "SYSTEM ALERTS"),
+              const SizedBox(height: 12),
+              StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(widget.user.uid)
+                    .collection('notifications')
+                    .orderBy('createdAt', descending: true)
+                    .limit(5)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) return const SizedBox();
+                  final docs = snapshot.data!.docs;
+                  if (docs.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32.0),
+                        child: Text("No recent alerts", style: TextStyle(color: Colors.grey.shade400)),
+                      ),
+                    );
+                  }
+
+                  return Column(
+                    children: docs.map((d) {
+                      final data = d.data() as Map<String, dynamic>;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          leading: IconBadge(teal: primaryTeal, blue: secondaryBlue, icon: Icons.notifications_rounded),
+                          title: Text(data['title'] ?? 'Alert', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                          subtitle: Text(data['body'] ?? '', style: const TextStyle(fontSize: 12)),
+                        ),
+                      );
+                    }).toList(),
+                  );
+                }
+              ),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _statCard(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: color.withValues(alpha: 0.1)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(height: 12),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
+            Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -490,17 +683,124 @@ class _EarningsTab extends StatelessWidget {
   }
 }
 
-class _ProfileTab extends StatelessWidget {
+class _ProfileTab extends StatefulWidget {
   final User user;
   final VoidCallback logoutCallback;
   const _ProfileTab({required this.user, required this.logoutCallback});
 
   @override
+  State<_ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<_ProfileTab> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _currentPasswordController = TextEditingController();
+  final TextEditingController _newPasswordController = TextEditingController();
+  bool _isUpdating = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    super.dispose();
+  }
+
+  void _showEditNameDialog(String currentName) {
+    _nameController.text = currentName;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Change Full Name"),
+        content: TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(labelText: "Full Name", border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () async {
+              if (_nameController.text.trim().isEmpty) return;
+              Navigator.pop(context);
+              setState(() => _isUpdating = true);
+              try {
+                await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
+                  'fullName': _nameController.text.trim(),
+                });
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Name updated successfully")));
+              } catch (e) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+              } finally {
+                if (mounted) setState(() => _isUpdating = false);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: primaryTeal),
+            child: const Text("Save", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog() {
+    _currentPasswordController.clear();
+    _newPasswordController.clear();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Change Password"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _currentPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "Current Password", border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _newPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: "New Password", border: OutlineInputBorder()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+          ElevatedButton(
+            onPressed: () async {
+              if (_currentPasswordController.text.isEmpty || _newPasswordController.text.isEmpty) return;
+              Navigator.pop(context);
+              setState(() => _isUpdating = true);
+              try {
+                AuthCredential credential = EmailAuthProvider.credential(
+                  email: widget.user.email!,
+                  password: _currentPasswordController.text,
+                );
+                await widget.user.reauthenticateWithCredential(credential);
+                await widget.user.updatePassword(_newPasswordController.text);
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password changed successfully")));
+              } catch (e) {
+                if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+              } finally {
+                if (mounted) setState(() => _isUpdating = false);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: primaryTeal),
+            child: const Text("Update", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance.collection('users').doc(user.uid).get(),
+      future: FirebaseFirestore.instance.collection('users').doc(widget.user.uid).get(),
       builder: (context, snapshot) {
         final data = snapshot.data?.data() as Map<String, dynamic>?;
+        final name = data?['fullName'] ?? 'Rider Name';
         
         return ListView(
           padding: const EdgeInsets.all(24),
@@ -516,14 +816,17 @@ class _ProfileTab extends StatelessWidget {
                     child: const Icon(Icons.person_rounded, size: 60, color: primaryTeal),
                   ),
                   const SizedBox(height: 16),
-                  Text(data?['fullName'] ?? 'Rider Name', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-                  Text(user.email ?? '', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+                  Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+                  Text(widget.user.email ?? '', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+                  if (_isUpdating) const Padding(padding: EdgeInsets.only(top: 8), child: CircularProgressIndicator(color: primaryTeal, strokeWidth: 2)),
                 ],
               ),
             ),
             const SizedBox(height: 40),
             const FieldLabel(label: "ACCOUNT SETTINGS"),
             const SizedBox(height: 12),
+            _profileItem(Icons.badge_rounded, name, onTap: () => _showEditNameDialog(name)),
+            _profileItem(Icons.lock_rounded, "Change Password", onTap: _showChangePasswordDialog),
             _profileItem(Icons.phone_rounded, data?['phone'] ?? 'Add phone number'),
             _profileItem(Icons.verified_user_rounded, "Verified Delivery Partner"),
             const SizedBox(height: 40),
@@ -532,7 +835,7 @@ class _ProfileTab extends StatelessWidget {
               icon: Icons.logout_rounded, 
               isLoading: false, 
               teal: Colors.redAccent, blue: Colors.red.shade900, 
-              onTap: logoutCallback
+              onTap: widget.logoutCallback
             ),
           ],
         );
@@ -540,17 +843,22 @@ class _ProfileTab extends StatelessWidget {
     );
   }
 
-  Widget _profileItem(IconData icon, String label) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-      child: Row(
-        children: [
-          Icon(icon, color: primaryTeal, size: 20),
-          const SizedBox(width: 16),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-        ],
+  Widget _profileItem(IconData icon, String label, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        child: Row(
+          children: [
+            Icon(icon, color: primaryTeal, size: 20),
+            const SizedBox(width: 16),
+            Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
+            if (onTap != null) Icon(Icons.edit_rounded, color: Colors.grey.shade300, size: 16),
+          ],
+        ),
       ),
     );
   }
