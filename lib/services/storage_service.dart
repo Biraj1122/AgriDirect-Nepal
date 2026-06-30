@@ -25,14 +25,17 @@ class StorageService {
       final String ext = p.extension(xFile.name).toLowerCase();
       final metadata = SettableMetadata(contentType: _getContentType(ext));
       
-      // readAsBytes() works on both Web and Mobile
-      final bytes = await xFile.readAsBytes();
-      
-      // putData is the most reliable cross-platform upload method
-      final TaskSnapshot uploadTask = await storageRef.putData(bytes, metadata);
-      
-      // Get and return the public download URL
-      return await uploadTask.ref.getDownloadURL();
+      if (kIsWeb) {
+        // Use putData for Web
+        final bytes = await xFile.readAsBytes();
+        final TaskSnapshot uploadTask = await storageRef.putData(bytes, metadata);
+        return await uploadTask.ref.getDownloadURL();
+      } else {
+        // Use putFile for Mobile/Desktop (more robust for various formats)
+        final file = File(xFile.path);
+        final TaskSnapshot uploadTask = await storageRef.putFile(file, metadata);
+        return await uploadTask.ref.getDownloadURL();
+      }
     } catch (e) {
       debugPrint('Firebase Storage Error: $e');
       return null;

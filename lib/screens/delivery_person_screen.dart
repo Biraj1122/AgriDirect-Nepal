@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/storage_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -170,6 +171,10 @@ class _HomeMapTabState extends State<_HomeMapTab> {
   LatLng? _driverPos;
   StreamSubscription<Position>? _localPosSub;
   MapLibreMapController? _mapController;
+  Line? _routeLine;
+  double? _routeDistance;
+  double? _routeDuration;
+  String? _targetLabel;
 
   @override
   void initState() {
@@ -189,14 +194,86 @@ class _HomeMapTabState extends State<_HomeMapTab> {
       setState(() => _driverPos = LatLng(pos.latitude, pos.longitude));
     }
     
-    _localPosSub = Geolocator.getPositionStream().listen((p) {
-      if (mounted) setState(() => _driverPos = LatLng(p.latitude, p.longitude));
+    _localPosSub = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
+    ).listen((p) {
+      if (mounted) {
+        setState(() => _driverPos = LatLng(p.latitude, p.longitude));
+        _updateDirections();
+      }
     });
   }
 
   void _centerOnDriver() {
     if (_driverPos != null && _mapController != null) {
       _mapController!.animateCamera(CameraUpdate.newLatLngZoom(_driverPos!, 15));
+    }
+  }
+
+  Future<void> _updateDirections() async {
+    if (_driverPos == null || _mapController == null) return;
+
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('orders')
+          .where('deliveryId', isEqualTo: widget.user.uid)
+          .where('status', whereIn: ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) {
+        if (_routeLine != null) {
+          _mapController!.removeLine(_routeLine!);
+          _routeLine = null;
+        }
+        if (mounted) setState(() { _routeDistance = null; _routeDuration = null; });
+        return;
+      }
+
+      final data = query.docs.first.data();
+      final status = data['status'];
+      LatLng? target;
+      String label = "Customer";
+
+      if (status == 'Awaiting Pickup') {
+        final lat = (data['farmerLat'] as num?)?.toDouble();
+        final lng = (data['farmerLng'] as num?)?.toDouble();
+        if (lat != null && lng != null) target = LatLng(lat, lng);
+        label = "Farm";
+      } else {
+        final lat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
+        final lng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
+        if (lat != null && lng != null) target = LatLng(lat, lng);
+        label = "Customer";
+      }
+
+      if (target != null) {
+        final routeData = await _locationService.getRouteData(
+          _driverPos!.latitude, _driverPos!.longitude,
+          target.latitude, target.longitude,
+        );
+
+        final List<LatLng> polyline = (routeData['points'] as List).map((p) => LatLng(p[0], p[1])).toList();
+
+        if (mounted) {
+          setState(() {
+            _routeDistance = routeData['distance'];
+            _routeDuration = routeData['duration'];
+            _targetLabel = label;
+          });
+        }
+
+        if (_routeLine != null) _mapController!.removeLine(_routeLine!);
+        _routeLine = await _mapController!.addLine(LineOptions(
+          geometry: polyline,
+          lineColor: "#2E5BFF",
+          lineWidth: 5,
+          lineOpacity: 0.8,
+          lineJoin: "round",
+        ));
+      }
+    } catch (e) {
+      debugPrint("Error updating rider directions: $e");
     }
   }
 
@@ -208,8 +285,41 @@ class _HomeMapTabState extends State<_HomeMapTab> {
           initialCameraPosition: CameraPosition(target: _driverPos ?? _kDefaultCenter, zoom: 14),
           myLocationEnabled: true,
           styleString: "https://tiles.openfreemap.org/styles/positron",
-          onMapCreated: (controller) => _mapController = controller,
+          onMapCreated: (controller) {
+            _mapController = controller;
+            _updateDirections();
+          },
         ),
+        if (_routeDistance != null)
+          Positioned(
+            top: 100, left: 20, right: 20,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1D25),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10)],
+              ),
+              child: Row(
+                children: [
+                  const CircleAvatar(backgroundColor: secondaryBlue, child: Icon(Icons.navigation_rounded, color: Colors.white, size: 20)),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text("Heading to $_targetLabel", style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text("${_routeDistance!.toStringAsFixed(1)} km • ${_routeDuration!.toStringAsFixed(0)} mins", 
+                             style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         Positioned(
           bottom: 20, right: 20,
           child: FloatingActionButton(
@@ -661,7 +771,7 @@ class _VerificationSheet extends StatefulWidget {
 }
 
 class _VerificationSheetState extends State<_VerificationSheet> {
-  XFile? licenseFront, licenseBack, citizenshipFront, citizenshipBack;
+  XFile? licenseFront, citizenshipFront, citizenshipBack;
   bool isUploading = false;
   int step = 1;
 
@@ -670,7 +780,6 @@ class _VerificationSheetState extends State<_VerificationSheet> {
     if (img != null) {
       setState(() {
         if (type == 'lf') licenseFront = img;
-        if (type == 'lb') licenseBack = img;
         if (type == 'cf') citizenshipFront = img;
         if (type == 'cb') citizenshipBack = img;
       });
@@ -678,24 +787,33 @@ class _VerificationSheetState extends State<_VerificationSheet> {
   }
 
   Future<void> _submit() async {
-    if (licenseFront == null || licenseBack == null || citizenshipFront == null || citizenshipBack == null) return;
+    if (licenseFront == null || citizenshipFront == null || citizenshipBack == null) return;
     
     setState(() => isUploading = true);
     try {
       final storage = StorageService();
       final lfUrl = await storage.uploadImage(licenseFront!, 'verification/${widget.uid}');
-      final lbUrl = await storage.uploadImage(licenseBack!, 'verification/${widget.uid}');
       final cfUrl = await storage.uploadImage(citizenshipFront!, 'verification/${widget.uid}');
       final cbUrl = await storage.uploadImage(citizenshipBack!, 'verification/${widget.uid}');
 
       await FirebaseFirestore.instance.collection('users').doc(widget.uid).update({
         'licenseFront': lfUrl,
-        'licenseBack': lbUrl,
         'citizenshipFront': cfUrl,
         'citizenshipBack': cbUrl,
         'verificationStatus': 'pending',
         'documentsUploadedAt': FieldValue.serverTimestamp(),
       });
+
+      // Notify Admin
+      await FirebaseFirestore.instance.collection('admin_notifications').add({
+        'type': 'verification',
+        'title': 'New Rider Verification',
+        'body': 'A rider has uploaded documents for verification.',
+        'riderId': widget.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload failed: $e")));
@@ -717,15 +835,13 @@ class _VerificationSheetState extends State<_VerificationSheet> {
           Heading(title: "Identity Verification", subtitle: step == 1 ? "Upload Driving License" : "Upload Citizenship Card"),
           const SizedBox(height: 32),
           if (step == 1) ...[
-            _uploadBox("Front Side", licenseFront, () => _pickImage('lf')),
-            const SizedBox(height: 16),
-            _uploadBox("Back Side", licenseBack, () => _pickImage('lb')),
+            _uploadBox("License Front", licenseFront, () => _pickImage('lf')),
             const SizedBox(height: 32),
             GradientButton(label: "Next Step", icon: Icons.arrow_forward_rounded, isLoading: false, teal: primaryTeal, blue: secondaryBlue, onTap: () => setState(() => step = 2)),
           ] else ...[
-            _uploadBox("Front Side", citizenshipFront, () => _pickImage('cf')),
+            _uploadBox("Citizenship Front", citizenshipFront, () => _pickImage('cf')),
             const SizedBox(height: 16),
-            _uploadBox("Back Side", citizenshipBack, () => _pickImage('cb')),
+            _uploadBox("Citizenship Back", citizenshipBack, () => _pickImage('cb')),
             const SizedBox(height: 32),
             Row(
               children: [
@@ -923,6 +1039,7 @@ class _ProfileTabState extends State<_ProfileTab> {
   final TextEditingController _newPasswordController = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   bool _isUpdating = false;
+  bool _isUploadingPhoto = false;
 
   @override
   void dispose() {
@@ -931,6 +1048,28 @@ class _ProfileTabState extends State<_ProfileTab> {
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAndUploadPhoto() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    if (image == null) return;
+
+    setState(() => _isUploadingPhoto = true);
+    try {
+      final storage = StorageService();
+      final url = await storage.uploadImage(image, 'profile_pics');
+      if (url != null) {
+        await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
+          'profileImageUrl': url,
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile photo updated!")));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload failed: $e")));
+    } finally {
+      if (mounted) setState(() => _isUploadingPhoto = false);
+    }
   }
 
   void _showEditNameDialog(String currentName) {
@@ -1072,10 +1211,30 @@ class _ProfileTabState extends State<_ProfileTab> {
             Center(
               child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 60,
-                    backgroundColor: primaryTeal.withValues(alpha: 0.1),
-                    child: const Icon(Icons.person_rounded, size: 60, color: primaryTeal),
+                  GestureDetector(
+                    onTap: _isUploadingPhoto ? null : _pickAndUploadPhoto,
+                    child: Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 60,
+                          backgroundColor: primaryTeal.withValues(alpha: 0.1),
+                          backgroundImage: (data?['profileImageUrl'] != null && data!['profileImageUrl'].toString().isNotEmpty) 
+                            ? CachedNetworkImageProvider(data['profileImageUrl']) : null,
+                          child: (data?['profileImageUrl'] == null || data!['profileImageUrl'].toString().isEmpty) 
+                            ? const Icon(Icons.person_rounded, size: 60, color: primaryTeal) : null,
+                        ),
+                        if (_isUploadingPhoto)
+                          const Positioned.fill(child: CircularProgressIndicator(color: primaryTeal)),
+                        Positioned(
+                          bottom: 0, right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(color: primaryTeal, shape: BoxShape.circle),
+                            child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
