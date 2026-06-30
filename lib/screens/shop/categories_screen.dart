@@ -1,11 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'product_detail_screen.dart';
 import '../../models/cart_model.dart';
 import '../../models/product.dart';
 import '../profile/my_favourites.dart';
+import '../../Success/shared_widgets.dart';
 
 class CategoriesScreen extends StatefulWidget {
   final String initialCategory;
@@ -306,7 +305,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                    child: _buildProductImage(productObj.image),
+                    child: SafeProductImage(
+                      imageUrl: productObj.image,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                   Positioned(
                     top: 8,
@@ -353,54 +356,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildProductImage(String image) {
-    if (image.isEmpty) {
-      return Container(
-        color: Colors.grey.shade100,
-        child: const Center(child: Icon(Icons.image, color: Colors.grey)),
-      );
-    }
-
-    if (image.startsWith('http')) {
-      return CachedNetworkImage(
-        imageUrl: image,
-        key: ValueKey(image),
-        width: double.infinity,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => const Center(
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
-        ),
-        errorWidget: (context, url, error) => const Center(
-          child: Icon(Icons.broken_image, color: Colors.grey),
-        ),
-      );
-    } else if (image.startsWith('data:image')) {
-      try {
-        final base64String = image.split(',').last;
-        return Image.memory(
-          base64Decode(base64String),
-          width: double.infinity,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
-        );
-      } catch (e) {
-        return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
-      }
-    }
-
-    String assetPath = image;
-    if (!assetPath.startsWith('assets/')) {
-      assetPath = 'assets/images/$image';
-    }
-
-    return Image.asset(
-      assetPath,
-      width: double.infinity,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.eco, color: Colors.green)),
     );
   }
 

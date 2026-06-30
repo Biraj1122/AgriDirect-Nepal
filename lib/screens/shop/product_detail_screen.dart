@@ -1,8 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../models/product.dart';
 import '../../models/cart_model.dart';
+import '../../Success/shared_widgets.dart';
 
 class ProductDetailScreen extends StatelessWidget {
   final Product product;
@@ -71,7 +72,10 @@ class ProductDetailScreen extends StatelessWidget {
                       ),
                       child: Hero(
                         tag: product.id ?? product.title,
-                        child: _buildProductImage(product.image),
+                        child: SafeProductImage(
+                          imageUrl: product.image,
+                          fit: BoxFit.contain,
+                        ),
                       ),
                     ),
                   ),

@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/services/storage_service.dart';
+import 'package:farmtech_agridirect/Success/shared_widgets.dart';
 
 class FarmerScreen extends StatefulWidget {
   const FarmerScreen({super.key});
@@ -16,6 +17,9 @@ class FarmerScreen extends StatefulWidget {
 }
 
 class _FarmerScreenState extends State<FarmerScreen> {
+  static const Color primaryTeal = Color(0xFF1D9E75);
+  static const Color secondaryBlue = Color(0xFF2E5BFF);
+  
   int _currentIndex = 0;
   Map<String, dynamic>? _farmerData;
   bool _loading = true;
@@ -66,7 +70,8 @@ class _FarmerScreenState extends State<FarmerScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text("New order request available!"),
-              backgroundColor: Colors.orange,
+              backgroundColor: primaryTeal,
+              behavior: SnackBarBehavior.floating,
               action: SnackBarAction(label: "VIEW", textColor: Colors.white, onPressed: () {
                 setState(() => _currentIndex = 0);
               }),
@@ -112,7 +117,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator(color: Colors.green)));
+    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator(color: primaryTeal)));
 
     final String farmerName = _farmerData?['name'] ?? _farmerData?['fullName'] ?? 'Farmer';
     final String farmName = _farmerData?['farmName'] ?? 'AgriDirect Farm';
@@ -137,33 +142,40 @@ class _FarmerScreenState extends State<FarmerScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7F5),
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: Text(farmName, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: Text(farmName, style: const TextStyle(color: Color(0xFF1A1D25), fontWeight: FontWeight.w700)),
         actions: [
-          IconButton(icon: const Icon(Icons.logout, color: Colors.red), onPressed: _logout),
+          IconButton(icon: const Icon(Icons.logout_rounded, color: Colors.redAccent), onPressed: _logout),
         ],
       ),
-      body: pages[_currentIndex],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: pages[_currentIndex],
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (i) => setState(() => _currentIndex = i),
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: Colors.green,
+        selectedItemColor: primaryTeal,
+        unselectedItemColor: Colors.grey.shade400,
+        backgroundColor: Colors.white,
+        elevation: 20,
         items: [
           BottomNavigationBarItem(
             icon: Badge(
               label: Text('${_unreadCount + _pendingOrderCount}'),
               isLabelVisible: _unreadCount + _pendingOrderCount > 0,
-              child: const Icon(Icons.dashboard_outlined),
+              backgroundColor: Colors.redAccent,
+              child: const Icon(Icons.dashboard_rounded),
             ),
-            label: 'Dashboard',
+            label: 'Home',
           ),
-          const BottomNavigationBarItem(icon: Icon(Icons.storefront_outlined), label: 'Products'),
-          const BottomNavigationBarItem(icon: Icon(Icons.local_shipping_outlined), label: 'Deliveries'),
-          const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_outlined), label: 'Stock'),
+          const BottomNavigationBarItem(icon: Icon(Icons.storefront_rounded), label: 'My Store'),
+          const BottomNavigationBarItem(icon: Icon(Icons.local_shipping_rounded), label: 'Orders'),
+          const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: 'Inventory'),
         ],
       ),
     );
@@ -214,10 +226,13 @@ class _DashboardTabState extends State<_DashboardTab> {
 
   Widget _buildCarouselSlide(String title, String subtitle, IconData icon) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [Colors.green.shade700, Colors.green.shade400], begin: Alignment.topLeft, end: Alignment.bottomRight),
-        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(colors: [Color(0xFF1D9E75), Color(0xFF2E5BFF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(color: const Color(0xFF1D9E75).withValues(alpha: 0.2), blurRadius: 15, offset: const Offset(0, 8)),
+        ],
       ),
       child: Row(
         children: [
@@ -226,13 +241,14 @@ class _DashboardTabState extends State<_DashboardTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                Text(title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
                 const SizedBox(height: 8),
-                Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13), maxLines: 3, overflow: TextOverflow.ellipsis),
+                Text(subtitle, style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4), maxLines: 2, overflow: TextOverflow.ellipsis),
               ],
             ),
           ),
-          Icon(icon, color: Colors.white.withValues(alpha: 0.2), size: 60),
+          const SizedBox(width: 12),
+          Icon(icon, color: Colors.white24, size: 64),
         ],
       ),
     );
@@ -241,16 +257,10 @@ class _DashboardTabState extends State<_DashboardTab> {
   @override
   Widget build(BuildContext context) {
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Namaste, ${widget.farmerName}!", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A2E1A))),
-            const Text("Hope your harvest is plentiful today.", style: TextStyle(color: Colors.grey, fontSize: 14)),
-          ],
-        ),
-        const SizedBox(height: 25),
+        Heading(title: "Namaste, ${widget.farmerName}!", subtitle: "Hope your harvest is plentiful today."),
+        const SizedBox(height: 28),
 
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
@@ -265,7 +275,7 @@ class _DashboardTabState extends State<_DashboardTab> {
             _carouselItemCount = notifications.isEmpty ? 1 : notifications.length;
 
             return SizedBox(
-              height: 180,
+              height: 160,
               child: Stack(
                 children: [
                   PageView.builder(
@@ -274,25 +284,26 @@ class _DashboardTabState extends State<_DashboardTab> {
                     itemCount: _carouselItemCount,
                     itemBuilder: (context, i) {
                       if (notifications.isEmpty) {
-                        return _buildCarouselSlide("Fresh Harvest Awaits", "Keep track of your products and orders efficiently.", Icons.eco);
+                        return _buildCarouselSlide("Fresh Harvest Awaits", "Keep track of your products and orders efficiently.", Icons.eco_rounded);
                       }
                       final data = notifications[i].data() as Map<String, dynamic>;
-                      return _buildCarouselSlide(data['title'] ?? 'Notification', data['body'] ?? '', Icons.info_outline);
+                      return _buildCarouselSlide(data['title'] ?? 'Notification', data['body'] ?? '', Icons.info_outline_rounded);
                     },
                   ),
                   Positioned(
-                    bottom: 15,
-                    right: 20,
+                    bottom: 16,
+                    right: 24,
                     child: Row(
                       children: List.generate(
                         _carouselItemCount,
-                        (index) => Container(
-                          margin: const EdgeInsets.only(left: 4),
-                          width: 8,
-                          height: 8,
+                        (index) => AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          margin: const EdgeInsets.only(left: 6),
+                          width: _currentCarouselIndex == index ? 20 : 6,
+                          height: 6,
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _currentCarouselIndex == index ? Colors.white : Colors.white.withValues(alpha: 0.4),
+                            borderRadius: BorderRadius.circular(3),
+                            color: _currentCarouselIndex == index ? Colors.white : Colors.white54,
                           ),
                         ),
                       ),
@@ -304,7 +315,7 @@ class _DashboardTabState extends State<_DashboardTab> {
           },
         ),
 
-        const SizedBox(height: 25),
+        const SizedBox(height: 32),
         
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance.collection('orders').where('status', isEqualTo: 'Pending Farmer').snapshots(),
@@ -317,7 +328,7 @@ class _DashboardTabState extends State<_DashboardTab> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("New Order Requests", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const FieldLabel(label: "NEW ORDER REQUESTS"),
                 const SizedBox(height: 12),
                 ...availableDocs.map((doc) => _OrderAcceptanceTile(
                   orderId: doc.id,
@@ -327,13 +338,13 @@ class _DashboardTabState extends State<_DashboardTab> {
                   farmerLat: widget.farmerLat,
                   farmerLng: widget.farmerLng,
                 )),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
               ],
             );
           },
         ),
 
-        const Text("Business Overview", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const FieldLabel(label: "BUSINESS OVERVIEW"),
         const SizedBox(height: 12),
         StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).snapshots(),
@@ -353,9 +364,9 @@ class _DashboardTabState extends State<_DashboardTab> {
 
             return Row(
               children: [
-                _StatCard(title: "Total Revenue", value: "Rs. ${totalEarnings.toStringAsFixed(0)}", icon: Icons.payments, color: Colors.green),
-                const SizedBox(width: 15),
-                _StatCard(title: "Active Tasks", value: "$pendingCount", icon: Icons.pending_actions, color: Colors.blue),
+                _StatCard(title: "Total Revenue", value: "Rs. ${totalEarnings.toStringAsFixed(0)}", icon: Icons.payments_rounded, color: const Color(0xFF1D9E75)),
+                const SizedBox(width: 16),
+                _StatCard(title: "Active Tasks", value: "$pendingCount", icon: Icons.pending_actions_rounded, color: const Color(0xFF2E5BFF)),
               ],
             );
           },
@@ -390,45 +401,63 @@ class _ProductsTabState extends State<_ProductsTab> {
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddProduct,
-        backgroundColor: Colors.green,
-        child: const Icon(Icons.add, color: Colors.white),
+        backgroundColor: const Color(0xFF1D9E75),
+        child: const Icon(Icons.add_rounded, color: Colors.white),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: widget.uid).snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-          final docs = snapshot.data!.docs;
-
-          if (docs.isEmpty) return const Center(child: Text("No products yet", style: TextStyle(color: Colors.grey)));
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: docs.length,
-            itemBuilder: (context, i) {
-              final data = docs[i].data() as Map<String, dynamic>;
-              return Card(
-                margin: const EdgeInsets.only(bottom: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                child: ListTile(
-                  leading: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: CachedNetworkImage(
-                      imageUrl: data['image'] ?? '',
-                      width: 50, height: 50, fit: BoxFit.cover,
-                      errorWidget: (context, url, error) => const Icon(Icons.eco, color: Colors.green),
-                    ),
-                  ),
-                  title: Text(data['name'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("Rs. ${data['price']} / ${data['unit']}"),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    onPressed: () => FirebaseFirestore.instance.collection('products').doc(docs[i].id).delete(),
-                  ),
-                ),
-              );
-            },
-          );
-        },
+      body: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Heading(title: "My Products", subtitle: "Manage your farm products for sale"),
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: widget.uid).snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF1D9E75)));
+                final docs = snapshot.data!.docs;
+      
+                if (docs.isEmpty) return Center(child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.storefront_rounded, size: 64, color: Colors.grey.shade300),
+                    const SizedBox(height: 16),
+                    const Text("No products yet", style: TextStyle(color: Colors.grey)),
+                  ],
+                ));
+      
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  itemCount: docs.length,
+                  itemBuilder: (context, i) {
+                    final data = docs[i].data() as Map<String, dynamic>;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade100)),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.all(12),
+                        leading: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: CachedNetworkImage(
+                            imageUrl: data['image'] ?? '',
+                            width: 60, height: 60, fit: BoxFit.cover,
+                            errorWidget: (context, url, error) => const Icon(Icons.eco_rounded, color: Color(0xFF1D9E75)),
+                          ),
+                        ),
+                        title: Text(data['name'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text("Rs. ${data['price']} / ${data['unit']}"),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                          onPressed: () => FirebaseFirestore.instance.collection('products').doc(docs[i].id).delete(),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -454,48 +483,69 @@ class _ProductFormState extends State<_ProductForm> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
+      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Add New Product", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            GestureDetector(
-              onTap: () async {
-                final img = await ImagePicker().pickImage(source: ImageSource.gallery);
-                if (img != null) setState(() => selectedImage = img);
-              },
-              child: Container(
-                width: 100, height: 100,
-                decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(15)),
-                child: selectedImage != null
-                    ? ClipRRect(borderRadius: BorderRadius.circular(15), child: Image.file(File(selectedImage!.path), fit: BoxFit.cover))
-                    : const Icon(Icons.add_a_photo, color: Colors.grey),
+            const Heading(title: "Add New Product", subtitle: "List your fresh produce on the market"),
+            const SizedBox(height: 24),
+            Center(
+              child: GestureDetector(
+                onTap: () async {
+                  final img = await ImagePicker().pickImage(source: ImageSource.gallery);
+                  if (img != null) setState(() => selectedImage = img);
+                },
+                child: Container(
+                  width: 120, height: 120,
+                  decoration: BoxDecoration(color: const Color(0xFFF4F6F8), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade200)),
+                  child: selectedImage != null
+                      ? ClipRRect(borderRadius: BorderRadius.circular(24), child: Image.file(File(selectedImage!.path), fit: BoxFit.cover))
+                      : const Icon(Icons.add_a_photo_rounded, color: Colors.grey, size: 32),
+                ),
               ),
             ),
+            const SizedBox(height: 24),
+            const FieldLabel(label: "PRODUCT NAME"),
+            const SizedBox(height: 8),
+            TextField(controller: name, decoration: customInputDecoration(hint: "e.g. Fresh Tomatoes", icon: Icons.eco, teal: const Color(0xFF1D9E75))),
             const SizedBox(height: 20),
-            TextField(controller: name, decoration: const InputDecoration(labelText: "Name", border: OutlineInputBorder())),
-            const SizedBox(height: 15),
             Row(
               children: [
-                Expanded(child: TextField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Price", border: OutlineInputBorder()))),
-                const SizedBox(width: 15),
-                Expanded(child: TextField(controller: unit, decoration: const InputDecoration(labelText: "Unit", border: OutlineInputBorder()))),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const FieldLabel(label: "PRICE"),
+                      const SizedBox(height: 8),
+                      TextField(controller: price, keyboardType: TextInputType.number, decoration: customInputDecoration(hint: "0.00", icon: Icons.payments, teal: const Color(0xFF1D9E75))),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const FieldLabel(label: "UNIT"),
+                      const SizedBox(height: 8),
+                      TextField(controller: unit, decoration: customInputDecoration(hint: "kg/ltr/bunch", icon: Icons.scale, teal: const Color(0xFF1D9E75))),
+                    ],
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 25),
-            SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                onPressed: isUploading ? null : _submit,
-                child: isUploading ? const CircularProgressIndicator(color: Colors.white) : const Text("List Product", style: TextStyle(color: Colors.white)),
-              ),
+            const SizedBox(height: 32),
+            GradientButton(
+              label: "List Product", 
+              icon: Icons.check_rounded, 
+              isLoading: isUploading, 
+              teal: const Color(0xFF1D9E75), blue: const Color(0xFF2E5BFF), 
+              onTap: _submit
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 40),
           ],
         ),
       ),
@@ -544,19 +594,29 @@ class _DeliveryTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: const TabBar(
-          labelColor: Colors.green,
-          indicatorColor: Colors.green,
-          tabs: [Tab(text: "Active"), Tab(text: "History")],
-        ),
-        body: TabBarView(
-          children: [
-            _OrderList(uid: uid, statuses: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way']),
-            _OrderList(uid: uid, statuses: ['Delivered']),
-          ],
-        ),
+      child: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Heading(title: "Orders", subtitle: "Track your outgoing deliveries"),
+          ),
+          TabBar(
+            labelColor: const Color(0xFF1D9E75),
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: const Color(0xFF1D9E75),
+            indicatorWeight: 3,
+            indicatorSize: TabBarIndicatorSize.label,
+            tabs: const [Tab(text: "Active"), Tab(text: "History")],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _OrderList(uid: uid, statuses: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way']),
+                _OrderList(uid: uid, statuses: ['Delivered', 'Cancelled']),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -576,33 +636,55 @@ class _OrderList extends StatelessWidget {
           .where('status', whereIn: statuses)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF1D9E75)));
         final docs = snapshot.data!.docs;
-        if (docs.isEmpty) return const Center(child: Text("No orders found", style: TextStyle(color: Colors.grey)));
+        if (docs.isEmpty) return Center(child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.receipt_long_rounded, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            const Text("No orders found", style: TextStyle(color: Colors.grey)),
+          ],
+        ));
 
         return ListView.builder(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(24),
           itemCount: docs.length,
           itemBuilder: (context, i) {
             final data = docs[i].data() as Map<String, dynamic>;
             final status = data['status'] ?? 'Pending';
-            return Card(
+            return Container(
               margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade100)),
               child: ListTile(
-                title: Text("Order #${docs[i].id.substring(0, 8)}"),
-                subtitle: Text(data['itemsSummary'] ?? 'Products'),
+                contentPadding: const EdgeInsets.all(16),
+                title: Text("Order #${docs[i].id.substring(0, 8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: Text(data['itemsSummary'] ?? 'Produce Pack'),
                 trailing: status == 'Farmer Accepted'
                     ? ElevatedButton(
                         onPressed: () => docs[i].reference.update({'status': 'Awaiting Pickup'}),
-                        child: const Text("Pack & Ready"),
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1D9E75), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        child: const Text("Pack & Ready", style: TextStyle(color: Colors.white, fontSize: 12)),
                       )
-                    : Text(status, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                    : _statusChip(status),
               ),
             );
           },
         );
       },
+    );
+  }
+
+  Widget _statusChip(String status) {
+    Color color = Colors.grey;
+    if (status == 'Delivered') color = Colors.green;
+    if (status == 'Cancelled') color = Colors.red;
+    if (status == 'Picked Up' || status == 'On the way') color = Colors.blue;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+      child: Text(status, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
     );
   }
 }
@@ -613,31 +695,43 @@ class _StockTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        final docs = snapshot.data!.docs;
-        return GridView.builder(
-          padding: const EdgeInsets.all(16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.8, crossAxisSpacing: 12, mainAxisSpacing: 12),
-          itemCount: docs.length,
-          itemBuilder: (ctx, i) {
-            final d = docs[i].data() as Map<String, dynamic>;
-            return Card(
-              child: Column(
-                children: [
-                  Expanded(child: CachedNetworkImage(imageUrl: d['image'] ?? '', fit: BoxFit.cover, errorWidget: (_,__,___) => const Icon(Icons.eco))),
-                  Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Text(d['name'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
+    return Column(
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Heading(title: "Inventory", subtitle: "Visual overview of your current stock"),
+        ),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF1D9E75)));
+              final docs = snapshot.data!.docs;
+              return GridView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.8, crossAxisSpacing: 16, mainAxisSpacing: 16),
+                itemCount: docs.length,
+                itemBuilder: (ctx, i) {
+                  final d = docs[i].data() as Map<String, dynamic>;
+                  return Container(
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade100)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(24)), child: CachedNetworkImage(imageUrl: d['image'] ?? '', fit: BoxFit.cover, width: double.infinity, errorWidget: (_,__,___) => const Icon(Icons.eco_rounded)))),
+                        Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Text(d['name'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
@@ -652,14 +746,15 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(15),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)]),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: color),
-            const SizedBox(height: 5),
-            Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+            IconBadge(teal: color, blue: color.withValues(alpha: 0.7), icon: icon),
+            const SizedBox(height: 16),
+            Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            Text(title, style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -677,21 +772,31 @@ class _OrderAcceptanceTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        title: Text(data['itemsSummary'] ?? 'New Order'),
-        subtitle: Text("Total: Rs. ${data['total']} • ${data['deliveryAddress']}"),
-        trailing: ElevatedButton(
-          onPressed: () => FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-            'status': 'Farmer Accepted',
-            'farmerUid': currentFarmerUid,
-            'farmName': currentFarmName,
-            'farmerLat': farmerLat,
-            'farmerLng': farmerLng,
-          }),
-          child: const Text("Accept"),
-        ),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade100)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(data['itemsSummary'] ?? 'New Order', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          const SizedBox(height: 4),
+          Text("Total: Rs. ${data['total']} • ${data['deliveryAddress']}", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+          const SizedBox(height: 16),
+          GradientButton(
+            label: "Accept Order", 
+            icon: Icons.check_circle_rounded, 
+            isLoading: false, 
+            teal: const Color(0xFF1D9E75), blue: const Color(0xFF2E5BFF), 
+            onTap: () => FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+              'status': 'Farmer Accepted',
+              'farmerUid': currentFarmerUid,
+              'farmName': currentFarmName,
+              'farmerLat': farmerLat,
+              'farmerLng': farmerLng,
+            }),
+          ),
+        ],
       ),
     );
   }

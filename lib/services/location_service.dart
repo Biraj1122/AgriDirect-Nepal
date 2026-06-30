@@ -24,6 +24,14 @@ class LocationService {
     return true;
   }
 
+  Future<Position?> getCurrentLocation() async {
+    bool hasPermission = await requestPermission();
+    if (!hasPermission) return null;
+    return await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
+  }
+
   Future<String> getAddressFromLatLng(double lat, double lng) async {
     String fallback = "Location (${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)})";
     

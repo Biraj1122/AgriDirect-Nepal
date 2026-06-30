@@ -28,6 +28,9 @@ class NavigationScreen extends StatefulWidget {
 }
 
 class _NavigationScreenState extends State<NavigationScreen> {
+  static const Color primaryTeal = Color(0xFF1D9E75);
+  static const Color secondaryBlue = Color(0xFF2E5BFF);
+  
   late int currentIndex;
   String selectedCategory = "All";
   bool _isCheckingRole = true;
@@ -74,7 +77,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
     }
 
     try {
-      // Add a 6-second timeout to prevent the app from hanging if Firestore is unresponsive
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -158,7 +160,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final String name = (product['name'] ?? product['title'] ?? '').toString().trim();
     if (name.isEmpty) return;
 
-    // Use a more flexible check to find existing favorite
     final existing = _favouriteProducts.firstWhere(
       (p) {
         final pName = (p['name'] ?? p['title'] ?? '').toString().trim();
@@ -183,12 +184,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
         await favRef.delete();
       } else {
         final Map<String, dynamic> favData = Map.from(product);
-        
-        // Ensure both 'name' and 'title' are saved so the list can find them
         favData['name'] = name;
         favData['title'] = name;
-        
-        // Ensure images are mapped correctly
         final String img = (product['image'] ?? product['imageUrl'] ?? product['imagePath'] ?? '').toString();
         favData['image'] = img;
         favData['imagePath'] = img;
@@ -223,7 +220,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(color: Colors.green),
+              CircularProgressIndicator(color: primaryTeal),
               SizedBox(height: 15),
               Text("Securing session...", style: TextStyle(color: Colors.grey)),
             ],
@@ -285,17 +282,18 @@ class _NavigationScreenState extends State<NavigationScreen> {
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: currentIndex,
-        children: screens,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 400),
+        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+        child: screens[currentIndex],
       ),
 
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.all(12),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(25),
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.08),
@@ -310,7 +308,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               navItem(Icons.home_rounded, "Home", 0),
-              navItem(Icons.grid_view_rounded, "Categories", 1),
+              navItem(Icons.grid_view_rounded, "Catalog", 1),
               navItem(Icons.shopping_cart_rounded, "Cart", 2),
               navItem(Icons.receipt_long_rounded, "Orders", 3),
               navItem(Icons.person_rounded, "Profile", 4),
@@ -327,36 +325,33 @@ class _NavigationScreenState extends State<NavigationScreen> {
     return GestureDetector(
       onTap: () => changeTab(index),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? Colors.green.withValues(alpha: 0.12)
+              ? primaryTeal.withValues(alpha: 0.1)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedScale(
-              scale: isSelected ? 1.2 : 1.0,
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                icon,
-                size: 26,
-                color: isSelected ? Colors.green : Colors.grey,
-              ),
+            Icon(
+              icon,
+              size: 24,
+              color: isSelected ? primaryTeal : Colors.grey.shade400,
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: isSelected ? Colors.green : Colors.grey,
-                fontWeight:
-                isSelected ? FontWeight.bold : FontWeight.w500,
+            if (isSelected) ...[
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: primaryTeal,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
+            ]
           ],
         ),
       ),

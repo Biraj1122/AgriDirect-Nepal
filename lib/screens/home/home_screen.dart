@@ -6,7 +6,7 @@ import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/orders_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:farmtech_agridirect/Success/shared_widgets.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
@@ -346,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
           borderRadius: BorderRadius.circular(20),
           child: Stack(
             children: [
-              Positioned.fill(child: _buildSafeFeaturedImage(product.image)),
+              Positioned.fill(child: SafeProductImage(imageUrl: product.image)),
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
@@ -405,34 +405,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSafeFeaturedImage(String image) {
-    if (image.isEmpty) {
-      return Container(color: Colors.grey.shade300, child: const Center(child: Icon(Icons.image, color: Colors.white, size: 40)));
-    }
-    
-    if (image.startsWith('http')) {
-      return CachedNetworkImage(
-        imageUrl: image,
-        width: double.infinity,
-        height: double.infinity,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(color: Colors.grey.shade200),
-        errorWidget: (context, url, error) => Container(color: Colors.grey.shade300, child: const Icon(Icons.broken_image)),
-      );
-    }
-    
-    return Image.asset(
-      image.startsWith('assets/') ? image : 'assets/images/$image',
-      width: double.infinity,
-      height: double.infinity,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => Container(
-        color: Colors.green.shade100,
-        child: const Center(child: Icon(Icons.eco, color: Colors.green, size: 40)),
-      ),
-    );
-  }
-
   Widget _buildDefaultFeatured() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -462,7 +434,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           _buildPromoCard("10% OFF", "On all organic vegetables", Colors.orange, Icons.percent),
           _buildPromoCard("FREE DELIVERY", "Orders above Rs. 2000", Colors.blue, Icons.local_shipping),
-          _buildPromoCard("COMBO DEALS", "Get freebies on every purchase", Colors.purple, Icons.card_giftcard),
+          _buildPromoCard("COMBO DEALS", "Get freebies on every purchase over Rs.5000", Colors.purple, Icons.card_giftcard),
         ],
       ),
     );
