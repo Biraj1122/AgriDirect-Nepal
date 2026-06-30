@@ -181,7 +181,7 @@ class AdminRepository {
     }
   }
 
-  Future<void> seedDatabase() async {
-    await seedProducts();
+  Future<void> seedDatabase({List<String>? selectedProductNames}) async {
+    await seedProducts(selectedProductNames: selectedProductNames);
   }
 }

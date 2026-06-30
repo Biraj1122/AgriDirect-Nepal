@@ -61,6 +61,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
         .where('status', isEqualTo: 'Pending Farmer')
         .snapshots()
         .listen((snapshot) {
+      // Filter out orders that already have a farmerUid (assigned to someone else)
       final pendingOrders = snapshot.docs.where((d) => (d.data() as Map)['farmerUid'] == null).toList();
       final currentCount = pendingOrders.length;
       
@@ -81,6 +82,37 @@ class _FarmerScreenState extends State<FarmerScreen> {
         setState(() => _pendingOrderCount = currentCount);
       }
     });
+  }
+
+  void _onTabTapped(int index) {
+    setState(() => _currentIndex = index);
+    if (index == 0) {
+      _markNotificationsAsRead();
+    }
+  }
+
+  Future<void> _markNotificationsAsRead() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('notifications')
+          .where('isRead', isEqualTo: false)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (var doc in query.docs) {
+          batch.update(doc.reference, {'isRead': true});
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint("Error marking notifications as read: $e");
+    }
   }
 
   Future<void> _loadFarmerData() async {
@@ -157,7 +189,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        onTap: _onTabTapped,
         type: BottomNavigationBarType.fixed,
         selectedItemColor: primaryTeal,
         unselectedItemColor: Colors.grey.shade400,
@@ -167,7 +199,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
           BottomNavigationBarItem(
             icon: Badge(
               label: Text('${_unreadCount + _pendingOrderCount}'),
-              isLabelVisible: _unreadCount + _pendingOrderCount > 0,
+              isLabelVisible: _currentIndex != 0 && (_unreadCount + _pendingOrderCount > 0),
               backgroundColor: Colors.redAccent,
               child: const Icon(Icons.dashboard_rounded),
             ),
@@ -321,7 +353,10 @@ class _DashboardTabState extends State<_DashboardTab> {
           stream: FirebaseFirestore.instance.collection('orders').where('status', isEqualTo: 'Pending Farmer').snapshots(),
           builder: (context, snap) {
             final docs = snap.data?.docs ?? [];
-            final availableDocs = docs.where((d) => (d.data() as Map)['farmerUid'] == null).toList();
+            final availableDocs = docs.where((d) {
+              final data = d.data() as Map<String, dynamic>;
+              return data['farmerUid'] == null && data['status'] != 'Cancelled';
+            }).toList();
 
             if (availableDocs.isEmpty) return const SizedBox();
 

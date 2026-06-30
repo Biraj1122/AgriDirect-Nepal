@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import '../models/user_model.dart';
 import '../models/research_submission_model.dart';
 import '../models/price_request_model.dart';
 import '../Success/shared_widgets.dart';
+import '../utils/db_seeder.dart';
 import 'auth/login_screen.dart';
 
 class AdminPage extends StatefulWidget {
@@ -21,17 +23,48 @@ class AdminPage extends StatefulWidget {
   State<AdminPage> createState() => _AdminPageState();
 }
 
-class _AdminPageState extends State<AdminPage> {
+class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
   static const Color primaryTeal = Color(0xFF1D9E75);
   static const Color secondaryBlue = Color(0xFF2E5BFF);
   static const Color backgroundColor = Color(0xffF8FAFC);
 
+  Timer? _inactivityTimer;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AdminViewModel>().refreshAdminState();
     });
+    _resetInactivityTimer();
+  }
+
+  @override
+  void dispose() {
+    _inactivityTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      // Logout immediately if app is closed or put in background for security
+      _logout();
+    }
+  }
+
+  void _resetInactivityTimer() {
+    _inactivityTimer?.cancel();
+    _inactivityTimer = Timer(const Duration(minutes: 3), () {
+      if (mounted) _logout();
+    });
+  }
+
+  void _logout() {
+    final viewModel = context.read<AdminViewModel>();
+    viewModel.logout(context, const LoginScreen());
   }
 
   @override
@@ -46,80 +79,89 @@ class _AdminPageState extends State<AdminPage> {
 
     bool isWide = MediaQuery.of(context).size.width > 900;
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        title: const Text("AgriDirect Admin", 
-          style: TextStyle(color: Color(0xFF1A1D25), fontWeight: FontWeight.w700, letterSpacing: -0.5)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: false,
-        iconTheme: const IconThemeData(color: primaryTeal),
-        actions: [
-          IconButton(
-            onPressed: () => viewModel.refreshAdminState(),
-            icon: const Icon(Icons.refresh_rounded, color: primaryTeal),
-          ),
-          const SizedBox(width: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16),
-            child: TextButton.icon(
-              onPressed: () => viewModel.logout(context, const LoginScreen()),
-              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
-              label: const Text("Logout", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return Listener(
+      onPointerDown: (_) => _resetInactivityTimer(),
+      onPointerMove: (_) => _resetInactivityTimer(),
+      child: Scaffold(
+        backgroundColor: backgroundColor,
+        appBar: AppBar(
+          title: const Text("AgriDirect Admin", 
+            style: TextStyle(color: Color(0xFF1A1D25), fontWeight: FontWeight.w700, letterSpacing: -0.5)),
+          backgroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: false,
+          iconTheme: const IconThemeData(color: primaryTeal),
+          actions: [
+            IconButton(
+              onPressed: () => _showSeedDatabaseDialog(context, viewModel),
+              icon: const Icon(Icons.storage_rounded, color: primaryTeal),
+              tooltip: "Seed Database",
+            ),
+            IconButton(
+              onPressed: () => viewModel.refreshAdminState(),
+              icon: const Icon(Icons.refresh_rounded, color: primaryTeal),
+            ),
+            const SizedBox(width: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16),
+              child: TextButton.icon(
+                onPressed: () => viewModel.logout(context, const LoginScreen()),
+                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
+                label: const Text("Logout", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-      drawer: isWide ? null : _buildSidePanel(context, viewModel),
-      body: Row(
-        children: [
-          if (isWide) _buildPersistentPanel(context, viewModel),
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              child: viewModel.currentIndex < 9 
-                ? IndexedStack(
-                  key: ValueKey(viewModel.currentIndex),
-                  index: viewModel.currentIndex,
-                  children: [
-                    _buildDashboard(context, viewModel),
-                    _buildOrdersList(context, viewModel),
-                    _buildProductsList(context, viewModel),
-                    _buildUsersList(context, viewModel),
-                    _buildAnnouncementManager(context, viewModel),
-                    _buildResearchManager(context, viewModel),
-                    _buildRevenueAnalyticsPage(context, viewModel),
-                    _buildPriceApprovalsList(context, viewModel),
-                    _buildProductApprovalsList(context, viewModel),
-                  ],
-                )
-                : const Center(child: Text("Page Not Found")),
+          ],
+        ),
+        drawer: isWide ? null : _buildSidePanel(context, viewModel),
+        body: Row(
+          children: [
+            if (isWide) _buildPersistentPanel(context, viewModel),
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: viewModel.currentIndex < 9 
+                  ? IndexedStack(
+                    key: ValueKey(viewModel.currentIndex),
+                    index: viewModel.currentIndex,
+                    children: [
+                      _buildDashboard(context, viewModel),
+                      _buildOrdersList(context, viewModel),
+                      _buildProductsList(context, viewModel),
+                      _buildUsersList(context, viewModel),
+                      _buildAnnouncementManager(context, viewModel),
+                      _buildResearchManager(context, viewModel),
+                      _buildRevenueAnalyticsPage(context, viewModel),
+                      _buildPriceApprovalsList(context, viewModel),
+                      _buildProductApprovalsList(context, viewModel),
+                    ],
+                  )
+                  : const Center(child: Text("Page Not Found")),
+              ),
             ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: isWide || viewModel.currentIndex >= 5
-          ? null
-          : BottomNavigationBar(
-        currentIndex: viewModel.currentIndex,
-        onTap: (index) => viewModel.setCurrentIndex(index),
-        selectedItemColor: primaryTeal,
-        unselectedItemColor: Colors.grey.shade400,
-        backgroundColor: Colors.white,
-        elevation: 20,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: "Dash"),
-          BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_rounded), label: "Orders"),
-          BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: "Catalog"),
-          BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: "Users"),
-          BottomNavigationBarItem(icon: Icon(Icons.campaign_rounded), label: "News"),
-        ],
+          ],
+        ),
+        bottomNavigationBar: isWide || viewModel.currentIndex >= 5
+            ? null
+            : BottomNavigationBar(
+          currentIndex: viewModel.currentIndex,
+          onTap: (index) => viewModel.setCurrentIndex(index),
+          selectedItemColor: primaryTeal,
+          unselectedItemColor: Colors.grey.shade400,
+          backgroundColor: Colors.white,
+          elevation: 20,
+          type: BottomNavigationBarType.fixed,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: "Dash"),
+            BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_rounded), label: "Orders"),
+            BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: "Catalog"),
+            BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: "Users"),
+            BottomNavigationBarItem(icon: Icon(Icons.campaign_rounded), label: "News"),
+          ],
+        ),
       ),
     );
   }
@@ -1288,13 +1330,15 @@ class _AdminPageState extends State<AdminPage> {
                     ),
                   ),
                   const SizedBox(height: 40),
-                  const FieldLabel(label: "CONTACT INFORMATION"),
-                  const SizedBox(height: 12),
-                  _userInfoCard([
-                    _infoRow(Icons.email_outlined, user.email ?? 'No email'),
-                    _infoRow(Icons.phone_outlined, user.phone ?? 'No phone'),
-                    _infoRow(Icons.location_on_outlined, user.address ?? 'No address'),
-                  ]),
+                  _userInfoField("FULL NAME", user.fullName ?? 'N/A', Icons.person_outline_rounded),
+                  const SizedBox(height: 24),
+                  _userInfoField("EMAIL ADDRESS", user.email ?? 'No email', Icons.email_outlined),
+                  const SizedBox(height: 24),
+                  _userInfoField("PHONE NUMBER", user.phone ?? 'No phone', Icons.phone_outlined),
+                  const SizedBox(height: 24),
+                  _userInfoField("ADDRESS", user.address ?? 'No address', Icons.location_on_outlined),
+                  const SizedBox(height: 24),
+                  _userInfoField("ROLE", user.role ?? 'Customer', Icons.badge_outlined),
                   const SizedBox(height: 32),
                   if (user.lat != null && user.lng != null) ...[
                     const FieldLabel(label: "SAVED LOCATION"),
@@ -1319,23 +1363,130 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  Widget _userInfoCard(List<Widget> children) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-      child: Column(children: children),
+  Widget _userInfoField(String label, String value, IconData icon) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FieldLabel(label: label),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade100),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: primaryTeal, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF1A1D25),
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _infoRow(IconData icon, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          Icon(icon, color: primaryTeal, size: 20),
-          const SizedBox(width: 16),
-          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w500, color: Color(0xFF1A1D25)))),
-        ],
+  void _showSeedDatabaseDialog(BuildContext context, AdminViewModel viewModel) {
+    List<String> selectedProducts = [];
+    bool isSeeding = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Seed Database", style: TextStyle(fontWeight: FontWeight.w800)),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    if (selectedProducts.length == nepalProductsList.length) {
+                      selectedProducts.clear();
+                    } else {
+                      selectedProducts = nepalProductsList.map((p) => p['name'] as String).toList();
+                    }
+                  });
+                },
+                child: Text(selectedProducts.length == nepalProductsList.length ? "Deselect All" : "Select All"),
+              )
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            height: 400,
+            child: ListView.builder(
+              itemCount: nepalProductsList.length,
+              itemBuilder: (context, index) {
+                final product = nepalProductsList[index];
+                final name = product['name'] as String;
+                final isSelected = selectedProducts.contains(name);
+
+                return CheckboxListTile(
+                  title: Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(product['category'] as String, style: const TextStyle(fontSize: 12)),
+                  value: isSelected,
+                  activeColor: primaryTeal,
+                  onChanged: (val) {
+                    setState(() {
+                      if (val == true) {
+                        selectedProducts.add(name);
+                      } else {
+                        selectedProducts.remove(name);
+                      }
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: isSeeding || selectedProducts.isEmpty ? null : () async {
+                setState(() => isSeeding = true);
+                try {
+                  await viewModel.seedDatabase(selectedProductNames: selectedProducts);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Database seeded successfully"), backgroundColor: Colors.green),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("Error: $e"), backgroundColor: Colors.redAccent),
+                    );
+                  }
+                } finally {
+                  if (mounted) setState(() => isSeeding = false);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryTeal,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: isSeeding 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) 
+                : const Text("Seed Data", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
       ),
     );
   }
