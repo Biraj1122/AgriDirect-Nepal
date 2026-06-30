@@ -5,6 +5,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'order_details_screen.dart';
 import '../../models/user_data.dart';
 import '../../services/location_service.dart';
 import '../home/navigation_screen.dart';
@@ -128,8 +129,11 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         final data = snapshot.data() as Map<String, dynamic>;
         final newStatus = data['status'] ?? status;
         final newRiderName = data['deliveryName'] ?? "Assigning...";
-        final newRiderPhone = data['deliveryPhone'] ?? data['userPhone'];
         final newDeliveryId = data['deliveryId'];
+        
+        // Ensure we get rider phone from order or their user doc
+        String? newRiderPhone = data['deliveryPhone'];
+        
         final double? custLat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
         final double? custLng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
         final double? fLat = (data['farmerLat'] as num?)?.toDouble();
@@ -145,12 +149,13 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         bool shouldStartRiderTracking = false;
         if (deliveryId != newDeliveryId && newDeliveryId != null) {
           shouldStartRiderTracking = true;
+          // If phone is missing in order, we'll get it from user doc in _listenToRiderLocation
         }
 
         setState(() {
           status = newStatus;
           riderName = newRiderName;
-          riderPhone = newRiderPhone;
+          if (newRiderPhone != null) riderPhone = newRiderPhone;
           deliveryId = newDeliveryId;
           if (custLat != null && custLng != null) {
             customerPosition = LatLng(custLat, custLng);
@@ -163,7 +168,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         });
 
         if (shouldStartRiderTracking) {
-          _listenToRiderLocation(newDeliveryId);
+          _listenToRiderLocation(newDeliveryId!);
         }
       }
     });
@@ -180,6 +185,11 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         final data = doc.data() as Map<String, dynamic>;
         final lat = (data['lat'] as num?)?.toDouble();
         final lng = (data['lng'] as num?)?.toDouble();
+        final phone = data['phone']?.toString();
+
+        if (phone != null && riderPhone == null) {
+          setState(() => riderPhone = phone);
+        }
 
         if (lat != null && lng != null) {
           final newPos = LatLng(lat, lng);
@@ -475,9 +485,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
   }
 
   bool _canCancelOrder() {
-    return status != 'Delivered' &&
-        status != 'Cancelled' &&
-        (deliveryId == null || deliveryId!.isEmpty);
+    return (status == 'Pending Farmer' || status == 'Farmer Accepted');
   }
 
   Future<void> _cancelOrder() async {
@@ -607,6 +615,25 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         elevation: 0,
         centerTitle: true,
         leading: IconButton(icon: const Icon(Icons.arrow_back_ios, color: Colors.black), onPressed: _handleBack),
+        actions: [
+          if (_activeOrderId != null)
+            IconButton(
+              icon: const Icon(Icons.receipt_long_rounded, color: Colors.green),
+              onPressed: () async {
+                final doc = await FirebaseFirestore.instance.collection('orders').doc(_activeOrderId).get();
+                if (doc.exists && mounted) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  data['id'] = doc.id;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => OrderDetailsScreen(order: data)),
+                  );
+                }
+              },
+              tooltip: "View Details",
+            ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Column(
         children: [
@@ -647,9 +674,29 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                             const Icon(Icons.info_outline, color: Colors.green),
                           const SizedBox(width: 15),
                           Expanded(
-                            child: Text(
-                              _getStatusMessage(),
-                              style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _getStatusMessage(),
+                                  style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87),
+                                ),
+                                const SizedBox(height: 2),
+                                GestureDetector(
+                                  onTap: () async {
+                                    final doc = await FirebaseFirestore.instance.collection('orders').doc(_activeOrderId).get();
+                                    if (doc.exists && mounted) {
+                                      final data = doc.data() as Map<String, dynamic>;
+                                      data['id'] = doc.id;
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => OrderDetailsScreen(order: data)),
+                                      );
+                                    }
+                                  },
+                                  child: const Text("View order details", style: TextStyle(color: Colors.green, fontSize: 12, fontWeight: FontWeight.bold, decoration: TextDecoration.underline)),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -714,7 +761,31 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                     ),
                   ),
                   const SizedBox(height: 8),
-                  if (status == "On the way" || status == "Arrived")
+                  if (status == "Arrived")
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(15),
+                          border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.info_outline, color: Colors.blue),
+                            SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                "Your rider has arrived! Please collect your items. Once the rider marks as delivered, you can confirm receipt here.",
+                                style: TextStyle(color: Colors.blue, fontSize: 13, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (status == "Confirm Received")
                     Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: SizedBox(

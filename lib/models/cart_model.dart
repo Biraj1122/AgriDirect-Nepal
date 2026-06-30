@@ -101,12 +101,12 @@ class CartModel extends ChangeNotifier {
           distance = UserData.distanceToHq;
         }
 
-        // Rs. 10 per km
-        totalDeliveryFee += (distance * 10);
+        // Rs. 15 per km + Rs. 40 base fee
+        totalDeliveryFee += 40 + (distance * 15);
       }
     }
 
-    return totalDeliveryFee > 0 ? totalDeliveryFee : 40; // Minimum 40 if distance is very low
+    return totalDeliveryFee;
   }
 
   double get total => subtotal + deliveryFee;
