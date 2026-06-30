@@ -7,6 +7,7 @@ import '../../firebase_options.dart';
 import '../../models/user_data.dart';
 import '../auth/login_screen.dart';
 import '../home/navigation_screen.dart';
+import '../profile/edit_profile_screen.dart';
 import 'farmer_screen.dart';
 import '../delivery_person_screen.dart';
 import '../admin_page.dart';
@@ -134,6 +135,23 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
           final role = doc.data()?['role'] ?? 'Customer';
           final name = doc.data()?['fullName'] ?? user.displayName ?? "User";
           
+          // Mandatory Profile Photo Check for Partners
+          if (role == 'Farmer' || role == 'Delivery Person') {
+            final profileImg = doc.data()?['profileImageUrl'];
+            if (profileImg == null || profileImg.toString().isEmpty) {
+              _isNavigated = true;
+              Navigator.pushReplacement(
+                context, 
+                MaterialPageRoute(builder: (_) => EditProfileScreen(
+                  currentName: name,
+                  currentPhone: doc.data()?['phone'] ?? "Not set",
+                  mandatoryPhoto: true,
+                ))
+              );
+              return;
+            }
+          }
+
           Widget target;
           if (role == 'Farmer') {
             target = const FarmerScreen();

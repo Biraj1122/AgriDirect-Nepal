@@ -28,6 +28,11 @@ class _FarmerScreenState extends State<FarmerScreen> {
   int _unreadCount = 0;
   int _pendingOrderCount = 0;
 
+  bool _isUpdatingPassword = false;
+  final _currentPasswordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -39,6 +44,9 @@ class _FarmerScreenState extends State<FarmerScreen> {
   void dispose() {
     _notificationSubscription?.cancel();
     _orderSubscription?.cancel();
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -137,6 +145,80 @@ class _FarmerScreenState extends State<FarmerScreen> {
     }
   }
 
+  void _showChangePasswordDialog() {
+    _currentPasswordController.clear();
+    _newPasswordController.clear();
+    _confirmPasswordController.clear();
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Text("Change Password", style: TextStyle(fontWeight: FontWeight.w800)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _currentPasswordController,
+                obscureText: true,
+                decoration: customInputDecoration(hint: "Current Password", icon: Icons.lock_outline, teal: primaryTeal),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _newPasswordController,
+                obscureText: true,
+                decoration: customInputDecoration(hint: "New Password", icon: Icons.vpn_key_outlined, teal: primaryTeal),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _confirmPasswordController,
+                obscureText: true,
+                decoration: customInputDecoration(hint: "Confirm New Password", icon: Icons.check_circle_outline, teal: primaryTeal),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: ElevatedButton(
+                onPressed: _isUpdatingPassword ? null : () async {
+                  if (_newPasswordController.text != _confirmPasswordController.text) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Passwords do not match")));
+                    return;
+                  }
+                  
+                  setDialogState(() => _isUpdatingPassword = true);
+                  try {
+                    final user = FirebaseAuth.instance.currentUser;
+                    final cred = EmailAuthProvider.credential(email: user!.email!, password: _currentPasswordController.text);
+                    await user.reauthenticateWithCredential(cred);
+                    await user.updatePassword(_newPasswordController.text);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password updated successfully"), backgroundColor: Colors.green));
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.redAccent));
+                    }
+                  } finally {
+                    setDialogState(() => _isUpdatingPassword = false);
+                  }
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: primaryTeal, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                child: _isUpdatingPassword 
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text("Update", style: TextStyle(color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _logout() {
     FirebaseAuth.instance.signOut();
     Navigator.pushAndRemoveUntil(
@@ -169,7 +251,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
         farmerLng: _farmerData?['farmLng'],
       ),
       _DeliveryTab(uid: uid),
-      _StockTab(uid: uid),
+      _ProfileTab(uid: uid, farmerName: farmerName, email: FirebaseAuth.instance.currentUser?.email ?? '', onChangePassword: _showChangePasswordDialog),
     ];
 
     return Scaffold(
@@ -206,8 +288,119 @@ class _FarmerScreenState extends State<FarmerScreen> {
           ),
           const BottomNavigationBarItem(icon: Icon(Icons.storefront_rounded), label: 'My Store'),
           const BottomNavigationBarItem(icon: Icon(Icons.local_shipping_rounded), label: 'Orders'),
-          const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: 'Inventory'),
+          const BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
         ],
+      ),
+    );
+  }
+}
+
+class _ProfileTab extends StatefulWidget {
+  final String uid, farmerName, email;
+  final VoidCallback onChangePassword;
+  const _ProfileTab({required this.uid, required this.farmerName, required this.email, required this.onChangePassword});
+
+  @override
+  State<_ProfileTab> createState() => _ProfileTabState();
+}
+
+class _ProfileTabState extends State<_ProfileTab> {
+  bool _isUploading = false;
+
+  Future<void> _pickAndUploadPhoto() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+    if (image == null) return;
+
+    setState(() => _isUploading = true);
+    try {
+      final storage = StorageService();
+      final url = await storage.uploadImage(image, 'profile_pics');
+      if (url != null) {
+        await FirebaseFirestore.instance.collection('users').doc(widget.uid).update({
+          'profileImageUrl': url,
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile photo updated!")));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload failed: $e")));
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('users').doc(widget.uid).snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data() as Map<String, dynamic>?;
+        final url = data?['profileImageUrl'];
+
+        return ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            const Heading(title: "Farm Profile", subtitle: "Manage your professional settings"),
+            const SizedBox(height: 40),
+            Center(
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onTap: _isUploading ? null : _pickAndUploadPhoto,
+                    child: Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 60,
+                          backgroundColor: const Color(0xFF1D9E75).withValues(alpha: 0.1),
+                          backgroundImage: (url != null && url.isNotEmpty) ? CachedNetworkImageProvider(url) : null,
+                          child: (url == null || url.isEmpty) ? const Icon(Icons.agriculture_rounded, size: 60, color: Color(0xFF1D9E75)) : null,
+                        ),
+                        if (_isUploading)
+                          const Positioned.fill(child: CircularProgressIndicator(color: Color(0xFF1D9E75))),
+                        Positioned(
+                          bottom: 0, right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(color: Color(0xFF1D9E75), shape: BoxShape.circle),
+                            child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(widget.farmerName, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+                  Text(widget.email, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 40),
+            const FieldLabel(label: "SECURITY"),
+            const SizedBox(height: 12),
+            _profileItem(Icons.lock_reset_rounded, "Change Password", onTap: widget.onChangePassword),
+            _profileItem(Icons.verified_user_rounded, "Verified Farmer Partner"),
+          ],
+        );
+      }
+    );
+  }
+
+  Widget _profileItem(IconData icon, String label, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        child: Row(
+          children: [
+            Icon(icon, color: const Color(0xFF1D9E75), size: 20),
+            const SizedBox(width: 16),
+            Expanded(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600))),
+            if (onTap != null) const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 16),
+          ],
+        ),
       ),
     );
   }
@@ -806,53 +999,6 @@ class _OrderList extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
       child: Text(status, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11)),
-    );
-  }
-}
-
-class _StockTab extends StatelessWidget {
-  final String uid;
-  const _StockTab({required this.uid});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Heading(title: "Inventory", subtitle: "Visual overview of your current stock"),
-        ),
-        Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).snapshots(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF1D9E75)));
-              final docs = snapshot.data!.docs;
-              return GridView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.8, crossAxisSpacing: 16, mainAxisSpacing: 16),
-                itemCount: docs.length,
-                itemBuilder: (ctx, i) {
-                  final d = docs[i].data() as Map<String, dynamic>;
-                  return Container(
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade100)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: ClipRRect(borderRadius: const BorderRadius.vertical(top: Radius.circular(24)), child: CachedNetworkImage(imageUrl: d['image'] ?? '', fit: BoxFit.cover, width: double.infinity, errorWidget: (_,__,___) => const Icon(Icons.eco_rounded)))),
-                        Padding(
-                          padding: const EdgeInsets.all(12.0),
-                          child: Text(d['name'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.w700), maxLines: 1, overflow: TextOverflow.ellipsis),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
     );
   }
 }

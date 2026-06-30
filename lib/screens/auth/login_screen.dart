@@ -120,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 15),
                 const Text(
-                  "Farmtech",
+                  "AgriDirect Nepal",
                   style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green, letterSpacing: 1.2),
                 ),
                 const SizedBox(height: 5),

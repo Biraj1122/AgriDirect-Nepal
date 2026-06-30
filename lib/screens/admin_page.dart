@@ -50,7 +50,6 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
-      // Logout immediately if app is closed or put in background for security
       _logout();
     }
   }
@@ -131,12 +130,12 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                       _buildDashboard(context, viewModel),
                       _buildOrdersList(context, viewModel),
                       _buildProductsList(context, viewModel),
-                      _buildUsersList(context, viewModel),
+                      _buildCategorizedUsersList(context, viewModel),
                       _buildAnnouncementManager(context, viewModel),
                       _buildResearchManager(context, viewModel),
                       _buildRevenueAnalyticsPage(context, viewModel),
                       _buildPriceApprovalsList(context, viewModel),
-                      _buildProductApprovalsList(context, viewModel),
+                      _buildCategorizedApprovalsList(context, viewModel),
                     ],
                   )
                   : const Center(child: Text("Page Not Found")),
@@ -159,7 +158,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
             BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_rounded), label: "Orders"),
             BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: "Catalog"),
             BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: "Users"),
-            BottomNavigationBarItem(icon: Icon(Icons.campaign_rounded), label: "News"),
+            BottomNavigationBarItem(icon: Icon(Icons.verified_user_rounded), label: "Approvals"),
           ],
         ),
       ),
@@ -207,7 +206,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                 _panelItem(context, viewModel, 4, Icons.campaign_rounded, "Announcements"),
                 _panelItem(context, viewModel, 5, Icons.science_rounded, "Research Insights"),
                 _panelItem(context, viewModel, 7, Icons.price_change_rounded, "Price Approvals"),
-                _panelItem(context, viewModel, 8, Icons.verified_user_rounded, "Product Verification"),
+                _panelItem(context, viewModel, 8, Icons.verified_user_rounded, "System Approvals"),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(24, 24, 24, 8),
                   child: Text("INSIGHTS", style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
@@ -402,15 +401,25 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                             decoration: BoxDecoration(color: _getStatusColor(order.status).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
                             child: Icon(_getStatusIcon(order.status), color: _getStatusColor(order.status), size: 20),
                           ),
-                          title: Text("Order #${order.id.substring(0, 8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                          title: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text("Order #${order.id.substring(0, 8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                          ),
                           subtitle: Text(order.status, style: TextStyle(color: _getStatusColor(order.status), fontSize: 12, fontWeight: FontWeight.w500)),
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text("Rs. ${order.total}", style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                              Text(order.createdAt != null ? DateFormat('MMM d, h:mm a').format(order.createdAt!) : "Just now", style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
-                            ],
+                          trailing: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 100),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text("Rs. ${order.total.toStringAsFixed(0)}", 
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                                  overflow: TextOverflow.ellipsis),
+                                Text(order.createdAt != null ? DateFormat('MMM d').format(order.createdAt!) : "Now", 
+                                  style: TextStyle(fontSize: 9, color: Colors.grey.shade400)),
+                              ],
+                            ),
                           ),
                           onTap: () => _showOrderDetails(context, order, viewModel),
                         );
@@ -518,7 +527,11 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       title: Row(
                         children: [
-                          Text("Order #${order.id.substring(0, 8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w700)),
+                          Expanded(
+                            child: Text("Order #${order.id.substring(0, 8).toUpperCase()}", 
+                              style: const TextStyle(fontWeight: FontWeight.w700),
+                              overflow: TextOverflow.ellipsis),
+                          ),
                           const SizedBox(width: 8),
                           _statusChip(order.status),
                         ],
@@ -526,7 +539,8 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 8.0),
                         child: Text("Customer: ${order.userName ?? 'Guest'} • Items: ${order.items?.length ?? 0}", 
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
                       trailing: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 140),
@@ -573,6 +587,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
       case 'delivered': return Colors.green;
       case 'cancelled': return Colors.red;
       case 'shipped': return Colors.deepPurple;
+      case 'confirm received': return Colors.amber;
       default: return Colors.grey;
     }
   }
@@ -588,6 +603,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
       case 'delivered': return Icons.check_circle_rounded;
       case 'cancelled': return Icons.cancel_rounded;
       case 'shipped': return Icons.flight_takeoff_rounded;
+      case 'confirm received': return Icons.touch_app_rounded;
       default: return Icons.help_outline_rounded;
     }
   }
@@ -617,8 +633,8 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text("Order Details", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF1A1D25))),
-                          Text("#${order.id.toUpperCase()}", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                          const Text("Order Details", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Color(0xFF1A1D25))),
+                          Text("#${order.id.toUpperCase()}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                         ],
                       ),
                       _statusChip(order.status),
@@ -639,11 +655,11 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                         isExpanded: true,
                         value: [
                           'Pending', 'Farmer Accepted', 'Processing', 'Picked Up', 
-                          'On the way', 'Arrived', 'Shipped', 'Delivered', 'Cancelled'
+                          'On the way', 'Arrived', 'Shipped', 'Delivered', 'Cancelled', 'Confirm Received'
                         ].contains(order.status) ? order.status : 'Pending',
                         items: [
                           'Pending', 'Farmer Accepted', 'Processing', 'Picked Up', 
-                          'On the way', 'Arrived', 'Shipped', 'Delivered', 'Cancelled'
+                          'On the way', 'Arrived', 'Shipped', 'Delivered', 'Cancelled', 'Confirm Received'
                         ].map((s) => DropdownMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)))).toList(),
                         onChanged: (val) {
                           if (val != null) {
@@ -689,6 +705,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
       case 'on the way':
       case 'arrived':
       case 'shipped': step = 2; break;
+      case 'confirm received':
       case 'delivered': step = 3; break;
       case 'cancelled': step = 0; labels[0] = 'Cancelled'; break;
     }
@@ -804,64 +821,145 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildUsersList(BuildContext context, AdminViewModel viewModel) {
-    return Column(
-      children: [
-        const Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Heading(title: "Users", subtitle: "All registered farmers, riders and customers"),
-        ),
-        Expanded(
-          child: StreamBuilder<List<UserModel>>(
-            stream: viewModel.getUsers(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
-              final users = snapshot.data!;
-
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                itemCount: users.length,
-                itemBuilder: (context, index) {
-                  final user = users[index];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: _getRoleColor(user.role).withValues(alpha: 0.1),
-                        child: Icon(_getRoleIcon(user.role), color: _getRoleColor(user.role), size: 20),
-                      ),
-                      title: Text(user.fullName ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text("${user.email} • ${user.role}", style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
-                      onTap: () => _showUserDetails(context, user),
-                    ),
-                  );
-                },
-              );
-            },
+  Widget _buildCategorizedUsersList(BuildContext context, AdminViewModel viewModel) {
+    return DefaultTabController(
+      length: 3,
+      child: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Heading(title: "Users", subtitle: "All registered members categorized by role"),
           ),
-        ),
-      ],
+          const TabBar(
+            labelColor: primaryTeal,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: primaryTeal,
+            tabs: [Tab(text: "Customers"), Tab(text: "Farmers"), Tab(text: "Riders")],
+          ),
+          Expanded(
+            child: StreamBuilder<List<UserModel>>(
+              stream: viewModel.getUsers(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
+                final users = snapshot.data!;
+                return TabBarView(
+                  children: [
+                    _buildUserSubList(context, users.where((u) => u.role?.toLowerCase() == 'customer').toList()),
+                    _buildUserSubList(context, users.where((u) => u.role?.toLowerCase() == 'farmer').toList()),
+                    _buildUserSubList(context, users.where((u) => u.role?.toLowerCase() == 'delivery person').toList()),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Color _getRoleColor(String? role) {
-    switch (role?.toLowerCase()) {
-      case 'farmer': return Colors.green;
-      case 'delivery person': return Colors.orange;
-      case 'admin': return Colors.red;
-      default: return Colors.blue;
-    }
+  Widget _buildUserSubList(BuildContext context, List<UserModel> users) {
+    if (users.isEmpty) return const Center(child: Text("No users in this category"));
+    return ListView.builder(
+      padding: const EdgeInsets.all(24),
+      itemCount: users.length,
+      itemBuilder: (context, index) {
+        final user = users[index];
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: _getRoleColor(user.role).withValues(alpha: 0.1),
+              child: Icon(_getRoleIcon(user.role), color: _getRoleColor(user.role), size: 20),
+            ),
+            title: Text(user.fullName ?? 'N/A', style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text("${user.email}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+            trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+            onTap: () => _showUserDetails(context, user),
+          ),
+        );
+      },
+    );
   }
 
-  IconData _getRoleIcon(String? role) {
-    switch (role?.toLowerCase()) {
-      case 'farmer': return Icons.agriculture_rounded;
-      case 'delivery person': return Icons.delivery_dining_rounded;
-      case 'admin': return Icons.admin_panel_settings_rounded;
-      default: return Icons.person_rounded;
-    }
+  Widget _buildCategorizedApprovalsList(BuildContext context, AdminViewModel viewModel) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Heading(title: "Approvals", subtitle: "Review pending products and rider verifications"),
+          ),
+          const TabBar(
+            labelColor: primaryTeal,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: primaryTeal,
+            tabs: [Tab(text: "Products"), Tab(text: "Riders")],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildProductApprovalsList(context, viewModel),
+                _buildRiderVerificationsList(context, viewModel),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRiderVerificationsList(BuildContext context, AdminViewModel viewModel) {
+    return StreamBuilder<List<UserModel>>(
+      stream: viewModel.getUsers(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
+        final pendingRiders = snapshot.data!.where((u) => u.role == 'Delivery Person').toList();
+        
+        // Use FutureBuilder to get actual document data for verification status
+        return ListView.builder(
+          padding: const EdgeInsets.all(24),
+          itemCount: pendingRiders.length,
+          itemBuilder: (context, index) {
+            final rider = pendingRiders[index];
+            return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance.collection('users').doc(rider.id).get(),
+              builder: (context, riderSnap) {
+                final data = riderSnap.data?.data() as Map<String, dynamic>?;
+                final status = data?['verificationStatus'] ?? 'unverified';
+                if (status != 'pending') return const SizedBox();
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: Colors.orange.withValues(alpha: 0.1),
+                        child: const Icon(Icons.person_search_rounded, color: Colors.orange, size: 20),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(rider.fullName ?? 'Rider', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            const Text("Pending Verification", style: TextStyle(color: Colors.orange, fontSize: 11, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                      TextButton(onPressed: () => _showUserDetails(context, rider), child: const Text("Review")),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildAnnouncementManager(BuildContext context, AdminViewModel viewModel) {
@@ -1141,99 +1239,89 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
   }
 
   Widget _buildProductApprovalsList(BuildContext context, AdminViewModel viewModel) {
-    return Column(
-      children: [
-        const Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Heading(title: "Product Verification", subtitle: "Review new catalog submissions"),
-        ),
-        Expanded(
-          child: StreamBuilder<List<Product>>(
-            stream: viewModel.getPendingProducts(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
-              final products = snapshot.data!;
-      
-              if (products.isEmpty) {
-                return const Center(child: Text("No pending product approvals"));
-              }
-      
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                itemCount: products.length,
-                itemBuilder: (context, index) {
-                  final product = products[index];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+    return StreamBuilder<List<Product>>(
+      stream: viewModel.getPendingProducts(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
+        final products = snapshot.data!;
+
+        if (products.isEmpty) {
+          return const Center(child: Text("No pending product approvals"));
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(24),
+          itemCount: products.length,
+          itemBuilder: (context, index) {
+            final product = products[index];
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: CachedNetworkImage(
+                          imageUrl: product.image,
+                          width: 80, height: 80, fit: BoxFit.cover,
+                          errorWidget: (context, url, error) => const Icon(Icons.image),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: CachedNetworkImage(
-                                imageUrl: product.image,
-                                width: 80, height: 80, fit: BoxFit.cover,
-                                errorWidget: (context, url, error) => const Icon(Icons.image),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(product.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-                                  Text("Farm: ${product.farmName ?? 'N/A'}", style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-                                  const SizedBox(height: 8),
-                                  Text("Rs. ${product.price} / ${product.unit}", style: const TextStyle(color: primaryTeal, fontWeight: FontWeight.w800)),
-                                ],
-                              ),
-                            ),
+                            Text(product.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                            Text("Farm: ${product.farmName ?? 'N/A'}", style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                            const SizedBox(height: 8),
+                            Text("Rs. ${product.price} / ${product.unit}", style: const TextStyle(color: primaryTeal, fontWeight: FontWeight.w800)),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        Text(product.description, style: TextStyle(fontSize: 13, color: Colors.grey.shade700), maxLines: 2, overflow: TextOverflow.ellipsis),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => viewModel.rejectProduct(product),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.redAccent,
-                                  side: const BorderSide(color: Colors.redAccent),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                ),
-                                child: const Text("Reject", style: TextStyle(fontWeight: FontWeight.w700)),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                onPressed: () => viewModel.approveProduct(product),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: primaryTeal,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                ),
-                                child: const Text("Approve", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-                              ),
-                            ),
-                          ],
-                        )
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-      ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(product.description, style: TextStyle(fontSize: 13, color: Colors.grey.shade700), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => viewModel.rejectProduct(product),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.redAccent,
+                            side: const BorderSide(color: Colors.redAccent),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text("Reject", style: TextStyle(fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => viewModel.approveProduct(product),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primaryTeal,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text("Approve", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                        ),
+                      ),
+                    ],
+                  )
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1309,61 +1397,101 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.8,
-        decoration: const BoxDecoration(color: backgroundColor, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(32),
-                children: [
-                  Center(
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 50,
-                          backgroundColor: _getRoleColor(user.role).withValues(alpha: 0.1),
-                          child: Icon(_getRoleIcon(user.role), size: 50, color: _getRoleColor(user.role)),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(user.fullName ?? 'Unnamed User', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-                        Text(user.role ?? 'Customer', style: TextStyle(color: _getRoleColor(user.role), fontWeight: FontWeight.w700, letterSpacing: 1.2)),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  _userInfoField("FULL NAME", user.fullName ?? 'N/A', Icons.person_outline_rounded),
-                  const SizedBox(height: 24),
-                  _userInfoField("EMAIL ADDRESS", user.email ?? 'No email', Icons.email_outlined),
-                  const SizedBox(height: 24),
-                  _userInfoField("PHONE NUMBER", user.phone ?? 'No phone', Icons.phone_outlined),
-                  const SizedBox(height: 24),
-                  _userInfoField("ADDRESS", user.address ?? 'No address', Icons.location_on_outlined),
-                  const SizedBox(height: 24),
-                  _userInfoField("ROLE", user.role ?? 'Customer', Icons.badge_outlined),
-                  const SizedBox(height: 32),
-                  if (user.lat != null && user.lng != null) ...[
-                    const FieldLabel(label: "SAVED LOCATION"),
-                    const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: SizedBox(
-                        height: 200,
-                        child: MapLibreMap(
-                          initialCameraPosition: CameraPosition(target: LatLng(user.lat!, user.lng!), zoom: 14),
-                          styleString: "https://tiles.openfreemap.org/styles/positron",
+      builder: (context) => FutureBuilder<DocumentSnapshot>(
+        future: FirebaseFirestore.instance.collection('users').doc(user.id).get(),
+        builder: (context, snapshot) {
+          final userData = snapshot.data?.data() as Map<String, dynamic>?;
+          
+          return Container(
+            height: MediaQuery.of(context).size.height * 0.8,
+            decoration: const BoxDecoration(color: backgroundColor, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+            child: Column(
+              children: [
+                const SizedBox(height: 12),
+                Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(32),
+                    children: [
+                      Center(
+                        child: Column(
+                          children: [
+                            CircleAvatar(
+                              radius: 50,
+                              backgroundColor: _getRoleColor(user.role).withValues(alpha: 0.1),
+                              child: Icon(_getRoleIcon(user.role), size: 50, color: _getRoleColor(user.role)),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(user.fullName ?? 'Unnamed User', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+                            Text(user.role ?? 'Customer', style: TextStyle(color: _getRoleColor(user.role), fontWeight: FontWeight.w700, letterSpacing: 1.2)),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
-                ],
-              ),
+                      const SizedBox(height: 40),
+                      _userInfoField("FULL NAME", user.fullName ?? 'N/A', Icons.person_outline_rounded),
+                      const SizedBox(height: 24),
+                      _userInfoField("EMAIL ADDRESS", user.email ?? 'No email', Icons.email_outlined),
+                      const SizedBox(height: 24),
+                      _userInfoField("PHONE NUMBER", user.phone ?? 'No phone', Icons.phone_outlined),
+                      const SizedBox(height: 24),
+                      _userInfoField("ADDRESS", user.address ?? 'No address', Icons.location_on_outlined),
+                      const SizedBox(height: 24),
+                      _userInfoField("ROLE", user.role ?? 'Customer', Icons.badge_outlined),
+                      const SizedBox(height: 32),
+                      if (user.role == 'Delivery Person' && (userData?['verificationStatus'] ?? 'unverified') == 'pending') ...[
+                        const FieldLabel(label: "VERIFICATION DOCUMENTS"),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            _docPreview("License", userData?['licenseFront']),
+                            const SizedBox(width: 12),
+                            _docPreview("Citizenship F", userData?['citizenshipFront']),
+                            const SizedBox(width: 12),
+                            _docPreview("Citizenship B", userData?['citizenshipBack']),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        GradientButton(
+                          label: "Approve Rider", 
+                          icon: Icons.verified_user_rounded, 
+                          isLoading: false, 
+                          teal: primaryTeal, blue: secondaryBlue, 
+                          onTap: () async {
+                            await FirebaseFirestore.instance.collection('users').doc(user.id).update({
+                              'verificationStatus': 'verified',
+                            });
+                            await FirebaseFirestore.instance.collection('users').doc(user.id).collection('notifications').add({
+                              'title': 'Account Verified!',
+                              'body': 'Congratulations! Your delivery partner account has been approved.',
+                              'createdAt': FieldValue.serverTimestamp(),
+                              'isRead': false,
+                            });
+                            if (context.mounted) Navigator.pop(context);
+                          }
+                        ),
+                        const SizedBox(height: 32),
+                      ],
+                      if (user.lat != null && user.lng != null) ...[
+                        const FieldLabel(label: "SAVED LOCATION"),
+                        const SizedBox(height: 12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(24),
+                          child: SizedBox(
+                            height: 200,
+                            child: MapLibreMap(
+                              initialCameraPosition: CameraPosition(target: LatLng(user.lat!, user.lng!), zoom: 14),
+                              styleString: "https://tiles.openfreemap.org/styles/positron",
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -1404,6 +1532,42 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
     );
   }
 
+  Color _getRoleColor(String? role) {
+    switch (role?.toLowerCase()) {
+      case 'farmer': return Colors.green;
+      case 'delivery person': return Colors.orange;
+      case 'admin': return Colors.red;
+      default: return Colors.blue;
+    }
+  }
+
+  IconData _getRoleIcon(String? role) {
+    switch (role?.toLowerCase()) {
+      case 'farmer': return Icons.agriculture_rounded;
+      case 'delivery person': return Icons.delivery_dining_rounded;
+      case 'admin': return Icons.admin_panel_settings_rounded;
+      default: return Icons.person_rounded;
+    }
+  }
+
+  Widget _docPreview(String label, String? url) {
+    return Expanded(
+      child: Column(
+        children: [
+          Container(
+            height: 80,
+            decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
+            child: url != null 
+              ? ClipRRect(borderRadius: BorderRadius.circular(12), child: CachedNetworkImage(imageUrl: url, fit: BoxFit.cover))
+              : const Icon(Icons.image_not_supported, color: Colors.grey, size: 20),
+          ),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(fontSize: 9, color: Colors.grey, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
   void _showSeedDatabaseDialog(BuildContext context, AdminViewModel viewModel) {
     List<String> selectedProducts = [];
     bool isSeeding = false;
@@ -1414,9 +1578,8 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
         builder: (context, setState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           title: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Seed Database", style: TextStyle(fontWeight: FontWeight.w800)),
+              const Expanded(child: Text("Seed Database", style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18))),
               TextButton(
                 onPressed: () {
                   setState(() {
@@ -1427,7 +1590,8 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                     }
                   });
                 },
-                child: Text(selectedProducts.length == nepalProductsList.length ? "Deselect All" : "Select All"),
+                child: Text(selectedProducts.length == nepalProductsList.length ? "Clear" : "All", 
+                           style: const TextStyle(fontSize: 12)),
               )
             ],
           ),

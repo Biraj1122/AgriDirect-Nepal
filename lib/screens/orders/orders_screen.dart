@@ -1,6 +1,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -720,19 +721,36 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                         ),
                         child: Row(
                           children: [
-                            const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.delivery_dining, color: Colors.white)),
+                            StreamBuilder<DocumentSnapshot>(
+                              stream: FirebaseFirestore.instance.collection('users').doc(deliveryId).snapshots(),
+                              builder: (context, snap) {
+                                final userData = snap.data?.data() as Map<String, dynamic>?;
+                                final url = userData?['profileImageUrl'];
+                                return CircleAvatar(
+                                  radius: 24,
+                                  backgroundColor: Colors.green.withValues(alpha: 0.1),
+                                  backgroundImage: (url != null && url.isNotEmpty) ? CachedNetworkImageProvider(url) : null,
+                                  child: (url == null || url.isEmpty) ? const Icon(Icons.delivery_dining, color: Colors.green) : null,
+                                );
+                              },
+                            ),
                             const SizedBox(width: 15),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text("Rider: $riderName", style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  Text(estimatedTime > 0 ? "$estimatedTime mins away" : "Arrived", style: const TextStyle(color: Colors.grey)),
+                                  Text("Rider: $riderName", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                                  const SizedBox(height: 2),
+                                  Text(estimatedTime > 0 ? "$estimatedTime mins away" : "Arrived", style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500)),
                                 ],
                               ),
                             ),
-                            IconButton(onPressed: _makeCall, icon: const Icon(Icons.phone, color: Colors.green)),
+                            IconButton(
+                              onPressed: _makeCall, 
+                              icon: const Icon(Icons.phone_in_talk_rounded, color: Colors.green),
+                              style: IconButton.styleFrom(backgroundColor: Colors.green.withValues(alpha: 0.1)),
+                            ),
                           ],
                         ),
                       ),

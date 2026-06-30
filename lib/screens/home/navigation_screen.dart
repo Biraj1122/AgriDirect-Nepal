@@ -8,10 +8,11 @@ import 'package:farmtech_agridirect/screens/shop/categories_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/orders_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/profile_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/my_favourites.dart';
-import 'package:farmtech_agridirect/screens/misc/farmer_screen.dart';
-import 'package:farmtech_agridirect/screens/delivery_person_screen.dart';
-import 'package:farmtech_agridirect/screens/admin_page.dart';
-import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
+import '../profile/edit_profile_screen.dart';
+import '../misc/farmer_screen.dart';
+import '../delivery_person_screen.dart';
+import '../admin_page.dart';
+import '../auth/login_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String userName;
@@ -87,6 +88,20 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
       if (mounted) {
         if (role != 'Customer' && role != null && role != 'Admin') {
+          // Mandatory Profile Photo Check for Partners
+          final profileImg = doc.data()?['profileImageUrl'];
+          if (profileImg == null || profileImg.toString().isEmpty) {
+            Navigator.pushReplacement(
+              context, 
+              MaterialPageRoute(builder: (_) => EditProfileScreen(
+                currentName: doc.data()?['fullName'] ?? user.displayName ?? "Partner",
+                currentPhone: doc.data()?['phone'] ?? "Not set",
+                mandatoryPhoto: true,
+              ))
+            );
+            return;
+          }
+
           Widget target;
           if (role == 'Farmer') {
             target = const FarmerScreen();
