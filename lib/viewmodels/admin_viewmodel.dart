@@ -127,8 +127,8 @@ class AdminViewModel extends ChangeNotifier {
     await _repository.sendGlobalNotification(title, body);
   }
 
-  Future<void> seedDatabase() async {
-    await _repository.seedDatabase();
+  Future<void> seedDatabase({List<String>? selectedProductNames}) async {
+    await _repository.seedDatabase(selectedProductNames: selectedProductNames);
   }
 
   void logout(BuildContext context, Widget loginScreen) {

@@ -210,6 +210,34 @@ class _NavigationScreenState extends State<NavigationScreen> {
     setState(() {
       currentIndex = index;
     });
+    // Clear notifications if Home (index 0), Orders (index 3) or Profile (index 4) is tapped
+    if (index == 0 || index == 3 || index == 4) {
+      _markNotificationsAsRead();
+    }
+  }
+
+  Future<void> _markNotificationsAsRead() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('notifications')
+          .where('isRead', isEqualTo: false)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (var doc in query.docs) {
+          batch.update(doc.reference, {'isRead': true});
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint("Error marking notifications as read: $e");
+    }
   }
 
   @override
@@ -321,6 +349,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   Widget navItem(IconData icon, String label, int index) {
     final bool isSelected = currentIndex == index;
+    final user = FirebaseAuth.instance.currentUser;
 
     return GestureDetector(
       onTap: () => changeTab(index),
@@ -336,10 +365,46 @@ class _NavigationScreenState extends State<NavigationScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 24,
-              color: isSelected ? primaryTeal : Colors.grey.shade400,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  icon,
+                  size: 24,
+                  color: isSelected ? primaryTeal : Colors.grey.shade400,
+                ),
+                if (!isSelected && (index == 0 || index == 3 || index == 4) && user != null)
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .collection('notifications')
+                        .where('isRead', isEqualTo: false)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                        return Positioned(
+                          right: -4,
+                          top: -4,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                            child: Text(
+                              "${snapshot.data!.docs.length}",
+                              style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+                      return const SizedBox();
+                    },
+                  ),
+              ],
             ),
             if (isSelected) ...[
               const SizedBox(height: 4),

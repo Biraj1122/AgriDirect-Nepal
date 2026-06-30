@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 /// Seeds the database with Nepal products and categories.
 /// Returns a map with success and error counts.
-Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<String>? selectedSeasons}) async {
+Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<String>? selectedSeasons, List<String>? selectedProductNames}) async {
   int productSuccess = 0;
   int productError = 0;
   int categorySuccess = 0;
@@ -18,9 +18,10 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
     debugPrint("Seeding Failed: No authenticated user found.");
     throw Exception("Authentication required. Please sign in again.");
   }
-  debugPrint("Authenticated as: ${user.email} (UID: ${user.uid})");
+  debugPrint("Authenticated as: ${user.email} (UID: ${user.uid})")  };
+}
 
-  final List<Map<String, dynamic>> nepalProducts = [
+final List<Map<String, dynamic>> nepalProductsList = [
     // --- VEGETABLES ---
     {
       "title": "Local Adhuwa (Ginger)",
@@ -695,13 +696,14 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
   final CollectionReference products = FirebaseFirestore.instance.collection('master_catalog');
   debugPrint("Beginning catalog seeding. Target products: ${nepalProducts.length}");
 
-  final CollectionReference liveProducts = FirebaseFirestore.instance.collection('products');
+  final List<Map<String, dynamic>> liveProductsCol = []; // Helper for batching if needed
 
   for (var product in nepalProducts) {
+    bool nameMatch = selectedProductNames == null || selectedProductNames.contains(product['name']);
     bool catMatch = selectedCategories == null || selectedCategories.contains(product['category']);
     bool seasonMatch = selectedSeasons == null || selectedSeasons.contains(product['season']) || product['season'] == 'All Year';
 
-    if (catMatch && seasonMatch) {
+    if (nameMatch && (selectedProductNames != null || (catMatch && seasonMatch))) {
       try {
         product['addedAt'] = FieldValue.serverTimestamp();
         product['updatedAt'] = FieldValue.serverTimestamp();
@@ -717,7 +719,7 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
 
         Map<String, dynamic> liveProduct = Map.from(product);
         liveProduct['isSample'] = true;
-        await liveProducts.doc(docId).set(liveProduct, SetOptions(merge: true));
+        await FirebaseFirestore.instance.collection('products').doc(docId).set(liveProduct, SetOptions(merge: true));
         
         productSuccess++;
         debugPrint("✓ Seeded Product: ${product['name']}");
