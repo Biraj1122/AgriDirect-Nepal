@@ -244,6 +244,12 @@ class _FarmerScreenState extends State<FarmerScreen> {
         farmerLat: _farmerData?['farmLat'],
         farmerLng: _farmerData?['farmLng'],
       ),
+      _CatalogTab(
+        uid: uid,
+        farmName: farmName,
+        farmerLat: _farmerData?['farmLat'],
+        farmerLng: _farmerData?['farmLng'],
+      ),
       _ProductsTab(
         uid: uid,
         farmName: farmName,
@@ -286,10 +292,125 @@ class _FarmerScreenState extends State<FarmerScreen> {
             ),
             label: 'Home',
           ),
+          const BottomNavigationBarItem(icon: Icon(Icons.apps_rounded), label: 'Catalog'),
           const BottomNavigationBarItem(icon: Icon(Icons.storefront_rounded), label: 'My Store'),
           const BottomNavigationBarItem(icon: Icon(Icons.local_shipping_rounded), label: 'Orders'),
           const BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
         ],
+      ),
+    );
+  }
+}
+
+class _CatalogTab extends StatefulWidget {
+  final String uid, farmName;
+  final double? farmerLat, farmerLng;
+  const _CatalogTab({required this.uid, required this.farmName, this.farmerLat, this.farmerLng});
+
+  @override
+  State<_CatalogTab> createState() => _CatalogTabState();
+}
+
+class _CatalogTabState extends State<_CatalogTab> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(24.0),
+          child: Heading(title: "Global Catalog", subtitle: "Pick items you grow to list them in your store"),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (v) => setState(() => _searchQuery = v),
+            decoration: customInputDecoration(hint: "Search global catalog...", icon: Icons.search, teal: _FarmerScreenState.primaryTeal),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('master_catalog').snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: _FarmerScreenState.primaryTeal));
+              final docs = snapshot.data!.docs.where((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                final name = (data['name'] ?? '').toString().toLowerCase();
+                return name.contains(_searchQuery.toLowerCase());
+              }).toList();
+
+              if (docs.isEmpty) {
+                return const Center(child: Text("No items found in catalog"));
+              }
+
+              return GridView.builder(
+                padding: const EdgeInsets.all(24),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 0.8,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                ),
+                itemCount: docs.length,
+                itemBuilder: (context, i) {
+                  final data = docs[i].data() as Map<String, dynamic>;
+                  return GestureDetector(
+                    onTap: () => _showPickDialog(data),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10)],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                              child: SafeProductImage(imageUrl: data['image'] ?? '', width: double.infinity, fit: BoxFit.cover),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(data['name'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                Text(data['category'] ?? 'General', style: TextStyle(color: Colors.grey.shade500, fontSize: 11)),
+                                const SizedBox(height: 4),
+                                Text("Suggested: Rs. ${data['price']}/${data['unit']}", style: const TextStyle(color: _FarmerScreenState.primaryTeal, fontWeight: FontWeight.w700, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showPickDialog(Map<String, dynamic> catalogData) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ProductForm(
+        uid: widget.uid,
+        farmName: widget.farmName,
+        farmerLat: widget.farmerLat,
+        farmerLng: widget.farmerLng,
+        prefillData: catalogData,
       ),
     );
   }
@@ -701,6 +822,69 @@ class _ProductsTabState extends State<_ProductsTab> {
     );
   }
 
+  void _showEditPrice(String productId, String name, double currentPrice, String unit) {
+    final priceController = TextEditingController(text: currentPrice.toString());
+    final unitController = TextEditingController(text: unit);
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Text("Update Price: $name"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: priceController,
+                keyboardType: TextInputType.number,
+                decoration: customInputDecoration(hint: "New Price", icon: Icons.payments, teal: _FarmerScreenState.primaryTeal),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: unitController,
+                decoration: customInputDecoration(hint: "Unit (e.g. kg)", icon: Icons.scale, teal: _FarmerScreenState.primaryTeal),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: isSubmitting ? null : () async {
+                setDialogState(() => isSubmitting = true);
+                try {
+                  await FirebaseFirestore.instance.collection('price_requests').add({
+                    'productId': productId,
+                    'productName': name,
+                    'farmerUid': widget.uid,
+                    'farmName': widget.farmName,
+                    'oldPrice': currentPrice,
+                    'newPrice': double.parse(priceController.text),
+                    'oldUnit': unit,
+                    'newUnit': unitController.text,
+                    'status': 'pending',
+                    'createdAt': FieldValue.serverTimestamp(),
+                  });
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Price update request sent to Admin")));
+                  }
+                } catch (e) {
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+                } finally {
+                  setDialogState(() => isSubmitting = false);
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: _FarmerScreenState.primaryTeal),
+              child: isSubmitting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text("Request Update", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -714,7 +898,7 @@ class _ProductsTabState extends State<_ProductsTab> {
         children: [
           const Padding(
             padding: EdgeInsets.all(24.0),
-            child: Heading(title: "My Products", subtitle: "Manage your farm products for sale"),
+            child: Heading(title: "My Store", subtitle: "Manage your farm products for sale"),
           ),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
@@ -730,7 +914,7 @@ class _ProductsTabState extends State<_ProductsTab> {
                       children: [
                         Icon(Icons.storefront_rounded, size: 64, color: Colors.grey.shade300),
                         const SizedBox(height: 16),
-                        const Text("No products yet", style: TextStyle(color: Colors.grey)),
+                        const Text("No products yet in your store", style: TextStyle(color: Colors.grey)),
                       ],
                     ),
                   );
@@ -741,25 +925,55 @@ class _ProductsTabState extends State<_ProductsTab> {
                   itemCount: docs.length,
                   itemBuilder: (context, i) {
                     final data = docs[i].data() as Map<String, dynamic>;
+                    final status = data['status'] ?? 'pending';
+                    final price = (data['price'] as num?)?.toDouble() ?? 0.0;
+                    final unit = data['unit'] ?? 'kg';
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade100)),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.all(12),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: CachedNetworkImage(
-                            imageUrl: data['image'] ?? '',
-                            width: 60, height: 60, fit: BoxFit.cover,
-                            errorWidget: (context, url, error) => const Icon(Icons.eco_rounded, color: Color(0xFF1D9E75)),
+                      child: Column(
+                        children: [
+                          ListTile(
+                            contentPadding: const EdgeInsets.all(12),
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: SafeProductImage(
+                                imageUrl: data['image'] ?? '',
+                                width: 60, height: 60, fit: BoxFit.cover,
+                              ),
+                            ),
+                            title: Row(
+                              children: [
+                                Expanded(child: Text(data['name'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.w700))),
+                                StatusBadge(status: status),
+                              ],
+                            ),
+                            subtitle: Text("Rs. $price / $unit"),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+                              onPressed: () => FirebaseFirestore.instance.collection('products').doc(docs[i].id).delete(),
+                            ),
                           ),
-                        ),
-                        title: Text(data['name'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.w700)),
-                        subtitle: Text("Rs. ${data['price']} / ${data['unit']}"),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                          onPressed: () => FirebaseFirestore.instance.collection('products').doc(docs[i].id).delete(),
-                        ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => _showEditPrice(docs[i].id, data['name'], price, unit),
+                                    icon: const Icon(Icons.edit_rounded, size: 16),
+                                    label: const Text("Update Price", style: TextStyle(fontSize: 12)),
+                                    style: OutlinedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        ],
                       ),
                     );
                   },
@@ -776,19 +990,41 @@ class _ProductsTabState extends State<_ProductsTab> {
 class _ProductForm extends StatefulWidget {
   final String uid, farmName;
   final double? farmerLat, farmerLng;
+  final Map<String, dynamic>? prefillData;
 
-  const _ProductForm({required this.uid, required this.farmName, this.farmerLat, this.farmerLng});
+  const _ProductForm({required this.uid, required this.farmName, this.farmerLat, this.farmerLng, this.prefillData});
 
   @override
   State<_ProductForm> createState() => _ProductFormState();
 }
 
 class _ProductFormState extends State<_ProductForm> {
-  final name = TextEditingController();
-  final price = TextEditingController();
-  final unit = TextEditingController(text: 'kg');
+  late final TextEditingController name;
+  late final TextEditingController price;
+  late final TextEditingController unit;
+  late final TextEditingController description;
   XFile? selectedImage;
+  String? prefilledImageUrl;
   bool isUploading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    name = TextEditingController(text: widget.prefillData?['name'] ?? '');
+    price = TextEditingController(text: widget.prefillData?['price']?.toString() ?? '');
+    unit = TextEditingController(text: widget.prefillData?['unit'] ?? 'kg');
+    description = TextEditingController(text: widget.prefillData?['description'] ?? '');
+    prefilledImageUrl = widget.prefillData?['image'] ?? widget.prefillData?['imageUrl'];
+  }
+
+  @override
+  void dispose() {
+    name.dispose();
+    price.dispose();
+    unit.dispose();
+    description.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -800,11 +1036,14 @@ class _ProductFormState extends State<_ProductForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Heading(title: "Add New Product", subtitle: "List your fresh produce on the market"),
+            Heading(
+              title: widget.prefillData != null ? "Pick from Catalog" : "Add Custom Product", 
+              subtitle: widget.prefillData != null ? "Set your own price and stock for this item" : "List your unique produce on the market"
+            ),
             const SizedBox(height: 24),
             Center(
               child: GestureDetector(
-                onTap: () async {
+                onTap: widget.prefillData != null ? null : () async {
                   final img = await ImagePicker().pickImage(source: ImageSource.gallery);
                   if (img != null) setState(() => selectedImage = img);
                 },
@@ -813,14 +1052,20 @@ class _ProductFormState extends State<_ProductForm> {
                   decoration: BoxDecoration(color: const Color(0xFFF4F6F8), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade200)),
                   child: selectedImage != null
                       ? ClipRRect(borderRadius: BorderRadius.circular(24), child: Image.file(File(selectedImage!.path), fit: BoxFit.cover))
-                      : const Icon(Icons.add_a_photo_rounded, color: Colors.grey, size: 32),
+                      : (prefilledImageUrl != null)
+                        ? ClipRRect(borderRadius: BorderRadius.circular(24), child: SafeProductImage(imageUrl: prefilledImageUrl!, fit: BoxFit.cover))
+                        : const Icon(Icons.add_a_photo_rounded, color: Colors.grey, size: 32),
                 ),
               ),
             ),
             const SizedBox(height: 24),
             const FieldLabel(label: "PRODUCT NAME"),
             const SizedBox(height: 8),
-            TextField(controller: name, decoration: customInputDecoration(hint: "e.g. Fresh Tomatoes", icon: Icons.eco, teal: const Color(0xFF1D9E75))),
+            TextField(
+              controller: name, 
+              enabled: widget.prefillData == null,
+              decoration: customInputDecoration(hint: "e.g. Fresh Tomatoes", icon: Icons.eco, teal: const Color(0xFF1D9E75))
+            ),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -828,7 +1073,7 @@ class _ProductFormState extends State<_ProductForm> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const FieldLabel(label: "PRICE"),
+                      const FieldLabel(label: "PRICE (RS)"),
                       const SizedBox(height: 8),
                       TextField(controller: price, keyboardType: TextInputType.number, decoration: customInputDecoration(hint: "0.00", icon: Icons.payments, teal: const Color(0xFF1D9E75))),
                     ],
@@ -847,9 +1092,13 @@ class _ProductFormState extends State<_ProductForm> {
                 ),
               ],
             ),
+            const SizedBox(height: 20),
+            const FieldLabel(label: "SHORT DESCRIPTION"),
+            const SizedBox(height: 8),
+            TextField(controller: description, decoration: customInputDecoration(hint: "A brief note about quality...", icon: Icons.description, teal: const Color(0xFF1D9E75))),
             const SizedBox(height: 32),
             GradientButton(
-              label: "List Product", 
+              label: widget.prefillData != null ? "Add to My Store" : "List Product", 
               icon: Icons.check_rounded, 
               isLoading: isUploading, 
               teal: const Color(0xFF1D9E75), blue: const Color(0xFF2E5BFF), 
@@ -863,16 +1112,25 @@ class _ProductFormState extends State<_ProductForm> {
   }
 
   Future<void> _submit() async {
-    if (name.text.isEmpty || price.text.isEmpty || selectedImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("All fields are required")));
+    if (name.text.isEmpty || price.text.isEmpty || (selectedImage == null && prefilledImageUrl == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Name, Price and Image are required")));
       return;
     }
 
     setState(() => isUploading = true);
     try {
-      final storageService = StorageService();
-      final imageUrl = await storageService.uploadImage(selectedImage!, 'products');
-      if (imageUrl == null) throw "Upload failed";
+      String? imageUrl = prefilledImageUrl;
+      
+      if (selectedImage != null) {
+        final storageService = StorageService();
+        imageUrl = await storageService.uploadImage(selectedImage!, 'products');
+      }
+      
+      if (imageUrl == null) throw "Image processing failed";
+
+      // If picked from catalog, it's approved by default (standard item)
+      // If custom added, it's pending Admin approval
+      final String initialStatus = widget.prefillData != null ? 'approved' : 'pending';
 
       await FirebaseFirestore.instance.collection('products').add({
         'name': name.text,
@@ -883,8 +1141,12 @@ class _ProductFormState extends State<_ProductForm> {
         'farmerLat': widget.farmerLat,
         'farmerLng': widget.farmerLng,
         'unit': unit.text,
+        'description': description.text,
+        'longDescription': description.text,
+        'category': widget.prefillData?['category'] ?? 'General',
         'image': imageUrl,
-        'status': 'approved',
+        'imageUrl': imageUrl,
+        'status': initialStatus,
         'createdAt': FieldValue.serverTimestamp(),
       });
       if (mounted) Navigator.pop(context);

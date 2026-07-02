@@ -51,10 +51,16 @@ class Product {
 
   factory Product.fromMap(Map<String, dynamic> map, {String? docId}) {
     // Prefer s3Url, then imageUrl, then image, then imagePath
-    String imageVal = map['s3Url'] ?? map['imageUrl'] ?? map['image'] ?? map['imagePath'] ?? '';
+    String imageVal = map['imageUrl'] ?? map['image'] ?? map['s3Url'] ?? map['imagePath'] ?? '';
     
-    // If the image is just a key/filename, get the full AWS URL
-    if (imageVal.isNotEmpty && !imageVal.startsWith('http') && !imageVal.startsWith('assets/') && !imageVal.startsWith('data:image')) {
+    // If the image is just a key/filename and NOT a network URL, get the full AWS URL if possible
+    if (imageVal.isNotEmpty && 
+        !imageVal.startsWith('http') && 
+        !imageVal.startsWith('assets/') && 
+        !imageVal.startsWith('data:image')) {
+      // Fallback check: if it contains a dot but no slash, it might be an asset name we now want to handle as network if seeded
+      // For now, let's trust the seeder gives full URLs. 
+      // But for backward compatibility with AWS:
       imageVal = AWSConfig.getImageUrl(imageVal);
     }
     
