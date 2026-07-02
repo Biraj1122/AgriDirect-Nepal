@@ -11,6 +11,7 @@ import '../profile/edit_profile_screen.dart';
 import 'farmer_screen.dart';
 import '../delivery_person_screen.dart';
 import '../admin_page.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -24,13 +25,15 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   late Animation<double> _logoScale;
   late Animation<double> _logoOpacity;
   late Animation<Offset> _logoSlide;
-  late Animation<double> _textOpacity;
-  late Animation<double> _subtitleOpacity;
   
   bool _isNavigated = false;
   String? _errorMessage;
   bool _showSkipButton = false;
   Timer? _skipTimer;
+  
+  String _appVersion = "";
+  String _userRole = "Default";
+  String _loadingMessage = "Initializing app...";
 
   @override
   void initState() {
@@ -62,20 +65,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       ),
     );
 
-    _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _mainController,
-        curve: const Interval(0.4, 0.8, curve: Curves.easeIn),
-      ),
-    );
-
-    _subtitleOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _mainController,
-        curve: const Interval(0.6, 1.0, curve: Curves.easeIn),
-      ),
-    );
-
     _mainController.forward();
     
     _skipTimer = Timer(const Duration(seconds: 8), () {
@@ -92,13 +81,37 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   Future<void> _initApp() async {
     final stopwatch = Stopwatch()..start();
     try {
+      setState(() => _loadingMessage = "Getting version info...");
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (mounted) setState(() => _appVersion = packageInfo.version);
+
+      setState(() => _loadingMessage = "Connecting to Firebase...");
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
         ).timeout(const Duration(seconds: 15));
       }
 
+      setState(() => _loadingMessage = "Loading user data...");
       await UserData.init();
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        setState(() => _loadingMessage = "Securing session...");
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get()
+            .timeout(const Duration(seconds: 5));
+
+        if (doc.exists && mounted) {
+          final role = doc.data()?['role'] ?? 'Customer';
+          setState(() {
+            _userRole = role;
+            _loadingMessage = "Welcome back, $role!";
+          });
+        }
+      }
       
       final int elapsed = stopwatch.elapsedMilliseconds;
       final int remaining = 2500 - elapsed;
@@ -202,6 +215,53 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     final size = MediaQuery.sizeOf(context);
     final isLargeScreen = size.height > 800;
 
+    // Define Role-Based Themes
+    List<Color> gradientColors;
+    IconData decorativeIcon;
+    String roleMessage;
+
+    switch (_userRole) {
+      case 'Farmer':
+        gradientColors = [
+          Colors.brown.shade900,
+          Colors.brown.shade700,
+          Colors.green.shade800,
+          Colors.green.shade600,
+        ];
+        decorativeIcon = Icons.agriculture_rounded;
+        roleMessage = "Your digital farm hub";
+        break;
+      case 'Delivery Person':
+        gradientColors = [
+          Colors.orange.shade900,
+          Colors.deepOrange.shade700,
+          Colors.blue.shade900,
+          Colors.blue.shade700,
+        ];
+        decorativeIcon = Icons.local_shipping_outlined;
+        roleMessage = "Ready for the next delivery?";
+        break;
+      case 'Admin':
+        gradientColors = [
+          Colors.blueGrey.shade900,
+          Colors.blueGrey.shade700,
+          Colors.teal.shade800,
+          Colors.teal.shade600,
+        ];
+        decorativeIcon = Icons.admin_panel_settings_outlined;
+        roleMessage = "System Overview Control";
+        break;
+      default: // Customer or Guest
+        gradientColors = [
+          Colors.green.shade900,
+          Colors.green.shade700,
+          Colors.green.shade500,
+          Colors.lightGreen.shade400,
+        ];
+        decorativeIcon = Icons.eco;
+        roleMessage = "Fresh from farm to your home";
+    }
+
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -210,12 +270,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Colors.green.shade900,
-              Colors.green.shade700,
-              Colors.green.shade500,
-              Colors.lightGreen.shade400,
-            ],
+            colors: gradientColors,
             stops: const [0.0, 0.3, 0.7, 1.0],
           ),
         ),
@@ -226,121 +281,146 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
               right: -50,
               child: Opacity(
                 opacity: 0.1,
-                child: Icon(Icons.eco, size: isLargeScreen ? 300 : 200, color: Colors.white),
+                child: Icon(decorativeIcon, size: isLargeScreen ? 300 : 200, color: Colors.white),
               ),
             ),
             
             SafeArea(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SlideTransition(
-                      position: _logoSlide,
-                      child: ScaleTransition(
-                        scale: _logoScale,
-                        child: FadeTransition(
-                          opacity: _logoOpacity,
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black12,
-                                  blurRadius: 30,
-                                  spreadRadius: 2,
+              child: Column(
+                children: [
+                  const Spacer(),
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SlideTransition(
+                          position: _logoSlide,
+                          child: ScaleTransition(
+                            scale: _logoScale,
+                            child: FadeTransition(
+                              opacity: _logoOpacity,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black12,
+                                      blurRadius: 40,
+                                      spreadRadius: 4,
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            child: Hero(
-                              tag: 'app_logo',
-                              child: Image.asset(
-                                "assets/images/logo_full.png",
-                                height: 120,
-                                width: 120,
-                                fit: BoxFit.contain,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(Icons.eco, size: 80, color: Colors.green),
+                                child: Hero(
+                                  tag: 'app_logo',
+                                  child: Image.asset(
+                                    "assets/images/logo_full.png",
+                                    height: 180,
+                                    width: 180,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        const Icon(Icons.eco, size: 120, color: Colors.green),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
+                        const SizedBox(height: 30),
+                        
+                        // Main App Title (Consistent)
+                        const Text(
+                          "AgriDirect Nepal",
+                          style: TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 8),
+                        
+                        // Dynamic Role-Based Message
+                        Text(
+                          roleMessage,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.white70,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 50),
+                        
+                        if (_errorMessage == null) ...[
+                          Column(
+                            children: [
+                              const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  valueColor: AlwaysStoppedAnimation(Colors.white),
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Text(
+                                _loadingMessage,
+                                style: const TextStyle(color: Colors.white60, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                          if (_showSkipButton)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 20),
+                              child: TextButton(
+                                onPressed: _navigateToLogin,
+                                child: const Text(
+                                  "Continue to Login",
+                                  style: TextStyle(color: Colors.white70, decoration: TextDecoration.underline),
+                                ),
+                              ),
+                            ),
+                        ] else
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 40),
+                            child: Column(
+                              children: [
+                                Text(
+                                  "Startup Issue: $_errorMessage",
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                ),
+                                const SizedBox(height: 20),
+                                ElevatedButton(
+                                  onPressed: () {
+                                    setState(() {
+                                      _errorMessage = null;
+                                      _userRole = "Default";
+                                    });
+                                    _initApp();
+                                  },
+                                  child: const Text("Retry"),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
-                    const SizedBox(height: 30),
-                    
-                    FadeTransition(
-                      opacity: _textOpacity,
-                      child: const Column(
-                        children: [
-                          Text(
-                            "Farmtech",
-                            style: TextStyle(
-                              fontSize: 48,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          Text(
-                            "AgriDirect Nepal",
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.white70,
-                              letterSpacing: 1.2,
-                            ),
-                          ),
-                        ],
-                      ),
+                  ),
+                  const Spacer(),
+                  
+                  // App Version at Bottom
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 20),
+                    child: Text(
+                      "Version $_appVersion",
+                      style: const TextStyle(color: Colors.white30, fontSize: 12),
                     ),
-                    
-                    const SizedBox(height: 60),
-                    
-                    if (_errorMessage == null) ...[
-                      const SizedBox(
-                        width: 30,
-                        height: 30,
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation(Colors.white),
-                          strokeWidth: 2,
-                        ),
-                      ),
-                      if (_showSkipButton)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 30),
-                          child: TextButton(
-                            onPressed: _navigateToLogin,
-                            child: const Text(
-                              "Continue to Login",
-                              style: TextStyle(color: Colors.white70, decoration: TextDecoration.underline),
-                            ),
-                          ),
-                        ),
-                    ] else
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 40),
-                        child: Column(
-                          children: [
-                            Text(
-                              "Startup Issue: $_errorMessage",
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white70, fontSize: 13),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton(
-                              onPressed: () {
-                                setState(() => _errorMessage = null);
-                                _initApp();
-                              },
-                              child: const Text("Retry"),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],

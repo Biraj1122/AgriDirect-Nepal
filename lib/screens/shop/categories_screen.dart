@@ -72,6 +72,19 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           };
         }).toList();
 
+        // Sort categories: Vegetables first, then Fruits, then others
+        fetched.sort((a, b) {
+          final nameA = a['name'].toString().toLowerCase();
+          final nameB = b['name'].toString().toLowerCase();
+          
+          if (nameA == 'vegetables') return -1;
+          if (nameB == 'vegetables') return 1;
+          if (nameA == 'fruits') return -1;
+          if (nameB == 'fruits') return 1;
+          
+          return nameA.compareTo(nameB);
+        });
+
         if (mounted) {
           setState(() {
             _categories = [{'name': 'All', 'icon': Icons.apps_rounded}, ...fetched];
