@@ -13,6 +13,8 @@ import 'package:farmtech_agridirect/screens/profile/my_addresses_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/order_history_screen.dart';
 import 'package:farmtech_agridirect/screens/misc/farm_osm_screen.dart';
 import 'package:farmtech_agridirect/models/user_data.dart';
+import 'package:farmtech_agridirect/viewmodels/theme_viewmodel.dart';
+import 'package:provider/provider.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userName;
@@ -265,6 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 24),
                     _buildSectionHeader("Personalization"),
                     _buildMenuCard([
+                      _buildThemeToggle(context),
                       _buildMenuItem(
                         icon: Icons.favorite_border,
                         title: "My Favorites",
@@ -537,6 +540,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThemeToggle(BuildContext context) {
+    final themeViewModel = context.watch<ThemeViewModel>();
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => themeViewModel.toggleTheme(),
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  themeViewModel.isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                  color: Colors.green,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  "Dark Mode",
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Switch.adaptive(
+                value: themeViewModel.isDarkMode,
+                onChanged: (_) => themeViewModel.toggleTheme(),
+                activeColor: Colors.green,
+              ),
+            ],
+          ),
         ),
       ),
     );

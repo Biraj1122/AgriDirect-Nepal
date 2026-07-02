@@ -11,6 +11,10 @@ import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/services/storage_service.dart';
 import 'package:farmtech_agridirect/Success/shared_widgets.dart';
 import 'package:farmtech_agridirect/screens/misc/farm_osm_screen.dart';
+import 'package:farmtech_agridirect/viewmodels/theme_viewmodel.dart';
+import 'package:provider/provider.dart';
+
+import '../delivery_person_screen.dart';
 
 class FarmerScreen extends StatefulWidget {
   const FarmerScreen({super.key});
@@ -449,7 +453,29 @@ class _ProfileTabState extends State<_ProfileTab> {
                   ],
                 ),
               ),
+              const SizedBox(height: 32),
+              const FieldLabel(label: "APP SETTINGS"),
               const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+                child: Consumer<ThemeViewModel>(
+                  builder: (context, themeVM, _) => ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                      child: Icon(themeVM.isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined, color: Colors.amber),
+                    ),
+                    title: const Text("Dark Mode", style: TextStyle(fontWeight: FontWeight.w600)),
+                    trailing: Switch.adaptive(
+                      value: themeVM.isDarkMode,
+                      onChanged: (_) => themeVM.toggleTheme(),
+                      activeColor: primaryTeal,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 40),
               _profileItem(Icons.map_rounded, "Update Farm Location", onTap: _updateFarmLocation),
               const SizedBox(height: 24),
               const FieldLabel(label: "SECURITY"),
