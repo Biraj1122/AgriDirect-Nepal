@@ -489,6 +489,7 @@ class _HomeScreenState extends State<HomeScreen> {
             return ListView(
               scrollDirection: Axis.horizontal,
               children: [
+                categoryItem(Icons.grid_view_rounded, "All"),
                 categoryItem(Icons.eco_outlined, "Vegetables"),
                 categoryItem(Icons.apple_outlined, "Fruits"),
                 categoryItem(Icons.grain, "Grains"),
@@ -498,18 +499,33 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
 
+          final fetched = snapshot.data!.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return data['name'] ?? 'Category';
+          }).toList();
+
+          // Sort categories: Vegetables first, then Fruits, then others
+          fetched.sort((a, b) {
+            final nameA = a.toString().toLowerCase();
+            final nameB = b.toString().toLowerCase();
+            
+            if (nameA == 'vegetables') return -1;
+            if (nameB == 'vegetables') return 1;
+            if (nameA == 'fruits') return -1;
+            if (nameB == 'fruits') return 1;
+            
+            return nameA.compareTo(nameB);
+          });
+
+          final displayCategories = ["All", ...fetched];
+
           return ListView.builder(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: snapshot.data!.docs.length,
+            itemCount: displayCategories.length,
             itemBuilder: (context, index) {
-              final cat = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-              final name = cat['name'] ?? 'Category';
-              
-              // Use category name to determine icon since dynamic IconData(code) 
-              // is often restricted by icon tree-shaking lints.
+              final name = displayCategories[index];
               final displayIcon = _getCategoryIcon(name);
-
               return categoryItem(displayIcon, name);
             },
           );
@@ -520,6 +536,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   IconData _getCategoryIcon(String name) {
     switch (name.toLowerCase()) {
+      case 'all': return Icons.grid_view_rounded;
       case 'vegetables': return Icons.eco_outlined;
       case 'fruits': return Icons.apple_outlined;
       case 'grains': return Icons.grain;

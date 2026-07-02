@@ -1,17 +1,47 @@
 # farmtech_agridirect
 
-Farmer's go to Marketplace
+Farmer-to-Consumer Marketplace Application
+
+## Overview
+
+FarmTech-AgriDirect is a mobile application developed using Flutter to connect farmers directly with consumers. The platform aims to eliminate intermediaries in the agricultural supply chain, enabling fair pricing for farmers and fresh, transparent access to products for customers.
+
+## Features
+
+- User authentication (Login and Signup)
+- Product listing system for agricultural goods
+- Shopping cart functionality
+- Product detail view
+- Clean and responsive user interface
+- Navigation between multiple screens
+
+## Purpose
+
+The main purpose of this project is to provide a direct marketplace system for agricultural products, improving transparency, reducing dependency on middlemen, and supporting local farmers through digital transformation.
+
+## Tech Stack
+
+- Flutter
+- Dart
+- Firebase (if applicable)
+- Android Studio
+- Git & GitHub for version control
 
 ## Getting Started
 
 This project is a starting point for a Flutter application.
 
-A few resources to get you started if this is your first Flutter project:
+### Prerequisites
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+Ensure you have the following installed:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- Flutter SDK
+- Dart SDK
+- Android Studio or VS Code
+- An emulator or physical device
+
+### Installation
+
+Clone the repository:
+
+git clone <https://github.com/Biraj1122/AgriDirect-Nepal>

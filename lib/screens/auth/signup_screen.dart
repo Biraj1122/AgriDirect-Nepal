@@ -103,7 +103,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
                 const SizedBox(height: 15),
                 const Text(
-                  "Farmtech",
+                  "AgriDirect Nepal",
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.green),
                 ),
                 const SizedBox(height: 10),

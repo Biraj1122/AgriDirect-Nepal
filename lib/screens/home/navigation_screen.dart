@@ -52,17 +52,32 @@ class _NavigationScreenState extends State<NavigationScreen> {
     try {
       final snapshot = await FirebaseFirestore.instance.collection('categories').get();
       if (snapshot.docs.isNotEmpty && mounted) {
+        final fetched = snapshot.docs.map((doc) {
+          final data = doc.data();
+          final iconCode = data['iconCode'] as int?;
+          return {
+            'name': data['name'] ?? 'Category',
+            'icon': iconCode != null
+                ? IconData(iconCode, fontFamily: 'MaterialIcons')
+                : Icons.category,
+          };
+        }).toList();
+
+        // Sort categories: Vegetables first, then Fruits, then others
+        fetched.sort((a, b) {
+          final nameA = a['name'].toString().toLowerCase();
+          final nameB = b['name'].toString().toLowerCase();
+          
+          if (nameA == 'vegetables') return -1;
+          if (nameB == 'vegetables') return 1;
+          if (nameA == 'fruits') return -1;
+          if (nameB == 'fruits') return 1;
+          
+          return nameA.compareTo(nameB);
+        });
+
         setState(() {
-          _categories = snapshot.docs.map((doc) {
-            final data = doc.data();
-            final iconCode = data['iconCode'] as int?;
-            return {
-              'name': data['name'] ?? 'Category',
-              'icon': iconCode != null
-                  ? IconData(iconCode, fontFamily: 'MaterialIcons')
-                  : Icons.category,
-            };
-          }).toList();
+          _categories = fetched;
         });
       }
     } catch (e) {

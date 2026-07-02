@@ -107,23 +107,27 @@ class _LoginScreenState extends State<LoginScreen> {
                 Hero(
                   tag: 'app_logo',
                   child: Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(8),
                     decoration: const BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
                       boxShadow: [
-                        BoxShadow(color: Colors.black12, blurRadius: 10, spreadRadius: 2),
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 40,
+                          spreadRadius: 4,
+                        ),
                       ],
                     ),
-                    child: Image.asset("assets/images/logo_full.png", height: 100, width: 70, fit: BoxFit.contain),
+                    child: Image.asset(
+                      "assets/images/logo_full.png",
+                      height: 180,
+                      width: 180,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 15),
-                const Text(
-                  "AgriDirect Nepal",
-                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.green, letterSpacing: 1.2),
-                ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 25),
                 const Text(
                   "Welcome!",
                   style: TextStyle(
