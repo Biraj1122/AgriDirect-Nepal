@@ -11,6 +11,8 @@ import 'package:farmtech_agridirect/screens/about_us.dart';
 import 'package:farmtech_agridirect/screens/profile/edit_profile_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/my_addresses_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/order_history_screen.dart';
+import 'package:farmtech_agridirect/screens/misc/farm_osm_screen.dart';
+import 'package:farmtech_agridirect/models/user_data.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userName;
@@ -38,6 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? phone;
   String? fullName;
   String? profileImageUrl;
+  String? address;
   bool _isLoading = true;
 
   @override
@@ -57,6 +60,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             fullName = doc.data()?['fullName'];
             phone = doc.data()?['phone'];
             profileImageUrl = doc.data()?['profileImageUrl'];
+            address = doc.data()?['address'];
           });
         }
       }
@@ -72,6 +76,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
       Navigator.pop(context);
     } else if (widget.onBackToHome != null) {
       widget.onBackToHome!();
+    }
+  }
+
+  Future<void> _updateLocation() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const FarmOsmScreen()),
+    );
+
+    if (result != null && result is Map<String, dynamic>) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      setState(() => _isLoading = true);
+      try {
+        final String newAddress = result['address'];
+        final double lat = result['lat'];
+        final double lng = result['lng'];
+
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
+          'address': newAddress,
+          'lat': lat,
+          'lng': lng,
+        });
+        
+        UserData.setAddress(address: newAddress, latitude: lat, longitude: lng);
+        
+        setState(() {
+          address = newAddress;
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Delivery location updated successfully!"), backgroundColor: Colors.green),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Failed to update location: $e"), backgroundColor: Colors.redAccent),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -208,6 +257,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsScreen(subtotal: 0, deliveryFee: 0, total: 0))),
                       ),
                     ]),
+
+                    const SizedBox(height: 24),
+                    _buildSectionHeader("Default Delivery Location"),
+                    _buildLocationCard(),
                     
                     const SizedBox(height: 24),
                     _buildSectionHeader("Personalization"),
@@ -286,6 +339,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: profileImageUrl == null || profileImageUrl!.isEmpty
             ? const Icon(Icons.person, size: 40, color: Colors.green)
             : null,
+      ),
+    );
+  }
+
+  Widget _buildLocationCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.location_on_outlined, color: Colors.green, size: 22),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Current Default Address",
+                      style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      address ?? "No default address set",
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xff2D3142)),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _updateLocation,
+              icon: const Icon(Icons.map_outlined, size: 18),
+              label: const Text("Set New Default Location"),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.green,
+                side: BorderSide(color: Colors.green.withValues(alpha: 0.5)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

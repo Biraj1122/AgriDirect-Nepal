@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/services/storage_service.dart';
 import 'package:farmtech_agridirect/Success/shared_widgets.dart';
+import 'package:farmtech_agridirect/screens/misc/farm_osm_screen.dart';
 
 class FarmerScreen extends StatefulWidget {
   const FarmerScreen({super.key});
@@ -25,6 +26,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
   bool _loading = true;
   StreamSubscription? _notificationSubscription;
   StreamSubscription? _orderSubscription;
+  StreamSubscription? _userSubscription;
   int _unreadCount = 0;
   int _pendingOrderCount = 0;
 
@@ -44,6 +46,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
   void dispose() {
     _notificationSubscription?.cancel();
     _orderSubscription?.cancel();
+    _userSubscription?.cancel();
     _currentPasswordController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
@@ -53,6 +56,23 @@ class _FarmerScreenState extends State<FarmerScreen> {
   void _setupGlobalListeners() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
+
+    _userSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .listen((doc) {
+      if (mounted && doc.exists) {
+        if (doc.data()?['role'] == 'Farmer') {
+          setState(() {
+            _farmerData = doc.data();
+            _loading = false;
+          });
+        } else {
+          _logout();
+        }
+      }
+    });
 
     _notificationSubscription = FirebaseFirestore.instance
         .collection('users')
@@ -307,6 +327,37 @@ class _ProfileTab extends StatefulWidget {
 class _ProfileTabState extends State<_ProfileTab> {
   bool _isUploading = false;
 
+  Future<void> _updateFarmLocation() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const FarmOsmScreen()),
+    );
+
+    if (result != null && result is Map<String, dynamic>) {
+      setState(() => _isUploading = true);
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(widget.uid).update({
+          'farmAddress': result['address'],
+          'farmLat': result['lat'],
+          'farmLng': result['lng'],
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Farm location updated successfully!"), backgroundColor: Colors.green),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Failed to update location: $e"), backgroundColor: Colors.redAccent),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isUploading = false);
+      }
+    }
+  }
+
   Future<void> _pickAndUploadPhoto() async {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
@@ -336,6 +387,7 @@ class _ProfileTabState extends State<_ProfileTab> {
       builder: (context, snapshot) {
         final data = snapshot.data?.data() as Map<String, dynamic>?;
         final url = data?['profileImageUrl'];
+        final farmAddress = data?['farmAddress'] ?? 'Not set';
 
         return ListView(
           padding: const EdgeInsets.all(24),
@@ -375,6 +427,30 @@ class _ProfileTabState extends State<_ProfileTab> {
               ),
             ),
             const SizedBox(height: 40),
+            const FieldLabel(label: "FARM LOCATION"),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+              child: Row(
+                children: [
+                  const Icon(Icons.location_on_rounded, color: Color(0xFF1D9E75), size: 20),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Pickup Address", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold)),
+                        Text(farmAddress, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            _profileItem(Icons.map_rounded, "Update Farm Location", onTap: _updateFarmLocation),
+            const SizedBox(height: 24),
             const FieldLabel(label: "SECURITY"),
             const SizedBox(height: 12),
             _profileItem(Icons.lock_reset_rounded, "Change Password", onTap: widget.onChangePassword),
