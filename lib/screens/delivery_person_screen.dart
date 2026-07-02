@@ -13,6 +13,8 @@ import 'package:geolocator/geolocator.dart';
 import '../services/location_service.dart';
 import '../Success/shared_widgets.dart';
 import 'auth/login_screen.dart';
+import 'package:farmtech_agridirect/viewmodels/theme_viewmodel.dart';
+import 'package:provider/provider.dart';
 
 const Color primaryTeal = Color(0xFF1D9E75);
 const Color secondaryBlue = Color(0xFF2E5BFF);
@@ -1371,6 +1373,29 @@ class _ProfileTabState extends State<_ProfileTab> {
               _profileItem(Icons.lock_rounded, "Change Password", onTap: _showChangePasswordDialog),
               _profileItem(Icons.phone_rounded, data?['phone'] ?? 'Add phone number'),
               _profileItem(statusIcon, statusLabel, onTap: verificationStatus == 'verified' ? null : () => _showVerificationDialog(data)),
+              
+              const SizedBox(height: 24),
+              const FieldLabel(label: "APP SETTINGS"),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+                child: Consumer<ThemeViewModel>(
+                  builder: (context, themeVM, _) => Row(
+                    children: [
+                      Icon(themeVM.isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded, color: Colors.amber, size: 20),
+                      const SizedBox(width: 16),
+                      const Expanded(child: Text("Dark Mode", style: TextStyle(fontWeight: FontWeight.w600))),
+                      Switch.adaptive(
+                        value: themeVM.isDarkMode,
+                        activeColor: primaryTeal,
+                        onChanged: (_) => themeVM.toggleTheme(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
               const SizedBox(height: 40),
               GradientButton(
                   label: "Logout Account",

@@ -7,6 +7,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../viewmodels/admin_viewmodel.dart';
+import '../viewmodels/theme_viewmodel.dart';
 import '../models/order_model.dart';
 import '../models/product.dart';
 import '../models/user_model.dart';
@@ -99,6 +100,17 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
             IconButton(
               onPressed: () => viewModel.refreshAdminState(),
               icon: const Icon(Icons.refresh_rounded, color: primaryTeal),
+            ),
+            const SizedBox(width: 4),
+            Consumer<ThemeViewModel>(
+              builder: (context, themeVM, _) => IconButton(
+                onPressed: () => themeVM.toggleTheme(),
+                icon: Icon(
+                  themeVM.isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                  color: Colors.amber,
+                ),
+                tooltip: "Toggle Dark Mode",
+              ),
             ),
             const SizedBox(width: 8),
             Padding(
