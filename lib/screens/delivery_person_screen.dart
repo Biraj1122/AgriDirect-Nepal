@@ -28,6 +28,8 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
   int _tab = 0;
   final LocationService _locationService = LocationService();
   StreamSubscription<Position>? _positionSub;
+  StreamSubscription<QuerySnapshot>? _availableOrdersSub;
+  final Set<String> _notifiedOrders = {};
 
   @override
   void initState() {
@@ -35,6 +37,7 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
     _checkRole();
     _setupFCM();
     _startGlobalLocationTracking();
+    _listenForAvailableOrders();
   }
 
   Future<void> _startGlobalLocationTracking() async {
@@ -55,9 +58,111 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
     });
   }
 
+  void _listenForAvailableOrders() {
+    _availableOrdersSub = FirebaseFirestore.instance
+        .collection('orders')
+        .where('status', isEqualTo: 'Farmer Accepted')
+        .where('deliveryId', isNull: true)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      for (var doc in snapshot.docs) {
+        if (!_notifiedOrders.contains(doc.id)) {
+          _notifiedOrders.add(doc.id);
+          _showNewOrderDialog(doc);
+        }
+      }
+    });
+  }
+
+  void _showNewOrderDialog(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.delivery_dining_rounded, color: primaryTeal, size: 28),
+            SizedBox(width: 12),
+            Text("New Shipment!", style: TextStyle(fontWeight: FontWeight.w900)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("A new order is ready for pickup near you.", style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 16),
+            _dialogInfo(Icons.storefront_rounded, "From: ${data['farmName'] ?? 'Farm'}"),
+            _dialogInfo(Icons.location_on_rounded, "To: ${data['deliveryAddress'] ?? 'Customer'}"),
+            _dialogInfo(Icons.payments_rounded, "Fee: Rs. ${data['deliveryFee'] ?? 40}"),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Dismiss", style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _acceptAvailableOrder(doc.id);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryTeal,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text("Accept Order", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dialogInfo(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: primaryTeal),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14))),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _acceptAvailableOrder(String orderId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final riderDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final riderName = riderDoc.data()?['fullName'] ?? 'Rider';
+    final riderPhone = riderDoc.data()?['phone'] ?? '';
+
+    await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+      'deliveryId': user.uid,
+      'deliveryName': riderName,
+      'deliveryPhone': riderPhone,
+      'status': 'Awaiting Pickup',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    if (mounted) {
+      setState(() => _tab = 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Order accepted! Directions loaded on map."), backgroundColor: primaryTeal),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _positionSub?.cancel();
+    _availableOrdersSub?.cancel();
     super.dispose();
   }
 
@@ -118,7 +223,7 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
 
     final pages = [
       _HomeMapTab(user: user),
-      _ShipmentsTab(user: user),
+      _ShipmentsTab(user: user, onSwitchToMap: () => setState(() => _tab = 0)),
       _EarningsTab(user: user),
       _ProfileTab(user: user, logoutCallback: _logout),
     ];
@@ -169,23 +274,99 @@ class _HomeMapTabState extends State<_HomeMapTab> {
   static const LatLng _kDefaultCenter = LatLng(27.7172, 85.3240);
 
   LatLng? _driverPos;
+  LatLng? _lastRouteUpdatePos;
   StreamSubscription<Position>? _localPosSub;
+  StreamSubscription<QuerySnapshot>? _orderSub;
   MapLibreMapController? _mapController;
   Line? _routeLine;
   double? _routeDistance;
   double? _routeDuration;
   String? _targetLabel;
+  Map<String, dynamic>? _activeOrderData;
+
+  Symbol? _riderSymbol;
+  Symbol? _targetSymbol;
+  Circle? _riderCircle;
+  Circle? _targetCircle;
 
   @override
   void initState() {
     super.initState();
     _initDriverLocation();
+    _listenToActiveOrder();
   }
 
   @override
   void dispose() {
     _localPosSub?.cancel();
+    _orderSub?.cancel();
     super.dispose();
+  }
+
+  void _listenToActiveOrder() {
+    _orderSub = FirebaseFirestore.instance
+        .collection('orders')
+        .where('deliveryId', isEqualTo: widget.user.uid)
+        .where('status', whereIn: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived', 'Confirm Received'])
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        data['id'] = snapshot.docs.first.id;
+        debugPrint("Active order found for rider: ${data['id']}");
+        
+        if (mounted) {
+          setState(() {
+            if (_activeOrderData?['id'] != data['id']) {
+              _lastRouteUpdatePos = null; // Force refresh for new order
+            }
+            _activeOrderData = data;
+          });
+        }
+      } else {
+        debugPrint("No active order found for rider.");
+        if (mounted) {
+          setState(() {
+            _activeOrderData = null;
+          });
+        }
+      }
+      _updateDirections(force: true);
+    });
+  }
+
+  Future<void> _cancelActiveOrderAssignment() async {
+    if (_activeOrderData == null) return;
+    
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Unassign Order?"),
+        content: const Text("Are you sure you want to remove yourself from this delivery? It will be available for other riders."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Keep")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true), 
+            child: const Text("Unassign", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      final orderId = _activeOrderData!['id'];
+      if (orderId == null) return;
+      
+      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+        'deliveryId': null,
+        'deliveryName': null,
+        'deliveryPhone': null,
+        'status': 'Farmer Accepted',
+      });
+      
+      // Local state will be updated by the Firestore listener
+    }
   }
 
   Future<void> _initDriverLocation() async {
@@ -195,7 +376,7 @@ class _HomeMapTabState extends State<_HomeMapTab> {
     }
     
     _localPosSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 15),
     ).listen((p) {
       if (mounted) {
         setState(() => _driverPos = LatLng(p.latitude, p.longitude));
@@ -206,75 +387,205 @@ class _HomeMapTabState extends State<_HomeMapTab> {
 
   void _centerOnDriver() {
     if (_driverPos != null && _mapController != null) {
-      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(_driverPos!, 15));
+      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(_driverPos!, 16));
     }
   }
 
-  Future<void> _updateDirections() async {
-    if (_driverPos == null || _mapController == null) return;
+  Future<void> _updateDirections({bool force = false}) async {
+    if (_mapController == null) return;
+
+    // IF NO ORDER: CLEAR MAP AND UI
+    if (_activeOrderData == null) {
+      if (_routeLine != null) {
+        try { await _mapController!.removeLine(_routeLine!); } catch (_) {}
+        _routeLine = null;
+      }
+      if (mounted) {
+        setState(() {
+          _routeDistance = null;
+          _routeDuration = null;
+          _targetLabel = null;
+        });
+      }
+      _updateMarkers(_driverPos, null, "");
+      return;
+    }
+
+    if (_driverPos == null) return;
+
+    // Debounce/Optimization: only update route if moved > 50m
+    if (!force && _lastRouteUpdatePos != null) {
+      final dist = Geolocator.distanceBetween(
+        _driverPos!.latitude, _driverPos!.longitude,
+        _lastRouteUpdatePos!.latitude, _lastRouteUpdatePos!.longitude
+      );
+      if (dist < 50) return; 
+    }
 
     try {
-      final query = await FirebaseFirestore.instance
-          .collection('orders')
-          .where('deliveryId', isEqualTo: widget.user.uid)
-          .where('status', whereIn: ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
-          .limit(1)
-          .get();
-
-      if (query.docs.isEmpty) {
-        if (_routeLine != null) {
-          _mapController!.removeLine(_routeLine!);
-          _routeLine = null;
-        }
-        if (mounted) setState(() { _routeDistance = null; _routeDuration = null; });
-        return;
-      }
-
-      final data = query.docs.first.data();
-      final status = data['status'];
+      LatLng startPos = _driverPos!;
       LatLng? target;
-      String label = "Customer";
+      String label = "";
 
-      if (status == 'Awaiting Pickup') {
-        final lat = (data['farmerLat'] as num?)?.toDouble();
-        final lng = (data['farmerLng'] as num?)?.toDouble();
-        if (lat != null && lng != null) target = LatLng(lat, lng);
-        label = "Farm";
-      } else {
-        final lat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
-        final lng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
-        if (lat != null && lng != null) target = LatLng(lat, lng);
-        label = "Customer";
+      final data = _activeOrderData!;
+      final status = data['status'];
+
+      final fLat = (data['farmerLat'] as num?)?.toDouble();
+      final fLng = (data['farmerLng'] as num?)?.toDouble();
+      final cLat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
+      final cLng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
+
+      if (status == 'Farmer Accepted' || status == 'Awaiting Pickup') {
+        if (fLat != null && fLng != null) {
+          target = LatLng(fLat, fLng);
+          label = "Farm (Pickup)";
+        }
+      } else if (status == 'Picked Up' || status == 'On the way' || status == 'Arrived' || status == 'Confirm Received') {
+        if (cLat != null && cLng != null) {
+          target = LatLng(cLat, cLng);
+          label = "Customer (Delivery)";
+        }
       }
 
       if (target != null) {
         final routeData = await _locationService.getRouteData(
-          _driverPos!.latitude, _driverPos!.longitude,
+          startPos.latitude, startPos.longitude,
           target.latitude, target.longitude,
         );
 
-        final List<LatLng> polyline = (routeData['points'] as List).map((p) => LatLng(p[0], p[1])).toList();
+        final List<LatLng> polyline = (routeData['points'] as List).map((p) => LatLng((p[0] as num).toDouble(), (p[1] as num).toDouble())).toList();
 
         if (mounted) {
           setState(() {
             _routeDistance = routeData['distance'];
             _routeDuration = routeData['duration'];
             _targetLabel = label;
+            _lastRouteUpdatePos = startPos;
           });
         }
 
-        if (_routeLine != null) _mapController!.removeLine(_routeLine!);
-        _routeLine = await _mapController!.addLine(LineOptions(
-          geometry: polyline,
-          lineColor: "#2E5BFF",
-          lineWidth: 5,
-          lineOpacity: 0.8,
-          lineJoin: "round",
-        ));
+        if (_routeLine == null) {
+          _routeLine = await _mapController!.addLine(LineOptions(
+            geometry: polyline,
+            lineColor: "#2E5BFF",
+            lineWidth: 5,
+            lineOpacity: 0.8,
+            lineJoin: "round",
+          ));
+        } else {
+          await _mapController!.updateLine(_routeLine!, LineOptions(geometry: polyline));
+        }
+      } else {
+        if (_routeLine != null) {
+          try { await _mapController!.removeLine(_routeLine!); } catch (_) {}
+          _routeLine = null;
+        }
+        if (mounted) {
+          setState(() {
+            _routeDistance = null;
+            _routeDuration = null;
+            _targetLabel = null;
+          });
+        }
       }
+      
+      _updateMarkers(_driverPos, target, label);
     } catch (e) {
       debugPrint("Error updating rider directions: $e");
     }
+  }
+
+  Future<void> _updateMarkers(LatLng? rider, LatLng? target, String label) async {
+    if (_mapController == null) return;
+
+    // Update Rider Marker
+    if (rider != null) {
+      if (_riderSymbol == null) {
+        try {
+          _riderCircle = await _mapController!.addCircle(CircleOptions(
+            geometry: rider, circleRadius: 10, circleColor: "#2E5BFF", circleStrokeWidth: 3, circleStrokeColor: "#FFFFFF",
+          ));
+          _riderSymbol = await _mapController!.addSymbol(SymbolOptions(
+            geometry: rider, textField: "Me (Rider)", textSize: 12, textColor: "#2E5BFF", textHaloColor: "#FFFFFF", textHaloWidth: 2, textOffset: const Offset(0, -2), textAnchor: "bottom",
+          ));
+        } catch (e) {
+          debugPrint("Error adding rider marker: $e");
+        }
+      } else {
+        _mapController!.updateSymbol(_riderSymbol!, SymbolOptions(geometry: rider));
+        if (_riderCircle != null) {
+          _mapController!.updateCircle(_riderCircle!, CircleOptions(geometry: rider));
+        }
+      }
+    }
+
+    // Update Target Marker (Farm or Customer)
+    if (target != null) {
+      final String colorHex = label.contains("Farm") ? "#F59E0B" : "#EF4444";
+
+      if (_targetSymbol == null) {
+        try {
+          _targetCircle = await _mapController!.addCircle(CircleOptions(
+            geometry: target, circleRadius: 12, circleColor: colorHex, circleStrokeWidth: 3, circleStrokeColor: "#FFFFFF",
+          ));
+          _targetSymbol = await _mapController!.addSymbol(SymbolOptions(
+            geometry: target, textField: label, textSize: 12, textColor: colorHex, textHaloColor: "#FFFFFF", textHaloWidth: 2, textOffset: const Offset(0, -2), textAnchor: "bottom",
+          ));
+        } catch (e) {
+          debugPrint("Error adding target marker: $e");
+        }
+      } else {
+        _mapController!.updateSymbol(_targetSymbol!, SymbolOptions(
+          geometry: target, textField: label, textColor: colorHex,
+        ));
+        if (_targetCircle != null) {
+          _mapController!.updateCircle(_targetCircle!, CircleOptions(
+            geometry: target, circleColor: colorHex,
+          ));
+        }
+      }
+    } else {
+      // Clear target markers if no target
+      if (_targetSymbol != null) {
+        try { await _mapController!.removeSymbol(_targetSymbol!); } catch (_) {}
+        _targetSymbol = null;
+      }
+      if (_targetCircle != null) {
+        try { await _mapController!.removeCircle(_targetCircle!); } catch (_) {}
+        _targetCircle = null;
+      }
+    }
+
+    // Adjust camera to fit markers
+    _fitCamera(rider, target);
+  }
+
+  void _fitCamera(LatLng? rider, LatLng? target) {
+    if (_mapController == null || rider == null) return;
+    
+    if (target == null) {
+      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(rider, 16));
+      return;
+    }
+
+    List<LatLng> points = [rider, target];
+
+    double south = points[0].latitude, north = points[0].latitude, west = points[0].longitude, east = points[0].longitude;
+    for (var p in points) {
+      if (p.latitude < south) south = p.latitude;
+      if (p.latitude > north) north = p.latitude;
+      if (p.longitude < west) west = p.longitude;
+      if (p.longitude > east) east = p.longitude;
+    }
+    
+    // Add padding
+    if (south == north) { south -= 0.001; north += 0.001; }
+    if (west == east) { west -= 0.001; east += 0.001; }
+
+    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(
+      LatLngBounds(southwest: LatLng(south, west), northeast: LatLng(north, east)),
+      left: 70, right: 70, top: 160, bottom: 100,
+    ));
   }
 
   @override
@@ -287,9 +598,16 @@ class _HomeMapTabState extends State<_HomeMapTab> {
           styleString: "https://tiles.openfreemap.org/styles/positron",
           onMapCreated: (controller) {
             _mapController = controller;
-            _updateDirections();
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted) {
+                _updateDirections(force: true);
+                _centerOnDriver();
+              }
+            });
           },
+          onMapClick: (point, latlng) => _centerOnDriver(),
         ),
+
         if (_routeDistance != null)
           Positioned(
             top: 100, left: 20, right: 20,
@@ -309,47 +627,53 @@ class _HomeMapTabState extends State<_HomeMapTab> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text("Heading to $_targetLabel", style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                        Text("Heading to ${_targetLabel ?? 'Destination'}", style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 2),
                         Text("${_routeDistance!.toStringAsFixed(1)} km • ${_routeDuration!.toStringAsFixed(0)} mins", 
                              style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
                       ],
                     ),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.cancel_rounded, color: Colors.white54, size: 24),
+                    onPressed: _cancelActiveOrderAssignment,
+                  ),
                 ],
               ),
             ),
           ),
-        Positioned(
-          bottom: 20, right: 20,
-          child: FloatingActionButton(
-            onPressed: _centerOnDriver,
-            backgroundColor: Colors.white,
-            mini: true,
-            child: const Icon(Icons.my_location_rounded, color: primaryTeal),
-          ),
-        ),
+        
         Positioned(
           top: 20, left: 20, right: 20,
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]),
-            child: Row(
-              children: [
-                const IconBadge(teal: primaryTeal, blue: secondaryBlue, icon: Icons.delivery_dining_rounded),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text("Status: Online", style: TextStyle(fontWeight: FontWeight.w800, color: primaryTeal)),
-                      Text("Awaiting new orders near you", style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                    ],
-                  ),
+          child: StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('users').doc(widget.user.uid).snapshots(),
+            builder: (context, snapshot) {
+              final userData = snapshot.data?.data() as Map<String, dynamic>?;
+              final isOnline = userData?['isOnline'] ?? true;
+              
+              return Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]),
+                child: Row(
+                  children: [
+                    IconBadge(teal: isOnline ? primaryTeal : Colors.grey, blue: isOnline ? secondaryBlue : Colors.grey.shade700, icon: Icons.delivery_dining_rounded),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text("Status: ${isOnline ? 'Online' : 'Offline'}", 
+                               style: TextStyle(fontWeight: FontWeight.w800, color: isOnline ? primaryTeal : Colors.grey)),
+                          Text(_routeDistance != null ? "Current Task: $_targetLabel" : (isOnline ? "Waiting for new orders..." : "Go online to see orders"),
+                               style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            }
           ),
         ),
       ],
@@ -359,7 +683,8 @@ class _HomeMapTabState extends State<_HomeMapTab> {
 
 class _ShipmentsTab extends StatelessWidget {
   final User user;
-  const _ShipmentsTab({required this.user});
+  final VoidCallback onSwitchToMap;
+  const _ShipmentsTab({required this.user, required this.onSwitchToMap});
 
   @override
   Widget build(BuildContext context) {
@@ -385,7 +710,7 @@ class _ShipmentsTab extends StatelessWidget {
           Expanded(
             child: TabBarView(
               children: [
-                _buildOrderList(context, ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'], true),
+                _buildOrderList(context, ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'], true),
                 _buildOrderList(context, ['Delivered', 'Cancelled'], false),
               ],
             ),
@@ -441,17 +766,47 @@ class _ShipmentsTab extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _infoItem(Icons.storefront_rounded, data['farmName'] ?? 'Pickup location'),
-                  _infoItem(Icons.location_on_rounded, data['deliveryAddress'] ?? 'Delivery address'),
+                  _infoItem(
+                    Icons.storefront_rounded, 
+                    data['farmName'] ?? 'Pickup location',
+                    onTap: isMyOrder && (data['status'] == 'Farmer Accepted' || data['status'] == 'Awaiting Pickup') 
+                        ? onSwitchToMap : null,
+                  ),
+                  _infoItem(
+                    Icons.location_on_rounded, 
+                    data['deliveryAddress'] ?? 'Delivery address',
+                    onTap: isMyOrder && (data['status'] == 'Picked Up' || data['status'] == 'On the way' || data['status'] == 'Arrived' || data['status'] == 'Confirm Received') 
+                        ? onSwitchToMap : null,
+                  ),
                   if (isActionable) ...[
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 16),
                     if (!isMyOrder)
                       GradientButton(
                         label: "Accept Shipment", 
                         icon: Icons.check_rounded, 
                         isLoading: false, 
                         teal: primaryTeal, blue: secondaryBlue, 
-                        onTap: () => _acceptOrder(context, docs[i].id, user.uid)
+                        onTap: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text("Accept Shipment?"),
+                              content: const Text("Are you sure you want to accept this delivery?"),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.pop(context, true), 
+                                  style: ElevatedButton.styleFrom(backgroundColor: primaryTeal),
+                                  child: const Text("Accept", style: TextStyle(color: Colors.white)),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            await _acceptOrder(context, docs[i].id, user.uid);
+                            onSwitchToMap();
+                          }
+                        }
                       )
                     else
                       GradientButton(
@@ -475,15 +830,35 @@ class _ShipmentsTab extends StatelessWidget {
     );
   }
 
-  Widget _infoItem(IconData icon, String text) {
+  Widget _infoItem(IconData icon, String text, {VoidCallback? onTap}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4.0),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: Colors.grey.shade400),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text, style: TextStyle(color: Colors.grey.shade600, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis)),
-        ],
+      padding: const EdgeInsets.only(bottom: 6.0),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4.0),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: onTap != null ? secondaryBlue : Colors.grey.shade400),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  text, 
+                  style: TextStyle(
+                    color: onTap != null ? secondaryBlue : Colors.grey.shade600, 
+                    fontSize: 13,
+                    fontWeight: onTap != null ? FontWeight.bold : FontWeight.normal,
+                  ), 
+                  maxLines: 1, 
+                  overflow: TextOverflow.ellipsis
+                )
+              ),
+              if (onTap != null)
+                const Icon(Icons.directions_rounded, size: 16, color: secondaryBlue),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -498,6 +873,7 @@ class _ShipmentsTab extends StatelessWidget {
 
   String _getNextStatusLabel(String? current) {
     switch (current) {
+      case 'Farmer Accepted': return 'Mark as Picked Up';
       case 'Awaiting Pickup': return 'Mark as Picked Up';
       case 'Picked Up': return 'Start Delivery';
       case 'On the way': return 'I have Arrived';
@@ -522,353 +898,20 @@ class _ShipmentsTab extends StatelessWidget {
 
   Future<void> _updateStatus(BuildContext context, String orderId, String? current) async {
     String next = 'Delivered';
-    if (current == 'Awaiting Pickup') {
+    if (current == 'Farmer Accepted' || current == 'Awaiting Pickup') {
       next = 'Picked Up';
     } else if (current == 'Picked Up') {
       next = 'On the way';
     } else if (current == 'On the way') {
       next = 'Arrived';
     } else if (current == 'Arrived') {
-      next = 'Confirm Received'; // Delivery person marks as delivered, now customer needs to confirm
+      next = 'Confirm Received';
     }
 
     await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
       'status': next,
       'updatedAt': FieldValue.serverTimestamp(),
     });
-  }
-}
-
-class _TasksTab extends StatefulWidget {
-  final User user;
-  const _TasksTab({required this.user});
-
-  @override
-  State<_TasksTab> createState() => _TasksTabState();
-}
-
-class _TasksTabState extends State<_TasksTab> {
-  bool _isOnline = true;
-  bool _isLoading = false;
-  Map<String, dynamic>? _riderData;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchDutyStatus();
-  }
-
-  Future<void> _fetchDutyStatus() async {
-    try {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).get();
-      if (mounted) {
-        setState(() {
-          _riderData = doc.data();
-          _isOnline = _riderData?['isOnline'] ?? true;
-        });
-      }
-    } catch (e) {
-      debugPrint("Error fetching duty status: $e");
-    }
-  }
-
-  Future<void> _toggleDuty() async {
-    setState(() => _isLoading = true);
-    try {
-      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
-        'isOnline': !_isOnline,
-        'lastDutyToggle': FieldValue.serverTimestamp(),
-      });
-      if (mounted) {
-        setState(() {
-          _isOnline = !_isOnline;
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isOnline ? "You are now ONLINE" : "You are now OFFLINE"),
-            backgroundColor: _isOnline ? primaryTeal : Colors.grey,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Stability Check: Ensure we don't return a blank screen if data is loading
-    // but also don't hang indefinitely. A ListView with placeholders is safer.
-    return Column(
-      children: [
-        const Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Heading(title: "Duty & Stats", subtitle: "Manage your availability and performance"),
-        ),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            children: [
-              // Duty Toggle Card
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: (_isOnline ? primaryTeal : Colors.grey).withValues(alpha: 0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(_isOnline ? Icons.bolt_rounded : Icons.power_settings_new_rounded, 
-                                 color: _isOnline ? primaryTeal : Colors.grey),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_isOnline ? "On Duty" : "Off Duty", 
-                               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-                          Text(_isOnline ? "Receiving new orders" : "Resting mode", 
-                               style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                    if (_isLoading)
-                      const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: primaryTeal, strokeWidth: 2))
-                    else
-                      Switch.adaptive(
-                        value: _isOnline, 
-                        onChanged: (_) => _toggleDuty(),
-                        activeTrackColor: primaryTeal,
-                        activeThumbColor: Colors.white,
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              const FieldLabel(label: "DAILY PERFORMANCE"),
-              const SizedBox(height: 12),
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('orders')
-                    .where('deliveryId', isEqualTo: widget.user.uid)
-                    .where('status', isEqualTo: 'Delivered')
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  final docs = snapshot.data?.docs ?? [];
-                  final todayDocs = docs.where((d) {
-                    final data = d.data() as Map;
-                    if (data['updatedAt'] == null) return false;
-                    final date = (data['updatedAt'] as Timestamp).toDate();
-                    final now = DateTime.now();
-                    return date.year == now.year && date.month == now.month && date.day == now.day;
-                  }).toList();
-
-                  double earnings = 0;
-                  for (var d in todayDocs) {
-                    earnings += (d.data() as Map)['deliveryRevenue'] ?? 100.0;
-                  }
-
-                  return Row(
-                    children: [
-                      _statCard("Deliveries", "${todayDocs.length}", Icons.check_circle_rounded, Colors.blue),
-                      const SizedBox(width: 16),
-                      _statCard("Earnings", "Rs. ${earnings.toStringAsFixed(0)}", Icons.account_balance_wallet_rounded, Colors.green),
-                    ],
-                  );
-                }
-              ),
-              const SizedBox(height: 32),
-              const FieldLabel(label: "SYSTEM ALERTS"),
-              const SizedBox(height: 12),
-              StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(widget.user.uid)
-                    .collection('notifications')
-                    .orderBy('createdAt', descending: true)
-                    .limit(5)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: primaryTeal, strokeWidth: 2)));
-                  }
-                  final docs = snapshot.data?.docs ?? [];
-                  if (docs.isEmpty) {
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32.0),
-                        child: Text("No recent alerts", style: TextStyle(color: Colors.grey.shade400)),
-                      ),
-                    );
-                  }
-
-                  return Column(
-                    children: docs.map((d) {
-                      final data = d.data() as Map<String, dynamic>;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(16),
-                          leading: IconBadge(teal: primaryTeal, blue: secondaryBlue, icon: Icons.notifications_rounded),
-                          title: Text(data['title'] ?? 'Alert', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
-                          subtitle: Text(data['body'] ?? '', style: const TextStyle(fontSize: 12)),
-                        ),
-                      );
-                    }).toList(),
-                  );
-                }
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _statCard(String label, String value, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: color.withValues(alpha: 0.1)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(height: 12),
-            Text(value, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 20)),
-            Text(label, style: TextStyle(color: Colors.grey.shade500, fontSize: 12, fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _VerificationSheet extends StatefulWidget {
-  final String uid;
-  final Map<String, dynamic>? currentData;
-  const _VerificationSheet({required this.uid, this.currentData});
-
-  @override
-  State<_VerificationSheet> createState() => _VerificationSheetState();
-}
-
-class _VerificationSheetState extends State<_VerificationSheet> {
-  XFile? licenseFront, citizenshipFront, citizenshipBack;
-  bool isUploading = false;
-  int step = 1;
-
-  Future<void> _pickImage(String type) async {
-    final img = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
-    if (img != null) {
-      setState(() {
-        if (type == 'lf') licenseFront = img;
-        if (type == 'cf') citizenshipFront = img;
-        if (type == 'cb') citizenshipBack = img;
-      });
-    }
-  }
-
-  Future<void> _submit() async {
-    if (licenseFront == null || citizenshipFront == null || citizenshipBack == null) return;
-    
-    setState(() => isUploading = true);
-    try {
-      final storage = StorageService();
-      final lfUrl = await storage.uploadImage(licenseFront!, 'verification/${widget.uid}');
-      final cfUrl = await storage.uploadImage(citizenshipFront!, 'verification/${widget.uid}');
-      final cbUrl = await storage.uploadImage(citizenshipBack!, 'verification/${widget.uid}');
-
-      await FirebaseFirestore.instance.collection('users').doc(widget.uid).update({
-        'licenseFront': lfUrl,
-        'citizenshipFront': cfUrl,
-        'citizenshipBack': cbUrl,
-        'verificationStatus': 'pending',
-        'documentsUploadedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Notify Admin
-      await FirebaseFirestore.instance.collection('admin_notifications').add({
-        'type': 'verification',
-        'title': 'New Rider Verification',
-        'body': 'A rider has uploaded documents for verification.',
-        'riderId': widget.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'isRead': false,
-      });
-
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload failed: $e")));
-    } finally {
-      if (mounted) setState(() => isUploading = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 24),
-          Heading(title: "Identity Verification", subtitle: step == 1 ? "Upload Driving License" : "Upload Citizenship Card"),
-          const SizedBox(height: 32),
-          if (step == 1) ...[
-            _uploadBox("License Front", licenseFront, () => _pickImage('lf')),
-            const SizedBox(height: 32),
-            GradientButton(label: "Next Step", icon: Icons.arrow_forward_rounded, isLoading: false, teal: primaryTeal, blue: secondaryBlue, onTap: () => setState(() => step = 2)),
-          ] else ...[
-            _uploadBox("Citizenship Front", citizenshipFront, () => _pickImage('cf')),
-            const SizedBox(height: 16),
-            _uploadBox("Citizenship Back", citizenshipBack, () => _pickImage('cb')),
-            const SizedBox(height: 32),
-            Row(
-              children: [
-                Expanded(child: OutlinedButton(onPressed: () => setState(() => step = 1), child: const Text("Back"))),
-                const SizedBox(width: 16),
-                Expanded(child: GradientButton(label: "Submit Documents", icon: Icons.check_rounded, isLoading: isUploading, teal: primaryTeal, blue: secondaryBlue, onTap: _submit)),
-              ],
-            ),
-          ],
-          const SizedBox(height: 32),
-        ],
-      ),
-    );
-  }
-
-  Widget _uploadBox(String label, XFile? file, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 120,
-        width: double.infinity,
-        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade200, style: BorderStyle.solid)),
-        child: file != null 
-          ? ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.file(File(file.path), fit: BoxFit.cover))
-          : Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_a_photo_rounded, color: Colors.grey), const SizedBox(height: 8), Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12))]),
-      ),
-    );
   }
 }
 
@@ -957,7 +1000,6 @@ class _EarningsTab extends StatelessWidget {
         double total = 0;
         for (var d in docs) {
           final data = d.data() as Map;
-          // Calculate Net: 80% of delivery fee
           total += ((data['deliveryFee'] ?? 40).toDouble() * 0.8);
         }
 
@@ -1040,6 +1082,23 @@ class _ProfileTabState extends State<_ProfileTab> {
   final TextEditingController _confirmPasswordController = TextEditingController();
   bool _isUpdating = false;
   bool _isUploadingPhoto = false;
+  String _currentAddress = "Fetching location...";
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCurrentAddress();
+  }
+
+  Future<void> _fetchCurrentAddress() async {
+    try {
+      final pos = await Geolocator.getCurrentPosition();
+      final address = await LocationService().getAddressFromLatLng(pos.latitude, pos.longitude);
+      if (mounted) setState(() => _currentAddress = address);
+    } catch (e) {
+      if (mounted) setState(() => _currentAddress = "Location unavailable");
+    }
+  }
 
   @override
   void dispose() {
@@ -1257,6 +1316,32 @@ class _ProfileTabState extends State<_ProfileTab> {
               ),
             ),
             const SizedBox(height: 40),
+            const FieldLabel(label: "AVAILABILITY"),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+              child: Row(
+                children: [
+                  Icon(Icons.power_settings_new_rounded, color: (data?['isOnline'] ?? true) ? primaryTeal : Colors.grey, size: 20),
+                  const SizedBox(width: 16),
+                  const Expanded(child: Text("Online Status", style: TextStyle(fontWeight: FontWeight.w600))),
+                  Switch(
+                    value: data?['isOnline'] ?? true,
+                    activeThumbColor: Colors.white,
+                    activeTrackColor: primaryTeal,
+                    onChanged: (val) async {
+                      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({'isOnline': val});
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            const FieldLabel(label: "CURRENT LOCATION"),
+            const SizedBox(height: 12),
+            _profileItem(Icons.location_on_rounded, _currentAddress, onTap: _fetchCurrentAddress),
+            const SizedBox(height: 24),
             const FieldLabel(label: "ACCOUNT SETTINGS"),
             const SizedBox(height: 12),
             _profileItem(Icons.badge_rounded, name, onTap: () => _showEditNameDialog(name)),
@@ -1293,6 +1378,116 @@ class _ProfileTabState extends State<_ProfileTab> {
             if (onTap != null) Icon(Icons.edit_rounded, color: Colors.grey.shade300, size: 16),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _VerificationSheet extends StatefulWidget {
+  final String uid;
+  final Map<String, dynamic>? currentData;
+  const _VerificationSheet({required this.uid, this.currentData});
+
+  @override
+  State<_VerificationSheet> createState() => _VerificationSheetState();
+}
+
+class _VerificationSheetState extends State<_VerificationSheet> {
+  XFile? licenseFront, citizenshipFront, citizenshipBack;
+  bool isUploading = false;
+  int step = 1;
+
+  Future<void> _pickImage(String type) async {
+    final img = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (img != null) {
+      setState(() {
+        if (type == 'lf') licenseFront = img;
+        if (type == 'cf') citizenshipFront = img;
+        if (type == 'cb') citizenshipBack = img;
+      });
+    }
+  }
+
+  Future<void> _submit() async {
+    if (licenseFront == null || citizenshipFront == null || citizenshipBack == null) return;
+    
+    setState(() => isUploading = true);
+    try {
+      final storage = StorageService();
+      final lfUrl = await storage.uploadImage(licenseFront!, 'verification/${widget.uid}');
+      final cfUrl = await storage.uploadImage(citizenshipFront!, 'verification/${widget.uid}');
+      final cbUrl = await storage.uploadImage(citizenshipBack!, 'verification/${widget.uid}');
+
+      await FirebaseFirestore.instance.collection('users').doc(widget.uid).update({
+        'licenseFront': lfUrl,
+        'citizenshipFront': cfUrl,
+        'citizenshipBack': cbUrl,
+        'verificationStatus': 'pending',
+        'documentsUploadedAt': FieldValue.serverTimestamp(),
+      });
+
+      await FirebaseFirestore.instance.collection('admin_notifications').add({
+        'type': 'verification',
+        'title': 'New Rider Verification',
+        'body': 'A rider has uploaded documents for verification.',
+        'riderId': widget.uid,
+        'createdAt': FieldValue.serverTimestamp(),
+        'isRead': false,
+      });
+
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload failed: $e")));
+    } finally {
+      if (mounted) setState(() => isUploading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 24),
+          Heading(title: "Identity Verification", subtitle: step == 1 ? "Upload Driving License" : "Upload Citizenship Card"),
+          const SizedBox(height: 32),
+          if (step == 1) ...[
+            _uploadBox("License Front", licenseFront, () => _pickImage('lf')),
+            const SizedBox(height: 32),
+            GradientButton(label: "Next Step", icon: Icons.arrow_forward_rounded, isLoading: false, teal: primaryTeal, blue: secondaryBlue, onTap: () => setState(() => step = 2)),
+          ] else ...[
+            _uploadBox("Citizenship Front", citizenshipFront, () => _pickImage('cf')),
+            const SizedBox(height: 16),
+            _uploadBox("Citizenship Back", citizenshipBack, () => _pickImage('cb')),
+            const SizedBox(height: 32),
+            Row(
+              children: [
+                Expanded(child: OutlinedButton(onPressed: () => setState(() => step = 1), child: const Text("Back"))),
+                const SizedBox(width: 16),
+                Expanded(child: GradientButton(label: "Submit Documents", icon: Icons.check_rounded, isLoading: isUploading, teal: primaryTeal, blue: secondaryBlue, onTap: _submit)),
+              ],
+            ),
+          ],
+          const SizedBox(height: 32),
+        ],
+      ),
+    );
+  }
+
+  Widget _uploadBox(String label, XFile? file, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 120,
+        width: double.infinity,
+        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade200, style: BorderStyle.solid)),
+        child: file != null 
+          ? ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.file(File(file.path), fit: BoxFit.cover))
+          : Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_a_photo_rounded, color: Colors.grey), const SizedBox(height: 8), Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12))]),
       ),
     );
   }
