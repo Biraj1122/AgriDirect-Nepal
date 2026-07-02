@@ -73,6 +73,10 @@ class AdminRepository {
     });
   }
 
+  Future<void> updateMasterProduct(String id, Map<String, dynamic> data) async {
+    await _firestore.collection('master_catalog').doc(id).update(data);
+  }
+
   Future<void> updateOrderStatus(String id, String status) async {
     await _firestore.collection('orders').doc(id).update({'status': status});
   }
@@ -105,7 +109,8 @@ class AdminRepository {
 
     if (masterSnap.docs.isEmpty) {
       // Add to master_catalog if unique
-      await _firestore.collection('master_catalog').add({
+      String docId = product.title.toString().replaceAll(' ', '_').toLowerCase();
+      await _firestore.collection('master_catalog').doc(docId).set({
         'name': product.title,
         'title': product.title,
         'price': double.tryParse(product.price) ?? 0,
@@ -118,6 +123,7 @@ class AdminRepository {
         'farmerUid': product.farmerUid,
         'farmName': product.farmName,
         'createdAt': FieldValue.serverTimestamp(),
+        'status': 'approved',
       });
     }
 

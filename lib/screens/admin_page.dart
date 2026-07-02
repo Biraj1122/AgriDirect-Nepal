@@ -56,7 +56,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
 
   void _resetInactivityTimer() {
     _inactivityTimer?.cancel();
-    _inactivityTimer = Timer(const Duration(minutes: 3), () {
+    _inactivityTimer = Timer(const Duration(minutes: 5), () {
       if (mounted) _logout();
     });
   }
@@ -201,11 +201,11 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
               children: [
                 _panelItem(context, viewModel, 0, Icons.dashboard_rounded, "Overview"),
                 _panelItem(context, viewModel, 1, Icons.shopping_cart_rounded, "Order Management"),
-                _panelItem(context, viewModel, 2, Icons.inventory_2_rounded, "Products Catalog"),
+                _panelItem(context, viewModel, 2, Icons.inventory_2_rounded, "Global Catalog"),
                 _panelItem(context, viewModel, 3, Icons.people_alt_rounded, "User Database"),
                 _panelItem(context, viewModel, 4, Icons.campaign_rounded, "Announcements"),
                 _panelItem(context, viewModel, 5, Icons.science_rounded, "Research Insights"),
-                _panelItem(context, viewModel, 7, Icons.price_change_rounded, "Price Approvals"),
+                _panelItem(context, viewModel, 7, Icons.price_change_rounded, "Price Updates"),
                 _panelItem(context, viewModel, 8, Icons.verified_user_rounded, "System Approvals"),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(24, 24, 24, 8),
@@ -218,7 +218,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: GradientButton(
-              label: "New Product",
+              label: "New Catalog Item",
               icon: Icons.add_rounded,
               isLoading: false,
               teal: primaryTeal,
@@ -284,7 +284,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
               children: [
                 _sideDrawerItem(context, viewModel, 0, Icons.dashboard_rounded, "Dashboard"),
                 _sideDrawerItem(context, viewModel, 1, Icons.shopping_bag_rounded, "Orders"),
-                _sideDrawerItem(context, viewModel, 2, Icons.inventory_2_rounded, "Products"),
+                _sideDrawerItem(context, viewModel, 2, Icons.inventory_2_rounded, "Catalog"),
                 _sideDrawerItem(context, viewModel, 3, Icons.people_rounded, "Users"),
                 _sideDrawerItem(context, viewModel, 7, Icons.price_check_rounded, "Price Requests"),
                 _sideDrawerItem(context, viewModel, 8, Icons.approval_rounded, "Approvals"),
@@ -364,7 +364,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                         children: [
                           _dashboardCard("Total Revenue", "Rs. ${totalRevenue.toStringAsFixed(0)}", Icons.payments_rounded, Colors.green, cardWidth, () => viewModel.setCurrentIndex(6)),
                           _dashboardCard("Active Orders", "$activeOrders", Icons.shopping_cart_checkout_rounded, Colors.orange, cardWidth, () => viewModel.setCurrentIndex(1)),
-                          _dashboardCard("Products", "$totalProducts", Icons.inventory_2_rounded, Colors.blue, cardWidth, () => viewModel.setCurrentIndex(2)),
+                          _dashboardCard("Catalog Items", "$totalProducts", Icons.inventory_2_rounded, Colors.blue, cardWidth, () => viewModel.setCurrentIndex(2)),
                           _dashboardCard("Completed", "$completedOrders", Icons.task_alt_rounded, Colors.purple, cardWidth, () { viewModel.setCurrentIndex(1); }),
                         ],
                       );
@@ -722,7 +722,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isDone ? primaryTeal : isActive ? primaryTeal.withValues(alpha: 0.1) : Colors.grey.shade100,
-                border: Border.all(color: isDone || isActive ? primaryTeal : Colors.grey.shade200),
+                border: Border.all(color: i < step || i == step ? primaryTeal : Colors.grey.shade200),
               ),
               child: Center(
                 child: isDone 
@@ -759,7 +759,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Heading(title: "Catalog", subtitle: "Global inventory management"),
+              const Heading(title: "Global Catalog", subtitle: "Manage core product database for farmers"),
               IconButton(onPressed: () => _showAddProductDialog(context, viewModel), icon: const Icon(Icons.add_circle_rounded, color: primaryTeal, size: 32)),
             ],
           ),
@@ -783,18 +783,22 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                       contentPadding: const EdgeInsets.all(12),
                       leading: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: CachedNetworkImage(
+                        child: SafeProductImage(
                           imageUrl: product.image,
                           width: 56, height: 56, fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(color: Colors.grey.shade100),
-                          errorWidget: (context, url, error) => const Icon(Icons.image_outlined),
                         ),
                       ),
                       title: Text(product.title, style: const TextStyle(fontWeight: FontWeight.w700)),
-                      subtitle: Text("${product.category} • Rs. ${product.price}", style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent), 
-                        onPressed: () => _confirmDelete(context, () => viewModel.deleteProduct(product.id!))
+                      subtitle: Text("${product.category} • Rs. ${product.price}/${product.unit}", style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(icon: const Icon(Icons.edit_rounded, color: Colors.blue, size: 20), onPressed: () => _showAddProductDialog(context, viewModel, existingProduct: product)),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20), 
+                            onPressed: () => _confirmDelete(context, () => viewModel.deleteProduct(product.id!))
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -889,13 +893,13 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
         children: [
           const Padding(
             padding: EdgeInsets.all(24.0),
-            child: Heading(title: "Approvals", subtitle: "Review pending products and rider verifications"),
+            child: Heading(title: "System Approvals", subtitle: "Review pending products and rider verifications"),
           ),
           const TabBar(
             labelColor: primaryTeal,
             unselectedLabelColor: Colors.grey,
             indicatorColor: primaryTeal,
-            tabs: [Tab(text: "Products"), Tab(text: "Riders")],
+            tabs: [Tab(text: "Farmer Products"), Tab(text: "Rider ID Docs")],
           ),
           Expanded(
             child: TabBarView(
@@ -917,7 +921,6 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
         final pendingRiders = snapshot.data!.where((u) => u.role == 'Delivery Person').toList();
         
-        // Use FutureBuilder to get actual document data for verification status
         return ListView.builder(
           padding: const EdgeInsets.all(24),
           itemCount: pendingRiders.length,
@@ -1265,10 +1268,9 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: CachedNetworkImage(
+                        child: SafeProductImage(
                           imageUrl: product.image,
                           width: 80, height: 80, fit: BoxFit.cover,
-                          errorWidget: (context, url, error) => const Icon(Icons.image),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -1325,12 +1327,13 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
     );
   }
 
-  void _showAddProductDialog(BuildContext context, AdminViewModel viewModel) {
-    final nameController = TextEditingController();
-    final categoryController = TextEditingController();
-    final priceController = TextEditingController();
-    final imageUrlController = TextEditingController();
-    final stockController = TextEditingController();
+  void _showAddProductDialog(BuildContext context, AdminViewModel viewModel, {Product? existingProduct}) {
+    final nameController = TextEditingController(text: existingProduct?.title ?? '');
+    final categoryController = TextEditingController(text: existingProduct?.category ?? '');
+    final priceController = TextEditingController(text: existingProduct?.price ?? '');
+    final unitController = TextEditingController(text: existingProduct?.unit ?? 'kg');
+    final imageUrlController = TextEditingController(text: existingProduct?.image ?? '');
+    final descController = TextEditingController(text: existingProduct?.description ?? '');
     bool isSaving = false;
 
     showDialog(
@@ -1338,7 +1341,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          title: const Text("Add to Global Catalog", style: TextStyle(fontWeight: FontWeight.w800)),
+          title: Text(existingProduct != null ? "Edit Catalog Item" : "Add to Global Catalog", style: const TextStyle(fontWeight: FontWeight.w800)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1352,13 +1355,39 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                 const SizedBox(height: 8),
                 TextField(controller: categoryController, decoration: customInputDecoration(hint: "e.g. Vegetables", icon: Icons.category, teal: primaryTeal)),
                 const SizedBox(height: 16),
-                const FieldLabel(label: "PRICE (RS)"),
-                const SizedBox(height: 8),
-                TextField(controller: priceController, keyboardType: TextInputType.number, decoration: customInputDecoration(hint: "0.00", icon: Icons.payments, teal: primaryTeal)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const FieldLabel(label: "PRICE (RS)"),
+                          const SizedBox(height: 8),
+                          TextField(controller: priceController, keyboardType: TextInputType.number, decoration: customInputDecoration(hint: "0.00", icon: Icons.payments, teal: primaryTeal)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const FieldLabel(label: "UNIT"),
+                          const SizedBox(height: 8),
+                          TextField(controller: unitController, decoration: customInputDecoration(hint: "kg", icon: Icons.scale, teal: primaryTeal)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 16),
                 const FieldLabel(label: "IMAGE URL"),
                 const SizedBox(height: 8),
                 TextField(controller: imageUrlController, decoration: customInputDecoration(hint: "https://...", icon: Icons.image, teal: primaryTeal)),
+                const SizedBox(height: 16),
+                const FieldLabel(label: "DESCRIPTION"),
+                const SizedBox(height: 8),
+                TextField(controller: descController, maxLines: 2, decoration: customInputDecoration(hint: "Brief info...", icon: Icons.description, teal: primaryTeal)),
               ],
             ),
           ),
@@ -1370,16 +1399,28 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                 onPressed: isSaving ? null : () async {
                   if (nameController.text.trim().isEmpty || priceController.text.trim().isEmpty) return;
                   setDialogState(() => isSaving = true);
-                  await viewModel.addProduct({
+                  
+                  final data = {
                     'name': nameController.text.trim(),
                     'title': nameController.text.trim(),
                     'category': categoryController.text.trim(),
                     'price': double.tryParse(priceController.text.trim()) ?? 0,
-                    'stock': int.tryParse(stockController.text.trim()) ?? 0,
+                    'unit': unitController.text.trim(),
                     'image': imageUrlController.text.trim(),
                     'imageUrl': imageUrlController.text.trim(),
-                    'createdAt': FieldValue.serverTimestamp(),
-                  });
+                    'description': descController.text.trim(),
+                    'longDescription': descController.text.trim(),
+                    'updatedAt': FieldValue.serverTimestamp(),
+                    'status': 'approved',
+                  };
+
+                  if (existingProduct != null) {
+                    await viewModel.updateMasterProduct(existingProduct.id!, data);
+                  } else {
+                    data['createdAt'] = FieldValue.serverTimestamp();
+                    await viewModel.addProduct(data);
+                  }
+
                   if (dialogContext.mounted) Navigator.pop(dialogContext);
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: primaryTeal, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),

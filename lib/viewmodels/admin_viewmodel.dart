@@ -119,6 +119,11 @@ class AdminViewModel extends ChangeNotifier {
     await _repository.deleteProduct(id);
   }
 
+  Future<void> updateMasterProduct(String id, Map<String, dynamic> data) async {
+    await _repository.updateMasterProduct(id, data);
+    notifyListeners();
+  }
+
   Future<void> updateAnnouncement(String title, String content) async {
     await _repository.updateAnnouncement(AnnouncementModel(title: title, content: content));
   }
