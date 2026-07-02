@@ -90,7 +90,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
             final bTime = (b.data()['createdAt'] as Timestamp?)?.toDate() ?? DateTime(1970);
             return bTime.compareTo(aTime);
           });
-          
+
           _activeOrderId = docs.first.id;
           _startTrackingFlow();
         } else {
@@ -131,10 +131,10 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         final newStatus = data['status'] ?? status;
         final newRiderName = data['deliveryName'] ?? "Assigning...";
         final newDeliveryId = data['deliveryId'];
-        
+
         // Ensure we get rider phone from order or their user doc
         String? newRiderPhone = data['deliveryPhone'];
-        
+
         final double? custLat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
         final double? custLng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
         final double? fLat = (data['farmerLat'] as num?)?.toDouble();
@@ -151,23 +151,41 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
           status = newStatus;
           riderName = newRiderName;
           if (newRiderPhone != null) riderPhone = newRiderPhone;
-          
+
           bool riderIdChanged = deliveryId != newDeliveryId;
           deliveryId = newDeliveryId;
-          
+
           if (custLat != null && custLng != null) {
             customerPosition = LatLng(custLat, custLng);
             _updateCustomerMarker();
+          } else {
+            // Diagnostic: if this prints, the order document is missing
+            // customerLat/customerLng (or legacy lat/lng) fields, which
+            // means the customer pin/route target can never be placed.
+            debugPrint("Order $_activeOrderId is missing customerLat/customerLng (or lat/lng) fields.");
           }
           if (fLat != null && fLng != null) {
             farmerPosition = LatLng(fLat, fLng);
             _updateFarmerMarker();
+          } else {
+            // Diagnostic: if this prints, the order document is missing
+            // farmerLat/farmerLng fields, so the farmer pin/route target
+            // can never be placed.
+            debugPrint("Order $_activeOrderId is missing farmerLat/farmerLng fields.");
           }
 
           if (deliveryId != null && (riderIdChanged || _riderLocationSubscription == null)) {
             _listenToRiderLocation(deliveryId!);
           }
         });
+
+        // FIX: recompute the route line and refit the camera whenever the
+        // order snapshot changes (status update, farmer/customer position
+        // becoming available, etc). Previously this only happened when the
+        // rider's live GPS location changed, which meant the route could
+        // stay missing or stale until the rider physically moved.
+        _updateRouteLine();
+        _fitCameraToMarkers();
       }
     });
   }
@@ -235,6 +253,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
         _addMarkers();
+        _updateRouteLine();
         _fitCameraToMarkers();
       }
     });
@@ -333,7 +352,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
 
   void _updateRouteLine() async {
     if (mapController == null || riderPosition == null) return;
-    
+
     LatLng? target;
     if (status == 'Farmer Accepted' || status == 'Awaiting Pickup') {
       target = farmerPosition;
@@ -816,7 +835,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                               ),
                             ),
                             IconButton(
-                              onPressed: _makeCall, 
+                              onPressed: _makeCall,
                               icon: const Icon(Icons.phone_in_talk_rounded, color: Colors.green),
                               style: IconButton.styleFrom(backgroundColor: Colors.green.withValues(alpha: 0.1)),
                             ),

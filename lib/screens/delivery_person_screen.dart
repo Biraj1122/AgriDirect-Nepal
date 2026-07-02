@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -31,6 +32,11 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
   StreamSubscription<QuerySnapshot>? _availableOrdersSub;
   final Set<String> _notifiedOrders = {};
 
+  // Lifted state to keep map/routing stable across tabs
+  LatLng? _driverPos;
+  Map<String, dynamic>? _activeOrderData;
+  StreamSubscription<QuerySnapshot>? _activeOrderSub;
+
   @override
   void initState() {
     super.initState();
@@ -38,15 +44,25 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
     _setupFCM();
     _startGlobalLocationTracking();
     _listenForAvailableOrders();
+    _listenToActiveOrder();
   }
 
   Future<void> _startGlobalLocationTracking() async {
     bool granted = await _locationService.requestPermission();
     if (!granted) return;
 
+    // Initial position
+    final p = await _locationService.getCurrentLocation();
+    if (p != null && mounted) {
+      setState(() => _driverPos = LatLng(p.latitude, p.longitude));
+    }
+
     _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
     ).listen((pos) {
+      if (mounted) {
+        setState(() => _driverPos = LatLng(pos.latitude, pos.longitude));
+      }
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         FirebaseFirestore.instance.collection('users').doc(user.uid).update({
@@ -54,6 +70,31 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
           'lng': pos.longitude,
           'lastSeen': FieldValue.serverTimestamp(),
         }).catchError((_) {});
+      }
+    });
+  }
+
+  void _listenToActiveOrder() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _activeOrderSub = FirebaseFirestore.instance
+        .collection('orders')
+        .where('deliveryId', isEqualTo: user.uid)
+        .where('status', whereIn: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        data['id'] = snapshot.docs.first.id;
+        if (mounted) {
+          setState(() => _activeOrderData = data);
+        }
+      } else {
+        if (mounted) {
+          setState(() => _activeOrderData = null);
+        }
       }
     });
   }
@@ -163,6 +204,7 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
   void dispose() {
     _positionSub?.cancel();
     _availableOrdersSub?.cancel();
+    _activeOrderSub?.cancel();
     super.dispose();
   }
 
@@ -205,8 +247,8 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
       final body = message.notification?.body ?? 'New Order Alert!';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(body), 
-          backgroundColor: primaryTeal, 
+          content: Text(body),
+          backgroundColor: primaryTeal,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
@@ -231,9 +273,14 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
     return Scaffold(
       backgroundColor: backgroundColor,
       body: SafeArea(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: pages[_tab],
+        child: IndexedStack(
+          index: _tab,
+          children: [
+            _HomeMapTab(user: user, driverPos: _driverPos, activeOrderData: _activeOrderData),
+            _ShipmentsTab(user: user, onSwitchToMap: () => setState(() => _tab = 0)),
+            _EarningsTab(user: user),
+            _ProfileTab(user: user, logoutCallback: _logout),
+          ],
         ),
       ),
       bottomNavigationBar: Container(
@@ -263,7 +310,9 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
 
 class _HomeMapTab extends StatefulWidget {
   final User user;
-  const _HomeMapTab({required this.user});
+  final LatLng? driverPos;
+  final Map<String, dynamic>? activeOrderData;
+  const _HomeMapTab({required this.user, this.driverPos, this.activeOrderData});
 
   @override
   State<_HomeMapTab> createState() => _HomeMapTabState();
@@ -273,16 +322,12 @@ class _HomeMapTabState extends State<_HomeMapTab> {
   final LocationService _locationService = LocationService();
   static const LatLng _kDefaultCenter = LatLng(27.7172, 85.3240);
 
-  LatLng? _driverPos;
   LatLng? _lastRouteUpdatePos;
-  StreamSubscription<Position>? _localPosSub;
-  StreamSubscription<QuerySnapshot>? _orderSub;
   MapLibreMapController? _mapController;
   Line? _routeLine;
   double? _routeDistance;
   double? _routeDuration;
   String? _targetLabel;
-  Map<String, dynamic>? _activeOrderData;
 
   Symbol? _riderSymbol;
   Symbol? _targetSymbol;
@@ -290,55 +335,23 @@ class _HomeMapTabState extends State<_HomeMapTab> {
   Circle? _targetCircle;
 
   @override
-  void initState() {
-    super.initState();
-    _initDriverLocation();
-    _listenToActiveOrder();
-  }
-
-  @override
-  void dispose() {
-    _localPosSub?.cancel();
-    _orderSub?.cancel();
-    super.dispose();
-  }
-
-  void _listenToActiveOrder() {
-    _orderSub = FirebaseFirestore.instance
-        .collection('orders')
-        .where('deliveryId', isEqualTo: widget.user.uid)
-        .where('status', whereIn: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived', 'Confirm Received'])
-        .limit(1)
-        .snapshots()
-        .listen((snapshot) {
-      if (snapshot.docs.isNotEmpty) {
-        final data = snapshot.docs.first.data();
-        data['id'] = snapshot.docs.first.id;
-        debugPrint("Active order found for rider: ${data['id']}");
-        
-        if (mounted) {
-          setState(() {
-            if (_activeOrderData?['id'] != data['id']) {
-              _lastRouteUpdatePos = null; // Force refresh for new order
-            }
-            _activeOrderData = data;
-          });
-        }
-      } else {
-        debugPrint("No active order found for rider.");
-        if (mounted) {
-          setState(() {
-            _activeOrderData = null;
-          });
-        }
+  void didUpdateWidget(_HomeMapTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Force route recalculation if order status changed or new order assigned
+    if (widget.activeOrderData != oldWidget.activeOrderData) {
+      if (widget.activeOrderData?['id'] != oldWidget.activeOrderData?['id'] ||
+          widget.activeOrderData?['status'] != oldWidget.activeOrderData?['status']) {
+        _lastRouteUpdatePos = null;
       }
       _updateDirections(force: true);
-    });
+    } else if (widget.driverPos != oldWidget.driverPos) {
+      _updateDirections();
+    }
   }
 
   Future<void> _cancelActiveOrderAssignment() async {
-    if (_activeOrderData == null) return;
-    
+    if (widget.activeOrderData == null) return;
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -347,7 +360,7 @@ class _HomeMapTabState extends State<_HomeMapTab> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Keep")),
           TextButton(
-            onPressed: () => Navigator.pop(context, true), 
+            onPressed: () => Navigator.pop(context, true),
             child: const Text("Unassign", style: TextStyle(color: Colors.red)),
           ),
         ],
@@ -355,47 +368,29 @@ class _HomeMapTabState extends State<_HomeMapTab> {
     );
 
     if (confirm == true) {
-      final orderId = _activeOrderData!['id'];
+      final orderId = widget.activeOrderData!['id'];
       if (orderId == null) return;
-      
+
       await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
         'deliveryId': null,
         'deliveryName': null,
         'deliveryPhone': null,
         'status': 'Farmer Accepted',
       });
-      
-      // Local state will be updated by the Firestore listener
     }
-  }
-
-  Future<void> _initDriverLocation() async {
-    final pos = await _locationService.getCurrentLocation();
-    if (pos != null && mounted) {
-      setState(() => _driverPos = LatLng(pos.latitude, pos.longitude));
-    }
-    
-    _localPosSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 15),
-    ).listen((p) {
-      if (mounted) {
-        setState(() => _driverPos = LatLng(p.latitude, p.longitude));
-        _updateDirections();
-      }
-    });
   }
 
   void _centerOnDriver() {
-    if (_driverPos != null && _mapController != null) {
-      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(_driverPos!, 16));
+    if (widget.driverPos != null && _mapController != null) {
+      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(widget.driverPos!, 16));
     }
   }
 
   Future<void> _updateDirections({bool force = false}) async {
     if (_mapController == null) return;
 
-    // IF NO ORDER: CLEAR MAP AND UI
-    if (_activeOrderData == null) {
+    // IF NO ORDER: CLEAR MAP AND UI COMPLETELY
+    if (widget.activeOrderData == null) {
       if (_routeLine != null) {
         try { await _mapController!.removeLine(_routeLine!); } catch (_) {}
         _routeLine = null;
@@ -405,30 +400,40 @@ class _HomeMapTabState extends State<_HomeMapTab> {
           _routeDistance = null;
           _routeDuration = null;
           _targetLabel = null;
+          _lastRouteUpdatePos = null;
         });
       }
-      _updateMarkers(_driverPos, null, "");
+      // Remove all symbols and circles to reset the map to a clean state
+      if (_mapController != null) {
+        if (_targetSymbol != null) { try { await _mapController!.removeSymbol(_targetSymbol!); } catch (_) {} _targetSymbol = null; }
+        if (_targetCircle != null) { try { await _mapController!.removeCircle(_targetCircle!); } catch (_) {} _targetCircle = null; }
+        if (_riderSymbol != null) { try { await _mapController!.removeSymbol(_riderSymbol!); } catch (_) {} _riderSymbol = null; }
+        if (_riderCircle != null) { try { await _mapController!.removeCircle(_riderCircle!); } catch (_) {} _riderCircle = null; }
+      }
       return;
     }
 
-    if (_driverPos == null) return;
+    if (widget.driverPos == null) return;
 
     // Debounce/Optimization: only update route if moved > 50m
     if (!force && _lastRouteUpdatePos != null) {
       final dist = Geolocator.distanceBetween(
-        _driverPos!.latitude, _driverPos!.longitude,
-        _lastRouteUpdatePos!.latitude, _lastRouteUpdatePos!.longitude
+          widget.driverPos!.latitude, widget.driverPos!.longitude,
+          _lastRouteUpdatePos!.latitude, _lastRouteUpdatePos!.longitude
       );
-      if (dist < 50) return; 
+      if (dist < 50) return;
     }
 
     try {
-      LatLng startPos = _driverPos!;
+      LatLng startPos = widget.driverPos!;
       LatLng? target;
       String label = "";
 
-      final data = _activeOrderData!;
+      final data = widget.activeOrderData!;
       final status = data['status'];
+
+      // Diagnostic print to debug missing coordinates
+      debugPrint("Processing directions for status: $status");
 
       final fLat = (data['farmerLat'] as num?)?.toDouble();
       final fLng = (data['farmerLng'] as num?)?.toDouble();
@@ -445,6 +450,12 @@ class _HomeMapTabState extends State<_HomeMapTab> {
           target = LatLng(cLat, cLng);
           label = "Customer (Delivery)";
         }
+      }
+
+      // If the specific target coordinates are missing, fallback to generic order location if available
+      if (target == null && (cLat != null && cLng != null)) {
+        target = LatLng(cLat, cLng);
+        label = "Destination";
       }
 
       if (target != null) {
@@ -488,8 +499,8 @@ class _HomeMapTabState extends State<_HomeMapTab> {
           });
         }
       }
-      
-      _updateMarkers(_driverPos, target, label);
+
+      _updateMarkers(widget.driverPos, target, label);
     } catch (e) {
       debugPrint("Error updating rider directions: $e");
     }
@@ -562,7 +573,7 @@ class _HomeMapTabState extends State<_HomeMapTab> {
 
   void _fitCamera(LatLng? rider, LatLng? target) {
     if (_mapController == null || rider == null) return;
-    
+
     if (target == null) {
       _mapController!.animateCamera(CameraUpdate.newLatLngZoom(rider, 16));
       return;
@@ -577,7 +588,7 @@ class _HomeMapTabState extends State<_HomeMapTab> {
       if (p.longitude < west) west = p.longitude;
       if (p.longitude > east) east = p.longitude;
     }
-    
+
     // Add padding
     if (south == north) { south -= 0.001; north += 0.001; }
     if (west == east) { west -= 0.001; east += 0.001; }
@@ -593,7 +604,7 @@ class _HomeMapTabState extends State<_HomeMapTab> {
     return Stack(
       children: [
         MapLibreMap(
-          initialCameraPosition: CameraPosition(target: _driverPos ?? _kDefaultCenter, zoom: 14),
+          initialCameraPosition: CameraPosition(target: widget.driverPos ?? _kDefaultCenter, zoom: 14),
           myLocationEnabled: true,
           styleString: "https://tiles.openfreemap.org/styles/positron",
           onMapCreated: (controller) {
@@ -616,7 +627,7 @@ class _HomeMapTabState extends State<_HomeMapTab> {
               decoration: BoxDecoration(
                 color: const Color(0xFF1A1D25),
                 borderRadius: BorderRadius.circular(20),
-                boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10)],
+                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
               ),
               child: Row(
                 children: [
@@ -629,8 +640,8 @@ class _HomeMapTabState extends State<_HomeMapTab> {
                       children: [
                         Text("Heading to ${_targetLabel ?? 'Destination'}", style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 2),
-                        Text("${_routeDistance!.toStringAsFixed(1)} km • ${_routeDuration!.toStringAsFixed(0)} mins", 
-                             style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                        Text("${_routeDistance!.toStringAsFixed(1)} km • ${_routeDuration!.toStringAsFixed(0)} mins",
+                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
                       ],
                     ),
                   ),
@@ -642,38 +653,38 @@ class _HomeMapTabState extends State<_HomeMapTab> {
               ),
             ),
           ),
-        
+
         Positioned(
           top: 20, left: 20, right: 20,
           child: StreamBuilder<DocumentSnapshot>(
-            stream: FirebaseFirestore.instance.collection('users').doc(widget.user.uid).snapshots(),
-            builder: (context, snapshot) {
-              final userData = snapshot.data?.data() as Map<String, dynamic>?;
-              final isOnline = userData?['isOnline'] ?? true;
-              
-              return Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]),
-                child: Row(
-                  children: [
-                    IconBadge(teal: isOnline ? primaryTeal : Colors.grey, blue: isOnline ? secondaryBlue : Colors.grey.shade700, icon: Icons.delivery_dining_rounded),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text("Status: ${isOnline ? 'Online' : 'Offline'}", 
-                               style: TextStyle(fontWeight: FontWeight.w800, color: isOnline ? primaryTeal : Colors.grey)),
-                          Text(_routeDistance != null ? "Current Task: $_targetLabel" : (isOnline ? "Waiting for new orders..." : "Go online to see orders"),
-                               style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                        ],
+              stream: FirebaseFirestore.instance.collection('users').doc(widget.user.uid).snapshots(),
+              builder: (context, snapshot) {
+                final userData = snapshot.data?.data() as Map<String, dynamic>?;
+                final isOnline = userData?['isOnline'] ?? true;
+
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)]),
+                  child: Row(
+                    children: [
+                      IconBadge(teal: isOnline ? primaryTeal : Colors.grey, blue: isOnline ? secondaryBlue : Colors.grey.shade700, icon: Icons.delivery_dining_rounded),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text("Status: ${isOnline ? 'Online' : 'Offline'}",
+                                style: TextStyle(fontWeight: FontWeight.w800, color: isOnline ? primaryTeal : Colors.grey)),
+                            Text(_routeDistance != null ? "Current Task: $_targetLabel" : (isOnline ? "Waiting for new orders..." : "Go online to see orders"),
+                                style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            }
+                    ],
+                  ),
+                );
+              }
           ),
         ),
       ],
@@ -710,7 +721,7 @@ class _ShipmentsTab extends StatelessWidget {
           Expanded(
             child: TabBarView(
               children: [
-                _buildOrderList(context, ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'], true),
+                _buildOrderList(context, ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived', 'Confirm Received'], true),
                 _buildOrderList(context, ['Delivered', 'Cancelled'], false),
               ],
             ),
@@ -750,7 +761,7 @@ class _ShipmentsTab extends StatelessWidget {
           itemBuilder: (context, i) {
             final data = docs[i].data() as Map<String, dynamic>;
             final isMyOrder = data['deliveryId'] == user.uid;
-            
+
             return Container(
               margin: const EdgeInsets.only(bottom: 16),
               padding: const EdgeInsets.all(20),
@@ -766,60 +777,65 @@ class _ShipmentsTab extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  _infoItem(
-                    Icons.storefront_rounded, 
-                    data['farmName'] ?? 'Pickup location',
-                    onTap: isMyOrder && (data['status'] == 'Farmer Accepted' || data['status'] == 'Awaiting Pickup') 
-                        ? onSwitchToMap : null,
+                  _locationActionRow(
+                    context,
+                    Icons.storefront_rounded,
+                    "Pickup: ${data['farmName'] ?? 'Farm'}",
+                    data['status'] == 'Farmer Accepted' || data['status'] == 'Awaiting Pickup',
+                    isMyOrder,
+                    onSwitchToMap,
                   ),
-                  _infoItem(
-                    Icons.location_on_rounded, 
-                    data['deliveryAddress'] ?? 'Delivery address',
-                    onTap: isMyOrder && (data['status'] == 'Picked Up' || data['status'] == 'On the way' || data['status'] == 'Arrived' || data['status'] == 'Confirm Received') 
-                        ? onSwitchToMap : null,
+                  const SizedBox(height: 8),
+                  _locationActionRow(
+                    context,
+                    Icons.location_on_rounded,
+                    "Deliver: ${data['deliveryAddress'] ?? 'Customer'}",
+                    data['status'] == 'Picked Up' || data['status'] == 'On the way' || data['status'] == 'Arrived' || data['status'] == 'Confirm Received',
+                    isMyOrder,
+                    onSwitchToMap,
                   ),
                   if (isActionable) ...[
                     const SizedBox(height: 16),
                     if (!isMyOrder)
                       GradientButton(
-                        label: "Accept Shipment", 
-                        icon: Icons.check_rounded, 
-                        isLoading: false, 
-                        teal: primaryTeal, blue: secondaryBlue, 
-                        onTap: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text("Accept Shipment?"),
-                              content: const Text("Are you sure you want to accept this delivery?"),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-                                ElevatedButton(
-                                  onPressed: () => Navigator.pop(context, true), 
-                                  style: ElevatedButton.styleFrom(backgroundColor: primaryTeal),
-                                  child: const Text("Accept", style: TextStyle(color: Colors.white)),
-                                ),
-                              ],
-                            ),
-                          );
-                          if (confirm == true) {
-                            await _acceptOrder(context, docs[i].id, user.uid);
-                            onSwitchToMap();
+                          label: "Accept Shipment",
+                          icon: Icons.check_rounded,
+                          isLoading: false,
+                          teal: primaryTeal, blue: secondaryBlue,
+                          onTap: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text("Accept Shipment?"),
+                                content: const Text("Are you sure you want to accept this delivery?"),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.pop(context, true),
+                                    style: ElevatedButton.styleFrom(backgroundColor: primaryTeal),
+                                    child: const Text("Accept", style: TextStyle(color: Colors.white)),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm == true) {
+                              await _acceptOrder(context, docs[i].id, user.uid);
+                              onSwitchToMap();
+                            }
                           }
-                        }
                       )
                     else
                       GradientButton(
-                        label: _getNextStatusLabel(data['status']), 
-                        icon: Icons.arrow_forward_rounded, 
-                        isLoading: false, 
-                        teal: primaryTeal, blue: secondaryBlue, 
-                        onTap: () => _updateStatus(context, docs[i].id, data['status'])
+                          label: _getNextStatusLabel(data['status']),
+                          icon: Icons.arrow_forward_rounded,
+                          isLoading: false,
+                          teal: primaryTeal, blue: secondaryBlue,
+                          onTap: () => _updateStatus(context, docs[i].id, data['status'])
                       ),
                   ] else ...[
-                     const SizedBox(height: 12),
-                     Text("Completed: ${data['updatedAt'] != null ? (data['updatedAt'] as Timestamp).toDate().toString().substring(0, 16) : 'N/A'}", 
-                          style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
+                    const SizedBox(height: 12),
+                    Text("Completed: ${data['updatedAt'] != null ? (data['updatedAt'] as Timestamp).toDate().toString().substring(0, 16) : 'N/A'}",
+                        style: TextStyle(color: Colors.grey.shade400, fontSize: 11)),
                   ]
                 ],
               ),
@@ -830,35 +846,42 @@ class _ShipmentsTab extends StatelessWidget {
     );
   }
 
-  Widget _infoItem(IconData icon, String text, {VoidCallback? onTap}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6.0),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4.0),
-          child: Row(
-            children: [
-              Icon(icon, size: 16, color: onTap != null ? secondaryBlue : Colors.grey.shade400),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  text, 
-                  style: TextStyle(
-                    color: onTap != null ? secondaryBlue : Colors.grey.shade600, 
-                    fontSize: 13,
-                    fontWeight: onTap != null ? FontWeight.bold : FontWeight.normal,
-                  ), 
-                  maxLines: 1, 
-                  overflow: TextOverflow.ellipsis
-                )
+  Widget _locationActionRow(BuildContext context, IconData icon, String text, bool isCurrentTarget, bool isMyOrder, VoidCallback onTap) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isCurrentTarget ? secondaryBlue.withValues(alpha: 0.05) : Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isCurrentTarget ? secondaryBlue.withValues(alpha: 0.2) : Colors.transparent),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: isCurrentTarget ? secondaryBlue : Colors.grey),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isCurrentTarget ? FontWeight.bold : FontWeight.normal,
+                color: isCurrentTarget ? Colors.black87 : Colors.grey.shade600,
               ),
-              if (onTap != null)
-                const Icon(Icons.directions_rounded, size: 16, color: secondaryBlue),
-            ],
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-        ),
+          if (isMyOrder)
+            TextButton.icon(
+              onPressed: onTap,
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                foregroundColor: isCurrentTarget ? secondaryBlue : Colors.grey,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              icon: const Icon(Icons.directions_rounded, size: 16),
+              label: Text(isCurrentTarget ? "Navigate" : "View Map", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            ),
+        ],
       ),
     );
   }
@@ -947,7 +970,7 @@ class _EarningsTab extends StatelessWidget {
                   final gross = (data['deliveryFee'] ?? 40).toDouble();
                   final net = gross * 0.8;
                   final fee = gross * 0.2;
-                  
+
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     padding: const EdgeInsets.all(16),
@@ -1242,123 +1265,123 @@ class _ProfileTabState extends State<_ProfileTab> {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').doc(widget.user.uid).snapshots(),
-      builder: (context, snapshot) {
-        final data = snapshot.data?.data() as Map<String, dynamic>?;
-        final name = data?['fullName'] ?? 'Rider Name';
-        
-        final String verificationStatus = data?['verificationStatus'] ?? 'unverified';
-        Color statusColor = Colors.grey;
-        String statusLabel = "Un-verified";
-        IconData statusIcon = Icons.error_outline_rounded;
+        stream: FirebaseFirestore.instance.collection('users').doc(widget.user.uid).snapshots(),
+        builder: (context, snapshot) {
+          final data = snapshot.data?.data() as Map<String, dynamic>?;
+          final name = data?['fullName'] ?? 'Rider Name';
 
-        if (verificationStatus == 'verified') {
-          statusColor = primaryTeal;
-          statusLabel = "Verified Partner";
-          statusIcon = Icons.verified_rounded;
-        } else if (verificationStatus == 'pending') {
-          statusColor = Colors.orange;
-          statusLabel = "Verification Pending";
-          statusIcon = Icons.hourglass_empty_rounded;
-        }
+          final String verificationStatus = data?['verificationStatus'] ?? 'unverified';
+          Color statusColor = Colors.grey;
+          String statusLabel = "Un-verified";
+          IconData statusIcon = Icons.error_outline_rounded;
 
-        return ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            const Heading(title: "My Profile", subtitle: "Manage your rider account settings"),
-            const SizedBox(height: 40),
-            Center(
-              child: Column(
-                children: [
-                  GestureDetector(
-                    onTap: _isUploadingPhoto ? null : _pickAndUploadPhoto,
-                    child: Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 60,
-                          backgroundColor: primaryTeal.withValues(alpha: 0.1),
-                          backgroundImage: (data?['profileImageUrl'] != null && data!['profileImageUrl'].toString().isNotEmpty) 
-                            ? CachedNetworkImageProvider(data['profileImageUrl']) : null,
-                          child: (data?['profileImageUrl'] == null || data!['profileImageUrl'].toString().isEmpty) 
-                            ? const Icon(Icons.person_rounded, size: 60, color: primaryTeal) : null,
-                        ),
-                        if (_isUploadingPhoto)
-                          const Positioned.fill(child: CircularProgressIndicator(color: primaryTeal)),
-                        Positioned(
-                          bottom: 0, right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(color: primaryTeal, shape: BoxShape.circle),
-                            child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+          if (verificationStatus == 'verified') {
+            statusColor = primaryTeal;
+            statusLabel = "Verified Partner";
+            statusIcon = Icons.verified_rounded;
+          } else if (verificationStatus == 'pending') {
+            statusColor = Colors.orange;
+            statusLabel = "Verification Pending";
+            statusIcon = Icons.hourglass_empty_rounded;
+          }
+
+          return ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              const Heading(title: "My Profile", subtitle: "Manage your rider account settings"),
+              const SizedBox(height: 40),
+              Center(
+                child: Column(
+                  children: [
+                    GestureDetector(
+                      onTap: _isUploadingPhoto ? null : _pickAndUploadPhoto,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 60,
+                            backgroundColor: primaryTeal.withValues(alpha: 0.1),
+                            backgroundImage: (data?['profileImageUrl'] != null && data!['profileImageUrl'].toString().isNotEmpty)
+                                ? CachedNetworkImageProvider(data['profileImageUrl']) : null,
+                            child: (data?['profileImageUrl'] == null || data!['profileImageUrl'].toString().isEmpty)
+                                ? const Icon(Icons.person_rounded, size: 60, color: primaryTeal) : null,
                           ),
-                        ),
-                      ],
+                          if (_isUploadingPhoto)
+                            const Positioned.fill(child: CircularProgressIndicator(color: primaryTeal)),
+                          Positioned(
+                            bottom: 0, right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(color: primaryTeal, shape: BoxShape.circle),
+                              child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-                  Text(widget.user.email ?? '', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(statusIcon, color: statusColor, size: 16),
-                        const SizedBox(width: 8),
-                        Text(statusLabel, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
-                      ],
+                    const SizedBox(height: 16),
+                    Text(name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
+                    Text(widget.user.email ?? '', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(statusIcon, color: statusColor, size: 16),
+                          const SizedBox(width: 8),
+                          Text(statusLabel, style: TextStyle(color: statusColor, fontWeight: FontWeight.bold, fontSize: 12)),
+                        ],
+                      ),
                     ),
-                  ),
-                  if (_isUpdating) const Padding(padding: EdgeInsets.only(top: 8), child: CircularProgressIndicator(color: primaryTeal, strokeWidth: 2)),
-                ],
+                    if (_isUpdating) const Padding(padding: EdgeInsets.only(top: 8), child: CircularProgressIndicator(color: primaryTeal, strokeWidth: 2)),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 40),
-            const FieldLabel(label: "AVAILABILITY"),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-              child: Row(
-                children: [
-                  Icon(Icons.power_settings_new_rounded, color: (data?['isOnline'] ?? true) ? primaryTeal : Colors.grey, size: 20),
-                  const SizedBox(width: 16),
-                  const Expanded(child: Text("Online Status", style: TextStyle(fontWeight: FontWeight.w600))),
-                  Switch(
-                    value: data?['isOnline'] ?? true,
-                    activeThumbColor: Colors.white,
-                    activeTrackColor: primaryTeal,
-                    onChanged: (val) async {
-                      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({'isOnline': val});
-                    },
-                  ),
-                ],
+              const SizedBox(height: 40),
+              const FieldLabel(label: "AVAILABILITY"),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+                child: Row(
+                  children: [
+                    Icon(Icons.power_settings_new_rounded, color: (data?['isOnline'] ?? true) ? primaryTeal : Colors.grey, size: 20),
+                    const SizedBox(width: 16),
+                    const Expanded(child: Text("Online Status", style: TextStyle(fontWeight: FontWeight.w600))),
+                    Switch(
+                      value: data?['isOnline'] ?? true,
+                      activeThumbColor: Colors.white,
+                      activeTrackColor: primaryTeal,
+                      onChanged: (val) async {
+                        await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({'isOnline': val});
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            const FieldLabel(label: "CURRENT LOCATION"),
-            const SizedBox(height: 12),
-            _profileItem(Icons.location_on_rounded, _currentAddress, onTap: _fetchCurrentAddress),
-            const SizedBox(height: 24),
-            const FieldLabel(label: "ACCOUNT SETTINGS"),
-            const SizedBox(height: 12),
-            _profileItem(Icons.badge_rounded, name, onTap: () => _showEditNameDialog(name)),
-            _profileItem(Icons.lock_rounded, "Change Password", onTap: _showChangePasswordDialog),
-            _profileItem(Icons.phone_rounded, data?['phone'] ?? 'Add phone number'),
-            _profileItem(statusIcon, statusLabel, onTap: verificationStatus == 'verified' ? null : () => _showVerificationDialog(data)),
-            const SizedBox(height: 40),
-            GradientButton(
-              label: "Logout Account", 
-              icon: Icons.logout_rounded, 
-              isLoading: false, 
-              teal: Colors.redAccent, blue: Colors.red.shade900, 
-              onTap: widget.logoutCallback
-            ),
-          ],
-        );
-      }
+              const SizedBox(height: 24),
+              const FieldLabel(label: "CURRENT LOCATION"),
+              const SizedBox(height: 12),
+              _profileItem(Icons.location_on_rounded, _currentAddress, onTap: _fetchCurrentAddress),
+              const SizedBox(height: 24),
+              const FieldLabel(label: "ACCOUNT SETTINGS"),
+              const SizedBox(height: 12),
+              _profileItem(Icons.badge_rounded, name, onTap: () => _showEditNameDialog(name)),
+              _profileItem(Icons.lock_rounded, "Change Password", onTap: _showChangePasswordDialog),
+              _profileItem(Icons.phone_rounded, data?['phone'] ?? 'Add phone number'),
+              _profileItem(statusIcon, statusLabel, onTap: verificationStatus == 'verified' ? null : () => _showVerificationDialog(data)),
+              const SizedBox(height: 40),
+              GradientButton(
+                  label: "Logout Account",
+                  icon: Icons.logout_rounded,
+                  isLoading: false,
+                  teal: Colors.redAccent, blue: Colors.red.shade900,
+                  onTap: widget.logoutCallback
+              ),
+            ],
+          );
+        }
     );
   }
 
@@ -1410,7 +1433,7 @@ class _VerificationSheetState extends State<_VerificationSheet> {
 
   Future<void> _submit() async {
     if (licenseFront == null || citizenshipFront == null || citizenshipBack == null) return;
-    
+
     setState(() => isUploading = true);
     try {
       final storage = StorageService();
@@ -1485,9 +1508,9 @@ class _VerificationSheetState extends State<_VerificationSheet> {
         height: 120,
         width: double.infinity,
         decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade200, style: BorderStyle.solid)),
-        child: file != null 
-          ? ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.file(File(file.path), fit: BoxFit.cover))
-          : Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_a_photo_rounded, color: Colors.grey), const SizedBox(height: 8), Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12))]),
+        child: file != null
+            ? ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.file(File(file.path), fit: BoxFit.cover))
+            : Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_a_photo_rounded, color: Colors.grey), const SizedBox(height: 8), Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12))]),
       ),
     );
   }
