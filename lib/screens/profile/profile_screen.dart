@@ -11,6 +11,7 @@ import 'package:farmtech_agridirect/screens/about_us.dart';
 import 'package:farmtech_agridirect/screens/profile/edit_profile_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/my_addresses_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/order_history_screen.dart';
+import 'package:farmtech_agridirect/Success/shared_widgets.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userName;
@@ -187,9 +188,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             child: CircleAvatar(
                               radius: 40,
                               backgroundColor: Colors.white,
-                              backgroundImage: profileImageUrl != null && profileImageUrl!.isNotEmpty
-                                  ? CachedNetworkImageProvider(profileImageUrl!)
-                                  : null,
+                              backgroundImage: getImageProvider(profileImageUrl),
                               child: profileImageUrl == null || profileImageUrl!.isEmpty
                                   ? const Icon(Icons.person, size: 45, color: Colors.green)
                                   : null,

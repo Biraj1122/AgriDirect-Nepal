@@ -6,6 +6,7 @@ import 'product_detail_screen.dart';
 import '../../models/cart_model.dart';
 import '../../models/product.dart';
 import '../profile/my_favourites.dart';
+import '../../Success/shared_widgets.dart';
 
 class CategoriesScreen extends StatefulWidget {
   final String initialCategory;
@@ -269,7 +270,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                    child: _buildProductImage(productObj.image),
+                    child: SafeProductImage(
+                      imageUrl: productObj.image,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                   Positioned(
                     top: 8,
@@ -319,126 +324,77 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     );
   }
 
-  Widget _buildProductImage(String image) {
-    if (image.isEmpty) {
-      return Container(
-        color: Colors.grey.shade100,
-        child: const Center(child: Icon(Icons.image, color: Colors.grey)),
-      );
-    }
-
-    if (image.startsWith('http')) {
-      return CachedNetworkImage(
-        imageUrl: image,
-        key: ValueKey(image),
-        width: double.infinity,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => const Center(
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
-        ),
-        errorWidget: (context, url, error) => const Center(
-          child: Icon(Icons.broken_image, color: Colors.grey),
-        ),
-      );
-    } else if (image.startsWith('data:image')) {
-      try {
-        final base64String = image.split(',').last;
-        return Image.memory(
-          base64Decode(base64String),
-          width: double.infinity,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.broken_image, color: Colors.grey)),
-        );
-      } catch (e) {
-        return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
-      }
-    }
-
-    String assetPath = image;
-    if (!assetPath.startsWith('assets/')) {
-      assetPath = 'assets/images/$image';
-    }
-
-    return Image.asset(
-      assetPath,
-      width: double.infinity,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) => const Center(child: Icon(Icons.eco, color: Colors.green)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
       body: SafeArea(
-        child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('products').snapshots(),
-          builder: (context, snapshot) {
-            List<Map<String, dynamic>> allProducts = [];
-            if (snapshot.hasData) {
-              allProducts = snapshot.data!.docs.map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                data['id'] = doc.id;
-                return data;
-              }).toList();
-            }
+        child: Column(
+          children: [
+            _buildAppBar(),
+            _buildSearchBar(),
+            _buildCategoryRow(),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance.collection('master_catalog').snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Center(child: Text("Error loading products: ${snapshot.error}"));
+                  }
 
-            final filteredProducts = _getFilteredProducts(allProducts);
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator(color: Colors.green));
+                  }
 
-            if (snapshot.hasError) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.red, size: 48),
-                    const SizedBox(height: 16),
-                    Text("Error: ${snapshot.error}"),
-                    ElevatedButton(
-                      onPressed: () => setState(() {}),
-                      child: const Text("Retry"),
-                    )
-                  ],
-                ),
-              );
-            }
+                  final allProducts = snapshot.data?.docs.map((doc) {
+                    final data = doc.data() as Map<String, dynamic>;
+                    data['id'] = doc.id;
+                    return data;
+                  }).toList() ?? [];
 
-            return Column(
-              children: [
-                _buildAppBar(),
-                _buildSearchBar(),
-                _buildCategoryRow(),
-                Expanded(
-                  child: snapshot.connectionState == ConnectionState.waiting
-                      ? const Center(child: CircularProgressIndicator(color: Colors.green))
-                      : (allProducts.isEmpty 
-                          ? const Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
-                                  SizedBox(height: 16),
-                                  Text("No products available in the shop"),
-                                ],
-                              ),
-                            )
-                          : (filteredProducts.isEmpty
-                              ? const Center(child: Text("No products found in this category"))
-                              : GridView.builder(
-                                  padding: const EdgeInsets.all(16),
-                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    childAspectRatio: 0.72,
-                                    crossAxisSpacing: 14,
-                                    mainAxisSpacing: 14,
-                                  ),
-                                  itemCount: filteredProducts.length,
-                                  itemBuilder: (context, index) => _buildProductCard(filteredProducts[index]),
-                                ))),
-                ),
-              ],
-            );
-          },
+                  if (allProducts.isEmpty) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
+                          SizedBox(height: 16),
+                          Text("No products available in the shop"),
+                        ],
+                      ),
+                    );
+                  }
+
+                  final filteredProducts = _getFilteredProducts(allProducts);
+
+                  if (filteredProducts.isEmpty) {
+                    return const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.search_off, size: 60, color: Colors.grey),
+                          SizedBox(height: 10),
+                          Text("No products found in this category", style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 0.72,
+                      crossAxisSpacing: 14,
+                      mainAxisSpacing: 14,
+                    ),
+                    itemCount: filteredProducts.length,
+                    itemBuilder: (context, index) => _buildProductCard(filteredProducts[index]),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );

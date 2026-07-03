@@ -1,5 +1,105 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:convert';
+import 'dart:typed_data';
 
+ImageProvider? getImageProvider(String? imageUrl) {
+  if (imageUrl == null || imageUrl.isEmpty) return null;
+
+  if (imageUrl.startsWith('data:image')) {
+    try {
+      final base64String = imageUrl.split(',').last;
+      return MemoryImage(base64Decode(base64String));
+    } catch (e) {
+      debugPrint("Error decoding base64 image: $e");
+      return null;
+    }
+  }
+
+  if (imageUrl.startsWith('http')) {
+    return CachedNetworkImageProvider(imageUrl);
+  }
+
+  // Handle assets
+  String assetPath = imageUrl;
+  if (!assetPath.startsWith('assets/')) {
+    assetPath = 'assets/images/$imageUrl';
+  }
+  return AssetImage(assetPath);
+}
+
+class SafeProductImage extends StatelessWidget {
+  final String imageUrl;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+
+  const SafeProductImage({
+    super.key,
+    required this.imageUrl,
+    this.width,
+    this.height,
+    this.fit = BoxFit.cover,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (imageUrl.isEmpty) {
+      return _buildPlaceholder();
+    }
+
+    if (imageUrl.startsWith('http')) {
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        width: width,
+        height: height,
+        fit: fit,
+        placeholder: (context, url) => Container(color: Colors.grey.shade100),
+        errorWidget: (context, url, error) => _buildPlaceholder(),
+      );
+    }
+
+    if (imageUrl.startsWith('data:image')) {
+      try {
+        final base64String = imageUrl.split(',').last;
+        return Image.memory(
+          base64Decode(base64String),
+          width: width,
+          height: height,
+          fit: fit,
+          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+        );
+      } catch (e) {
+        return _buildPlaceholder();
+      }
+    }
+
+    // Assume asset
+    String assetPath = imageUrl;
+    if (!assetPath.startsWith('assets/')) {
+      assetPath = 'assets/images/$imageUrl';
+    }
+
+    return Image.asset(
+      assetPath,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      width: width,
+      height: height,
+      color: Colors.green.shade50,
+      child: const Center(
+        child: Icon(Icons.eco_rounded, color: Color(0xFF1D9E75), size: 32),
+      ),
+    );
+  }
+}
 
 class IconBadge extends StatelessWidget {
   final Color teal, blue;
