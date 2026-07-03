@@ -1,12 +1,12 @@
 class AWSConfig {
   static const String bucketName = 'agridirectproducts';
   static const String region = 'ap-south-1'; // Mumbai
-  
+
   // Base URL for S3 objects
   static const String s3BaseUrl = 'https://$bucketName.s3.$region.amazonaws.com';
-  
+
   // If you set up CloudFront later, replace this with your CloudFront domain
-  static const String cloudFrontDomain = ''; 
+  static const String cloudFrontDomain = '';
 
   static String getImageUrl(String? path) {
     if (path == null || path.isEmpty) return '';
@@ -22,7 +22,7 @@ class AWSConfig {
       // Fallback for other s3:// URIs if they occur
       return path.replaceFirst('s3://', 'https://s3.$region.amazonaws.com/');
     }
-    
+
     // If it's a relative path, assume it's an S3 key
     if (cloudFrontDomain.isNotEmpty) {
       return 'https://$cloudFrontDomain/$path';
