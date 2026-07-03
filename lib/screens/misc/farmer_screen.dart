@@ -1,7 +1,5 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,6 +9,8 @@ import 'package:farmtech_agridirect/services/storage_service.dart';
 import 'package:farmtech_agridirect/Success/shared_widgets.dart';
 import 'package:geolocator/geolocator.dart';
 
+const Color primaryTeal = Color(0xFF1D9E75);
+
 class FarmerScreen extends StatefulWidget {
   const FarmerScreen({super.key});
 
@@ -19,8 +19,6 @@ class FarmerScreen extends StatefulWidget {
 }
 
 class _FarmerScreenState extends State<FarmerScreen> {
-  static const Color primaryTeal = Color(0xFF1D9E75);
-  
   int _currentIndex = 0;
   Map<String, dynamic>? _farmerData;
   bool _loading = true;
@@ -70,20 +68,22 @@ class _FarmerScreenState extends State<FarmerScreen> {
     final String farmerName = _farmerData?['name'] ?? _farmerData?['fullName'] ?? 'Farmer';
     final String farmName = _farmerData?['farmName'] ?? 'AgriDirect Farm';
     final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final double? fLat = (_farmerData?['farmLat'] as num?)?.toDouble();
+    final double? fLng = (_farmerData?['farmLng'] as num?)?.toDouble();
 
     final List<Widget> pages = [
       _DashboardTab(
         farmerName: farmerName,
         farmName: farmName,
         uid: uid,
-        farmerLat: _farmerData?['farmLat'],
-        farmerLng: _farmerData?['farmLng'],
+        farmerLat: fLat,
+        farmerLng: fLng,
       ),
       _ProductsTab(
         uid: uid,
         farmName: farmName,
-        farmerLat: _farmerData?['farmLat'],
-        farmerLng: _farmerData?['farmLng'],
+        farmerLat: fLat,
+        farmerLng: fLng,
       ),
       _DeliveryTab(uid: uid),
       _StockTab(uid: uid),
@@ -181,17 +181,17 @@ class _ProfileTabState extends State<_ProfileTab> {
                       children: [
                         CircleAvatar(
                           radius: 60,
-                          backgroundColor: const Color(0xFF1D9E75).withValues(alpha: 0.1),
+                          backgroundColor: primaryTeal.withOpacity(0.1),
                           backgroundImage: getImageProvider(url),
-                          child: (url == null || url.isEmpty) ? const Icon(Icons.agriculture_rounded, size: 60, color: Color(0xFF1D9E75)) : null,
+                          child: (url == null || url.isEmpty) ? const Icon(Icons.agriculture_rounded, size: 60, color: primaryTeal) : null,
                         ),
                         if (_isUploading)
-                          const Positioned.fill(child: CircularProgressIndicator(color: Color(0xFF1D9E75))),
+                          const Positioned.fill(child: CircularProgressIndicator(color: primaryTeal)),
                         Positioned(
                           bottom: 0, right: 0,
                           child: Container(
                             padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(color: Color(0xFF1D9E75), shape: BoxShape.circle),
+                            decoration: const BoxDecoration(color: primaryTeal, shape: BoxShape.circle),
                             child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
                           ),
                         ),
@@ -254,7 +254,7 @@ class _DashboardTabState extends State<_DashboardTab> {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF1D9E75), Color(0xFF2E5BFF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+        gradient: const LinearGradient(colors: [primaryTeal, Color(0xFF2E5BFF)], begin: Alignment.topLeft, end: Alignment.bottomRight),
         borderRadius: BorderRadius.circular(24),
       ),
       child: Row(
@@ -326,7 +326,7 @@ class _DashboardTabState extends State<_DashboardTab> {
           stream: FirebaseFirestore.instance.collection('orders').where('status', isEqualTo: 'Pending Farmer').snapshots(),
           builder: (context, snap) {
             final docs = snap.data?.docs ?? [];
-            final availableDocs = docs.where((d) => (d.data() as Map)['farmerUid'] == null).toList();
+            final availableDocs = docs.where((d) => (d.data() as Map<String, dynamic>)['farmerUid'] == null).toList();
 
             if (availableDocs.isEmpty) return const SizedBox();
 
@@ -369,7 +369,7 @@ class _DashboardTabState extends State<_DashboardTab> {
 
             return Row(
               children: [
-                _StatCard(title: "Revenue", value: "Rs. ${totalNetEarnings.toStringAsFixed(0)}", icon: Icons.payments_rounded, color: const Color(0xFF1D9E75)),
+                _StatCard(title: "Revenue", value: "Rs. ${totalNetEarnings.toStringAsFixed(0)}", icon: Icons.payments_rounded, color: primaryTeal),
                 const SizedBox(width: 16),
                 _StatCard(title: "Active", value: "$pendingCount", icon: Icons.pending_actions_rounded, color: const Color(0xFF2E5BFF)),
               ],
@@ -406,7 +406,7 @@ class _ProductsTabState extends State<_ProductsTab> {
       backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddProduct,
-        backgroundColor: const Color(0xFF1D9E75),
+        backgroundColor: primaryTeal,
         child: const Icon(Icons.add_rounded, color: Colors.white),
       ),
       body: Column(
@@ -419,7 +419,7 @@ class _ProductsTabState extends State<_ProductsTab> {
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: widget.uid).snapshots(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF1D9E75)));
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
                 final docs = snapshot.data!.docs;
       
                 if (docs.isEmpty) {
@@ -487,6 +487,14 @@ class _ProductFormState extends State<_ProductForm> {
   final unit = TextEditingController(text: 'kg');
   XFile? selectedImage;
   bool isUploading = false;
+
+  @override
+  void dispose() {
+    name.dispose();
+    price.dispose();
+    unit.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -580,7 +588,7 @@ class _ProductFormState extends State<_ProductForm> {
       await FirebaseFirestore.instance.collection('products').add({
         'name': name.text,
         'title': name.text,
-        'price': double.parse(price.text),
+        'price': double.tryParse(price.text) ?? 0.0,
         'farmerUid': widget.uid,
         'farmName': widget.farmName,
         'farmerLat': widget.farmerLat,
@@ -615,9 +623,9 @@ class _DeliveryTab extends StatelessWidget {
             child: Heading(title: "Orders", subtitle: "Track your outgoing deliveries"),
           ),
           TabBar(
-            labelColor: const Color(0xFF1D9E75),
+            labelColor: primaryTeal,
             unselectedLabelColor: Colors.grey,
-            indicatorColor: const Color(0xFF1D9E75),
+            indicatorColor: primaryTeal,
             indicatorWeight: 3,
             tabs: const [Tab(text: "Active"), Tab(text: "History")],
           ),
@@ -649,7 +657,7 @@ class _OrderList extends StatelessWidget {
           .where('status', whereIn: statuses)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) return const Center(child: Text("No orders found", style: TextStyle(color: Colors.grey)));
 
@@ -669,10 +677,10 @@ class _OrderList extends StatelessWidget {
                 trailing: status == 'Farmer Accepted'
                     ? ElevatedButton(
                         onPressed: () => docs[i].reference.update({'status': 'Awaiting Pickup'}),
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1D9E75), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                        style: ElevatedButton.styleFrom(backgroundColor: primaryTeal, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                         child: const Text("Pack & Ready", style: TextStyle(color: Colors.white, fontSize: 12)),
                       )
-                    : Text(status, style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1D9E75))),
+                    : Text(status, style: const TextStyle(fontWeight: FontWeight.bold, color: primaryTeal)),
               ),
             );
           },
@@ -691,7 +699,7 @@ class _StockTab extends StatelessWidget {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: uid).snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) return const Center(child: Text("No stock found"));
 
@@ -711,7 +719,7 @@ class _StockTab extends StatelessWidget {
                     child: Column(
                       children: [
                         Text(d['name'] ?? 'Product', style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text("Qty: ${d['stock'] ?? 100}", style: const TextStyle(color: Color(0xFF1D9E75))),
+                        Text("Qty: ${d['stock'] ?? 100}", style: const TextStyle(color: primaryTeal)),
                       ],
                     ),
                   )
@@ -776,33 +784,45 @@ class _OrderAcceptanceTile extends StatelessWidget {
             label: "Accept Order", 
             icon: Icons.check_circle_rounded, 
             isLoading: false, 
-            teal: const Color(0xFF1D9E75), blue: const Color(0xFF2E5BFF), 
+            teal: primaryTeal, blue: const Color(0xFF2E5BFF),
             onTap: () async {
+              final double? customerLat = (data['customerLat'] as num?)?.toDouble();
+              final double? customerLng = (data['customerLng'] as num?)?.toDouble();
+              
+              double deliveryFee = 40.0;
+              
+              if (customerLat != null && customerLng != null && farmerLat != null && farmerLng != null) {
+                final double distance = Geolocator.distanceBetween(
+                  farmerLat!, farmerLng!,
+                  customerLat, customerLng,
+                ) / 1000;
+                
+                if (distance >= 1 && distance <= 3) {
+                  deliveryFee = 50.0;
+                } else if (distance > 3) {
+                  deliveryFee = 15.0 * distance;
+                }
+              }
+
+              final double subtotal = (data['subtotal'] as num?)?.toDouble() ?? 0.0;
+              final double total = subtotal + deliveryFee;
+
               await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
                 'status': 'Farmer Accepted',
                 'farmerUid': currentFarmerUid,
                 'farmName': currentFarmName,
                 'farmerLat': farmerLat,
                 'farmerLng': farmerLng,
+                'deliveryFee': deliveryFee,
+                'total': total,
+                'farmerRevenue': subtotal * 0.8,
+                'adminRevenue': (subtotal * 0.2) + (deliveryFee * 0.2),
+                'deliveryRevenue': deliveryFee * 0.8,
               });
             },
           ),
         ],
       ),
-    );
-  }
-}
-
-class _TrackRiderMapScreen extends StatelessWidget {
-  final String orderId, riderId;
-  final Map<String, dynamic> orderData;
-  const _TrackRiderMapScreen({required this.orderId, required this.riderId, required this.orderData});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text("Track Rider")),
-      body: const Center(child: Text("Map integration here")),
     );
   }
 }

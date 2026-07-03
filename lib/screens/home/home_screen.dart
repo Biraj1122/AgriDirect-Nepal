@@ -303,6 +303,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         final iconCode = cat['iconCode'] as int?;
 
                         final displayIcon = iconCode != null
+                            // ignore: non_const_argument_for_const_parameter
                             ? IconData(iconCode, fontFamily: 'MaterialIcons')
                             : Icons.category_rounded;
 

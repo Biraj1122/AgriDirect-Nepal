@@ -10,7 +10,6 @@ import 'package:farmtech_agridirect/screens/profile/profile_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/my_favourites.dart';
 import 'package:farmtech_agridirect/screens/misc/farmer_screen.dart';
 import 'package:farmtech_agridirect/screens/delivery_person_screen.dart';
-import 'package:farmtech_agridirect/screens/admin_page.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
@@ -55,6 +54,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
             return {
               'name': data['name'] ?? 'Category',
               'icon': iconCode != null
+                  // ignore: non_const_argument_for_const_parameter
                   ? IconData(iconCode, fontFamily: 'MaterialIcons')
                   : Icons.category,
             };

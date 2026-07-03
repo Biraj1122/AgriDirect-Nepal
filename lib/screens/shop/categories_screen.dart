@@ -1,5 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'product_detail_screen.dart';
@@ -72,6 +70,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           return {
             'name': data['name'] ?? 'Category',
             'icon': iconCode != null
+                // ignore: non_const_argument_for_const_parameter
                 ? IconData(iconCode, fontFamily: 'MaterialIcons')
                 : Icons.category_rounded,
           };

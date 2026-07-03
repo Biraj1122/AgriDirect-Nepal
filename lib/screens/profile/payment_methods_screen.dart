@@ -2,7 +2,6 @@ import 'package:farmtech_agridirect/models/user_data.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:geolocator/geolocator.dart';
 import '../orders/orders_screen.dart';
 import '../../models/cart_model.dart';
 
