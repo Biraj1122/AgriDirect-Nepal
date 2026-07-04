@@ -191,7 +191,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.15),
+                                  color: Colors.black.withOpacity(0.15),
                                   blurRadius: 30,
                                   spreadRadius: 2,
                                 ),
@@ -257,7 +257,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                         child: CircularProgressIndicator(
                           valueColor: const AlwaysStoppedAnimation(Colors.white),
                           strokeWidth: 2.5,
-                          backgroundColor: Colors.white.withValues(alpha: 0.2),
+                          backgroundColor: Colors.white.withOpacity(0.2),
                         ),
                       ),
                       if (_showSkipButton)

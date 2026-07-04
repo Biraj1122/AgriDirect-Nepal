@@ -1,12 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/order_model.dart';
-import '../models/product.dart';
-import '../models/user_model.dart';
-import '../models/announcement_model.dart';
-import '../models/research_submission_model.dart';
-import '../utils/db_seeder.dart';
-
-import '../models/price_request_model.dart';
+import 'package:farmtech_agridirect/models/order_model.dart';
+import 'package:farmtech_agridirect/models/product.dart';
+import 'package:farmtech_agridirect/models/user_model.dart';
+import 'package:farmtech_agridirect/models/announcement_model.dart';
+import 'package:farmtech_agridirect/models/research_submission_model.dart';
+import 'package:farmtech_agridirect/utils/db_seeder.dart';
+import 'package:farmtech_agridirect/models/price_request_model.dart';
 
 class AdminRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -16,8 +15,6 @@ class AdminRepository {
       return snapshot.docs.map((doc) => OrderModel.fromFirestore(doc)).toList();
     });
   }
-
-  // ... (keep existing methods)
 
   Stream<List<PriceRequestModel>> getPriceRequests() {
     return _firestore
@@ -30,16 +27,13 @@ class AdminRepository {
   }
 
   Future<void> approvePriceRequest(PriceRequestModel request) async {
-    // 1. Update the price_request status
     await _firestore.collection('price_requests').doc(request.id).update({'status': 'approved'});
 
-    // 2. Update the product in 'products' collection
     await _firestore.collection('products').doc(request.productId).update({
       'price': request.newPrice,
       'unit': request.newUnit,
     });
 
-    // 3. Update the product in 'master_catalog' if it exists there
     final masterSnap = await _firestore
         .collection('master_catalog')
         .where('farmerUid', isEqualTo: request.farmerUid)
@@ -48,12 +42,11 @@ class AdminRepository {
 
     for (var doc in masterSnap.docs) {
       await doc.reference.update({
-        'price': request.newPrice.toString(),
+        'price': request.newPrice,
         'unit': request.newUnit,
       });
     }
 
-    // 4. Notify the farmer
     await _firestore.collection('users').doc(request.farmerUid).collection('notifications').add({
       'title': 'Price Update Approved',
       'body': 'Your request to update ${request.productName} has been approved.',
