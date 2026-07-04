@@ -3,13 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../viewmodels/admin_viewmodel.dart';
-import '../models/order_model.dart';
-import '../models/product.dart';
-import '../models/user_model.dart';
-import '../models/research_submission_model.dart';
-import '../models/price_request_model.dart';
-import 'auth/login_screen.dart';
+import 'package:farmtech_agridirect/viewmodels/admin_viewmodel.dart';
+import 'package:farmtech_agridirect/models/order_model.dart';
+import 'package:farmtech_agridirect/models/product.dart';
+import 'package:farmtech_agridirect/models/user_model.dart';
+import 'package:farmtech_agridirect/models/research_submission_model.dart';
+import 'package:farmtech_agridirect/models/price_request_model.dart';
+import 'package:farmtech_agridirect/Success/shared_widgets.dart';
+import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 
 class AdminPage extends StatelessWidget {
   const AdminPage({super.key});
@@ -91,7 +92,7 @@ class AdminPage extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(20),
-            color: Colors.green.withValues(alpha: 0.1),
+            color: Colors.green.withOpacity(0.1),
             child: Row(
               children: [
                 const CircleAvatar(backgroundColor: Colors.green, child: Icon(Icons.admin_panel_settings, color: Colors.white)),
@@ -154,7 +155,7 @@ class AdminPage extends StatelessWidget {
     bool selected = viewModel.currentIndex == index;
     return ListTile(
       selected: selected,
-      selectedTileColor: Colors.green.withValues(alpha: 0.1),
+      selectedTileColor: Colors.green.withOpacity(0.1),
       leading: Icon(icon, color: selected ? Colors.green : Colors.grey),
       title: Text(label, style: TextStyle(color: selected ? Colors.green : Colors.black)),
       onTap: () => viewModel.setCurrentIndex(index),
@@ -315,7 +316,7 @@ class AdminPage extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(15),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10)],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,11 +398,10 @@ class AdminPage extends StatelessWidget {
                     final product = products[index];
                     return Card(
                       child: ListTile(
-                        leading: CachedNetworkImage(
+                        leading: SafeProductImage(
                           imageUrl: product.image,
                           width: 50,
-                          placeholder: (context, url) => const CircularProgressIndicator(strokeWidth: 2),
-                          errorWidget: (context, url, error) => const Icon(Icons.image),
+                          fit: BoxFit.cover,
                         ),
                         title: Text(product.title),
                         subtitle: Text("Category: ${product.category} | Price: Rs. ${product.price}"),

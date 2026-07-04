@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../repositories/admin_repository.dart';
-import '../models/order_model.dart';
-import '../models/product.dart';
-import '../models/user_model.dart';
-import '../models/research_submission_model.dart';
-import '../models/announcement_model.dart';
-import '../models/price_request_model.dart';
+import 'package:farmtech_agridirect/repositories/admin_repository.dart';
+import 'package:farmtech_agridirect/models/order_model.dart';
+import 'package:farmtech_agridirect/models/product.dart';
+import 'package:farmtech_agridirect/models/user_model.dart';
+import 'package:farmtech_agridirect/models/research_submission_model.dart';
+import 'package:farmtech_agridirect/models/announcement_model.dart';
+import 'package:farmtech_agridirect/models/price_request_model.dart';
 import 'dart:developer' as developer;
 
 class AdminViewModel extends ChangeNotifier {
@@ -24,7 +24,13 @@ class AdminViewModel extends ChangeNotifier {
   bool get showPendingOnly => _showPendingOnly;
 
   AdminViewModel() {
+    refreshAdminState();
+  }
+
+  void refreshAdminState() {
+    _isCheckingRole = true;
     _adminEmail = FirebaseAuth.instance.currentUser?.email;
+    notifyListeners();
     _checkRole();
   }
 
@@ -65,9 +71,8 @@ class AdminViewModel extends ChangeNotifier {
         }
       }
       
-      // If not admin, logout or stay in loading state (should probably logout)
       developer.log("User ${user.email} is not an admin. Role: ${doc.data()?['role']}");
-      _isCheckingRole = false; // Stop loading even if not admin to show unauthorized or redirect
+      _isCheckingRole = false;
       notifyListeners();
     } catch (e) {
       developer.log("Admin check error: $e");

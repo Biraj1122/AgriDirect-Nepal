@@ -298,7 +298,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
           borderRadius: BorderRadius.circular(25),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
+              color: Colors.black.withOpacity(0.08),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -331,7 +331,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? Colors.green.withValues(alpha: 0.12)
+              ? Colors.green.withOpacity(0.12)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(15),
         ),
