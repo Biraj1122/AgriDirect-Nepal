@@ -13,8 +13,6 @@ import 'package:farmtech_agridirect/screens/profile/my_addresses_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/order_history_screen.dart';
 import 'package:farmtech_agridirect/screens/misc/farm_osm_screen.dart';
 import 'package:farmtech_agridirect/models/user_data.dart';
-import 'package:farmtech_agridirect/viewmodels/theme_viewmodel.dart';
-import 'package:provider/provider.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String userName;
@@ -128,8 +126,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -138,182 +134,196 @@ class _ProfileScreenState extends State<ProfileScreen> {
       },
       child: Scaffold(
         backgroundColor: const Color(0xffF8FAF8),
-        body: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
-          slivers: [
-            SliverAppBar(
-              expandedHeight: 220,
-              pinned: true,
-              stretch: true,
-              backgroundColor: Colors.green,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => _handleBack(context),
-              ),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.settings_outlined, color: Colors.white),
-                  onPressed: () async {
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => EditProfileScreen(
-                          currentName: fullName ?? widget.userName,
-                          currentPhone: phone ?? "Not set",
-                        ),
-                      ),
-                    );
-                    if (result == true) {
-                      _fetchUserData();
-                    }
-                  },
-                ),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                stretchModes: const [
-                  StretchMode.zoomBackground,
-                  StretchMode.blurBackground,
-                ],
-                background: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    CachedNetworkImage(
-                      imageUrl: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1000",
-                      fit: BoxFit.cover,
+        body: Stack(
+          children: [
+            CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverAppBar(
+                  expandedHeight: 220,
+                  pinned: true,
+                  stretch: true,
+                  backgroundColor: Colors.green,
+                  leading: IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => _handleBack(context),
+                  ),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                      onPressed: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => EditProfileScreen(
+                              currentName: fullName ?? widget.userName,
+                              currentPhone: phone ?? "Not set",
+                            ),
+                          ),
+                        );
+                        if (result == true) {
+                          _fetchUserData();
+                        }
+                      },
                     ),
-                    Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.4),
-                            Colors.green.withValues(alpha: 0.8),
-                          ],
+                  ],
+                  flexibleSpace: FlexibleSpaceBar(
+                    stretchModes: const [
+                      StretchMode.zoomBackground,
+                      StretchMode.blurBackground,
+                    ],
+                    background: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CachedNetworkImage(
+                          imageUrl: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=1000",
+                          fit: BoxFit.cover,
                         ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 40,
-                      left: 20,
-                      right: 20,
-                      child: Row(
-                        children: [
-                          _buildProfileImage(),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  fullName ?? widget.userName,
-                                  style: const TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  phone ?? "Add phone number",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.white.withValues(alpha: 0.9),
-                                  ),
-                                ),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.4),
+                                Colors.green.withValues(alpha: 0.8),
                               ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                        Positioned(
+                          bottom: 40,
+                          left: 20,
+                          right: 20,
+                          child: Row(
+                            children: [
+                              _buildProfileImage(),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      fullName ?? widget.userName,
+                                      style: const TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.white,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      phone ?? "Add phone number",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Colors.white.withValues(alpha: 0.9),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSectionHeader("Account Overview"),
+                        _buildMenuCard([
+                          _buildMenuItem(
+                            icon: Icons.shopping_bag_outlined,
+                            title: "Order History",
+                            color: Colors.blue,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderHistoryScreen())),
+                          ),
+                          _buildMenuItem(
+                            icon: Icons.location_on_outlined,
+                            title: "My Addresses",
+                            color: Colors.orange,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAddressesScreen())),
+                          ),
+                          _buildMenuItem(
+                            icon: Icons.payment_outlined,
+                            title: "Payment Methods",
+                            color: Colors.purple,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsScreen(subtotal: 0, deliveryFee: 0, total: 0))),
+                          ),
+                        ]),
+
+                        const SizedBox(height: 24),
+                        _buildSectionHeader("Default Delivery Location"),
+                        _buildLocationCard(),
+                        
+                        const SizedBox(height: 24),
+                        _buildSectionHeader("Personalization"),
+                        _buildMenuCard([
+                          _buildMenuItem(
+                            icon: Icons.favorite_border,
+                            title: "My Favorites",
+                            color: Colors.red,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => MyFavouritesScreen(onFavouriteToggle: widget.onFavouriteToggle ?? (item) {}))),
+                          ),
+                          _buildMenuItem(
+                            icon: Icons.notifications_none_outlined,
+                            title: "Notifications",
+                            color: Colors.amber,
+                            badgeStream: FirebaseAuth.instance.currentUser?.uid != null
+                                ? FirebaseFirestore.instance
+                                    .collection('users')
+                                    .doc(FirebaseAuth.instance.currentUser!.uid)
+                                    .collection('notifications')
+                                    .where('isRead', isEqualTo: false)
+                                    .snapshots()
+                                : null,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+                          ),
+                        ]),
+
+                        const SizedBox(height: 24),
+                        _buildSectionHeader("Support & Info"),
+                        _buildMenuCard([
+                          _buildMenuItem(
+                            icon: Icons.help_outline,
+                            title: "Help & Support",
+                            color: Colors.teal,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportScreen())),
+                          ),
+                          _buildMenuItem(
+                            icon: Icons.info_outline,
+                            title: "About AgriDirect",
+                            color: Colors.indigo,
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutUsScreen())),
+                          ),
+                        ]),
+
+                        const SizedBox(height: 32),
+                        _buildLogoutButton(context),
+                        const SizedBox(height: 40),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (_isLoading)
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                  minHeight: 3,
                 ),
               ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildSectionHeader("Account Overview"),
-                    _buildMenuCard([
-                      _buildMenuItem(
-                        icon: Icons.shopping_bag_outlined,
-                        title: "Order History",
-                        color: Colors.blue,
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderHistoryScreen())),
-                      ),
-                      _buildMenuItem(
-                        icon: Icons.location_on_outlined,
-                        title: "My Addresses",
-                        color: Colors.orange,
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAddressesScreen())),
-                      ),
-                      _buildMenuItem(
-                        icon: Icons.payment_outlined,
-                        title: "Payment Methods",
-                        color: Colors.purple,
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsScreen(subtotal: 0, deliveryFee: 0, total: 0))),
-                      ),
-                    ]),
-
-                    const SizedBox(height: 24),
-                    _buildSectionHeader("Default Delivery Location"),
-                    _buildLocationCard(),
-                    
-                    const SizedBox(height: 24),
-                    _buildSectionHeader("Personalization"),
-                    _buildMenuCard([
-                      _buildThemeToggle(context),
-                      _buildMenuItem(
-                        icon: Icons.favorite_border,
-                        title: "My Favorites",
-                        color: Colors.red,
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => MyFavouritesScreen(onFavouriteToggle: widget.onFavouriteToggle ?? (item) {}))),
-                      ),
-                      _buildMenuItem(
-                        icon: Icons.notifications_none_outlined,
-                        title: "Notifications",
-                        color: Colors.amber,
-                        badgeStream: FirebaseAuth.instance.currentUser?.uid != null
-                            ? FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(FirebaseAuth.instance.currentUser!.uid)
-                                .collection('notifications')
-                                .where('isRead', isEqualTo: false)
-                                .snapshots()
-                            : null,
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
-                      ),
-                    ]),
-
-                    const SizedBox(height: 24),
-                    _buildSectionHeader("Support & Info"),
-                    _buildMenuCard([
-                      _buildMenuItem(
-                        icon: Icons.help_outline,
-                        title: "Help & Support",
-                        color: Colors.teal,
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportScreen())),
-                      ),
-                      _buildMenuItem(
-                        icon: Icons.info_outline,
-                        title: "About AgriDirect",
-                        color: Colors.indigo,
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutUsScreen())),
-                      ),
-                    ]),
-
-                    const SizedBox(height: 32),
-                    _buildLogoutButton(context),
-                    const SizedBox(height: 40),
-                  ],
-                ),
-              ),
-            ),
           ],
         ),
       ),
@@ -540,51 +550,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildThemeToggle(BuildContext context) {
-    final themeViewModel = context.watch<ThemeViewModel>();
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => themeViewModel.toggleTheme(),
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  themeViewModel.isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
-                  color: Colors.green,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  "Dark Mode",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Switch.adaptive(
-                value: themeViewModel.isDarkMode,
-                onChanged: (_) => themeViewModel.toggleTheme(),
-                activeColor: Colors.green,
-              ),
-            ],
-          ),
         ),
       ),
     );

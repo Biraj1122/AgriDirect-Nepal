@@ -1,23 +1,46 @@
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
-import 'package:aws_s3_upload/aws_s3_upload.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:cloudinary_public/cloudinary_public.dart';
 
 /// Service to handle file uploads to different storage providers.
 class StorageService {
-  // Cloudflare R2 Credentials (Placeholders - to be replaced with production values)
-  static const String _accessKey = 'YOUR_ACCESS_KEY';
-  static const String _secretKey = 'YOUR_SECRET_KEY';
-  static const String _bucket = 'agridirect-uploads';
-  static const String _region = 'auto'; // Cloudflare R2 uses 'auto'
-  
-  // Public URL for accessing uploaded images (Cloudflare R2 Public Bucket/Custom Domain)
-  static const String _baseUrl = 'https://pub-your-id.r2.dev';
+  // Cloudinary Configuration
+  // Using a generic cloud name and unsigned upload preset for ease of use.
+  static const String _cloudName = 'dwu54m8er'; // generic cloud name for AgriDirect Nepal
+  static const String _uploadPreset = 'agridirect_unsigned'; 
 
-  /// Uploads an image to Firebase Storage and returns the download URL.
+  final CloudinaryPublic _cloudinary = CloudinaryPublic(_cloudName, _uploadPreset, cache: false);
+
+  /// Uploads an image to Cloudinary (Primary) with Firebase Storage as fallback.
   Future<String?> uploadImage(XFile xFile, String folder) async {
+    try {
+      debugPrint('Cloudinary: Starting upload for ${xFile.name} into $folder...');
+      
+      CloudinaryResponse response = await _cloudinary.uploadFile(
+        CloudinaryFile.fromFile(
+          xFile.path,
+          folder: 'agridirect/$folder',
+          resourceType: CloudinaryResourceType.Image,
+        ),
+      );
+
+      if (response.secureUrl.isNotEmpty) {
+        debugPrint('Cloudinary Upload Success: ${response.secureUrl}');
+        return response.secureUrl;
+      }
+    } catch (e) {
+      debugPrint('Cloudinary Upload Error: $e');
+      debugPrint('Attempting Firebase Storage Fallback...');
+      return await _uploadToFirebase(xFile, folder);
+    }
+    return null;
+  }
+
+  /// Internal method for Firebase Storage upload (Fallback).
+  Future<String?> _uploadToFirebase(XFile xFile, String folder) async {
     try {
       final String fileName = _generateFileName(xFile);
       final storageRef = FirebaseStorage.instance.ref().child(folder).child(fileName);
@@ -26,57 +49,16 @@ class StorageService {
       final metadata = SettableMetadata(contentType: _getContentType(ext));
       
       if (kIsWeb) {
-        // Use putData for Web
         final bytes = await xFile.readAsBytes();
         final TaskSnapshot uploadTask = await storageRef.putData(bytes, metadata);
         return await uploadTask.ref.getDownloadURL();
       } else {
-        // Use putFile for Mobile/Desktop (more robust for various formats)
         final file = File(xFile.path);
         final TaskSnapshot uploadTask = await storageRef.putFile(file, metadata);
         return await uploadTask.ref.getDownloadURL();
       }
     } catch (e) {
-      debugPrint('Firebase Storage Error: $e');
-      return null;
-    }
-  }
-
-  /// Alias for [uploadImage] for backward compatibility.
-  Future<String?> uploadToFirebase(XFile xFile, String folder) => uploadImage(xFile, folder);
-
-  /// Uploads an image to AWS S3 (or compatible R2) and returns the URL.
-  Future<String?> uploadToS3(XFile xFile, String folder) async {
-    try {
-      final String ext = p.extension(xFile.name).toLowerCase();
-      final String fileName = '${DateTime.now().millisecondsSinceEpoch}${ext.isEmpty ? ".jpg" : ext}';
-      
-      // Note: This implementation may need adjustment for Flutter Web
-      // aws_s3_upload 1.5.0 uses File object from dart:io for mobile
-      if (!kIsWeb) {
-        final File file = File(xFile.path);
-        final String? result = await AwsS3.uploadFile(
-          accessKey: _accessKey,
-          secretKey: _secretKey,
-          bucket: _bucket,
-          region: _region,
-          file: file,
-          destDir: folder, 
-          filename: fileName,
-        );
-
-        if (result != null) {
-          final String downloadUrl = '$_baseUrl/$folder/$fileName';
-          debugPrint('Upload successful: $downloadUrl');
-          return downloadUrl;
-        }
-      } else {
-        debugPrint('AWS S3 upload not fully implemented for Web in this snippet');
-      }
-      
-      return null;
-    } catch (e) {
-      debugPrint('S3 Upload Error: $e');
+      debugPrint('Firebase Storage Fallback Error: $e');
       return null;
     }
   }
@@ -104,7 +86,7 @@ class StorageService {
     }
   }
 
-  /// Optional: Cleanup local temporary files if needed
+  /// Cleanup local temporary files if needed.
   Future<void> cleanup(XFile xFile) async {
     try {
       if (!kIsWeb) {

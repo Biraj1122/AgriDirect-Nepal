@@ -35,10 +35,12 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    _pinAnimation = Tween<double>(begin: 0, end: -15).animate(
-      CurvedAnimation(parent: _pinController, curve: Curves.easeOut),
-    );
+    _pinAnimation = Tween<double>(begin: 0, end: -15).animate(curvedPinAnimation());
     initializeLocation();
+  }
+
+  CurvedAnimation curvedPinAnimation() {
+    return CurvedAnimation(parent: _pinController, curve: Curves.easeOut);
   }
 
   Future<void> initializeLocation() async {
@@ -95,7 +97,10 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
       currentPosition.longitude,
     );
     
-    cartModel.setDistance(distance);
+    // Check if cartModel is available globally
+    try {
+       cartModel.setDistance(distance);
+    } catch (_) {}
 
     UserData.setAddress(
       address: currentAddress,
@@ -169,7 +174,7 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
                   initialCameraPosition: CameraPosition(
                     target: currentPosition,
                     zoom: 15,
-                    tilt: 45, // 3D feel
+                    tilt: 45, 
                   ),
                   onMapCreated: (controller) => mapController = controller,
                   onCameraMove: (CameraPosition position) {
@@ -181,10 +186,10 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
                   },
                   onCameraIdle: _onCameraIdle,
                   myLocationEnabled: true,
-                  styleString: "https://tiles.openfreemap.org/styles/positron", // Clean modern style
+                  styleString: "https://tiles.openfreemap.org/styles/positron", 
                 ),
           
-          // MODERN SEARCH BAR (FLOATING)
+          // FLOATING SEARCH BAR
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -193,12 +198,12 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
+                      borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 20,
-                          offset: const Offset(0, 5),
+                          offset: const Offset(0, 8),
                         ),
                       ],
                     ),
@@ -207,8 +212,9 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
                       onChanged: _handleSearch,
                       decoration: InputDecoration(
                         hintText: "Search location...",
+                        hintStyle: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.w500),
                         prefixIcon: IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.black),
+                          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.black, size: 20),
                           onPressed: () => Navigator.pop(context),
                         ),
                         suffixIcon: _isSearching 
@@ -216,46 +222,55 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
                               padding: EdgeInsets.all(12),
                               child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
                             )
-                          : const Icon(Icons.search, color: Colors.grey),
+                          : const Icon(Icons.search_rounded, color: Colors.grey),
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(vertical: 15),
                       ),
                     ),
                   ),
                   
-                  // SEARCH RESULTS
+                  // SMOOTH SEARCH RESULTS
                   if (_searchResults.isNotEmpty)
                     Container(
-                      margin: const EdgeInsets.only(top: 10),
-                      constraints: const BoxConstraints(maxHeight: 300),
+                      margin: const EdgeInsets.only(top: 12),
+                      constraints: const BoxConstraints(maxHeight: 320),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(15),
+                        borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 20,
-                            offset: const Offset(0, 5),
+                            blurRadius: 25,
+                            offset: const Offset(0, 10),
                           ),
                         ],
                       ),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: _searchResults.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (ctx, i) {
-                          final res = _searchResults[i];
-                          return ListTile(
-                            leading: const Icon(Icons.location_on_outlined, color: Colors.green),
-                            title: Text(
-                              res['display_name'],
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 14),
-                            ),
-                            onTap: () => _selectSearchResult(res),
-                          );
-                        },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.zero,
+                          itemCount: _searchResults.length,
+                          separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade100),
+                          itemBuilder: (ctx, i) {
+                            final res = _searchResults[i];
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                              leading: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), shape: BoxShape.circle),
+                                child: const Icon(Icons.location_on_rounded, color: Colors.green, size: 20),
+                              ),
+                              title: Text(
+                                res['display_name'],
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1D25)),
+                              ),
+                              onTap: () => _selectSearchResult(res),
+                            );
+                          },
+                        ),
                       ),
                     ),
                 ],
@@ -263,30 +278,31 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
             ),
           ),
 
-          // ANIMATED PIN IN CENTER
+          // PIN WITH LABEL
           Center(
             child: AnimatedBuilder(
               animation: _pinAnimation,
               builder: (context, child) {
                 return Transform.translate(
-                  offset: Offset(0, _pinAnimation.value - 20), // -20 to center the tip
+                  offset: Offset(0, _pinAnimation.value - 24), 
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
                           color: Colors.black,
                           borderRadius: BorderRadius.circular(10),
+                          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 10)],
                         ),
                         child: const Text(
                           "Pin Location",
-                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                         ),
                       ),
                       const Icon(
-                        Icons.location_on,
-                        size: 45,
+                        Icons.location_on_rounded,
+                        size: 50,
                         color: Colors.green,
                       ),
                     ],
@@ -296,18 +312,18 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
             ),
           ),
 
-          // BOTTOM ADDRESS CARD
+          // BOTTOM CONFIRMATION CARD
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(30), // Pathao style round card
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -10)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 20, offset: const Offset(0, -10)),
                 ],
               ),
               child: Column(
@@ -316,47 +332,38 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
                 children: [
                   Center(
                     child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+                      width: 40, height: 4,
+                      decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
                     ),
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 20),
                   const Text(
                     "DELIVERY ADDRESS",
-                    style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                    style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.w800, letterSpacing: 1.2),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: Colors.green.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.location_on, color: Colors.green, size: 22),
+                        child: const Icon(Icons.location_searching_rounded, color: Colors.green, size: 24),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 16),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isMoving ? "Moving map..." : currentAddress,
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, height: 1.3),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
+                        child: Text(
+                          isMoving ? "Updating map position..." : currentAddress,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Color(0xFF1A1D25), height: 1.4),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 25),
+                  const SizedBox(height: 28),
                   SizedBox(
                     width: double.infinity,
                     height: 56,
@@ -366,11 +373,12 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
                         backgroundColor: Colors.green,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        elevation: 0,
+                        elevation: 8,
+                        shadowColor: Colors.green.withValues(alpha: 0.3),
                       ),
                       child: const Text(
                         "CONFIRM LOCATION",
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                       ),
                     ),
                   ),
@@ -379,7 +387,7 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
             ),
           ),
 
-          // MY LOCATION BUTTON (Pathao style)
+          // MY LOCATION BUTTON
           Positioned(
             bottom: 230,
             right: 20,
@@ -393,11 +401,11 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
                     ),
                   );
                 } catch (e) {
-                  debugPrint("Error getting location: $e");
+                  debugPrint("Location button error: $e");
                 }
               },
               child: Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   shape: BoxShape.circle,
@@ -405,7 +413,7 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
                     BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 15, offset: const Offset(0, 5)),
                   ],
                 ),
-                child: const Icon(Icons.my_location, color: Colors.green),
+                child: const Icon(Icons.my_location_rounded, color: Colors.green, size: 24),
               ),
             ),
           ),

@@ -97,7 +97,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         if (_imageFile != null) {
           final xFile = XFile(_imageFile!.path);
           imageUrl = await _storageService.uploadImage(xFile, 'profile_pics');
-          if (imageUrl == null) throw "Failed to upload image";
+          if (imageUrl == null) {
+            throw "Failed to upload image. Please check your internet connection or try a different photo.";
+          }
         }
 
         // Update Name in Firestore

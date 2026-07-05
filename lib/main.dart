@@ -8,8 +8,6 @@ import 'package:farmtech_agridirect/viewmodels/admin_viewmodel.dart';
 import 'package:farmtech_agridirect/firebase_options.dart';
 import 'package:farmtech_agridirect/screens/misc/splash_screen.dart';
 
-import 'package:farmtech_agridirect/viewmodels/theme_viewmodel.dart';
-
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
@@ -40,7 +38,6 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => AdminViewModel()),
-          ChangeNotifierProvider(create: (_) => ThemeViewModel()),
         ],
         child: const AgriDirectApp(),
       ),
@@ -56,23 +53,14 @@ class AgriDirectApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeViewModel = context.watch<ThemeViewModel>();
-
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'AgriDirect Nepal',
-      themeMode: themeViewModel.themeMode,
+      themeMode: ThemeMode.light, // Forced Light Mode
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
         scaffoldBackgroundColor: Colors.white,
-      ),
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.green,
-          brightness: Brightness.dark,
-        ),
       ),
       builder: (context, child) {
         ErrorWidget.builder = (FlutterErrorDetails details)

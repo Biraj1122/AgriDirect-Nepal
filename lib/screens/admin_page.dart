@@ -1,13 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import '../viewmodels/admin_viewmodel.dart';
-import '../viewmodels/theme_viewmodel.dart';
 import '../models/order_model.dart';
 import '../models/product.dart';
 import '../models/user_model.dart';
@@ -15,6 +16,7 @@ import '../models/research_submission_model.dart';
 import '../models/price_request_model.dart';
 import '../Success/shared_widgets.dart';
 import '../utils/db_seeder.dart';
+import '../services/storage_service.dart';
 import 'auth/login_screen.dart';
 
 class AdminPage extends StatefulWidget {
@@ -100,17 +102,6 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
             IconButton(
               onPressed: () => viewModel.refreshAdminState(),
               icon: const Icon(Icons.refresh_rounded, color: primaryTeal),
-            ),
-            const SizedBox(width: 4),
-            Consumer<ThemeViewModel>(
-              builder: (context, themeVM, _) => IconButton(
-                onPressed: () => themeVM.toggleTheme(),
-                icon: Icon(
-                  themeVM.isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-                  color: Colors.amber,
-                ),
-                tooltip: "Toggle Dark Mode",
-              ),
             ),
             const SizedBox(width: 8),
             Padding(
@@ -1346,6 +1337,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
     final unitController = TextEditingController(text: existingProduct?.unit ?? 'kg');
     final imageUrlController = TextEditingController(text: existingProduct?.image ?? '');
     final descController = TextEditingController(text: existingProduct?.description ?? '');
+    XFile? adminSelectedImage;
     bool isSaving = false;
 
     showDialog(
@@ -1359,6 +1351,26 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Center(
+                  child: GestureDetector(
+                    onTap: () async {
+                      final img = await ImagePicker().pickImage(source: ImageSource.gallery);
+                      if (img != null) {
+                        setDialogState(() => adminSelectedImage = img);
+                      }
+                    },
+                    child: Container(
+                      width: 100, height: 100,
+                      decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade200)),
+                      child: adminSelectedImage != null
+                          ? ClipRRect(borderRadius: BorderRadius.circular(20), child: Image.file(File(adminSelectedImage!.path), fit: BoxFit.cover))
+                          : (imageUrlController.text.isNotEmpty 
+                              ? ClipRRect(borderRadius: BorderRadius.circular(20), child: CachedNetworkImage(imageUrl: imageUrlController.text, fit: BoxFit.cover))
+                              : const Icon(Icons.add_a_photo_rounded, color: Colors.grey)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
                 const FieldLabel(label: "PRODUCT NAME"),
                 const SizedBox(height: 8),
                 TextField(controller: nameController, decoration: customInputDecoration(hint: "e.g. Organic Ginger", icon: Icons.shopping_basket, teal: primaryTeal)),
@@ -1412,14 +1424,33 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                   if (nameController.text.trim().isEmpty || priceController.text.trim().isEmpty) return;
                   setDialogState(() => isSaving = true);
                   
+                  String finalImageUrl = imageUrlController.text.trim();
+                  if (adminSelectedImage != null) {
+                    try {
+                      final storageService = StorageService();
+                      final uploadedUrl = await storageService.uploadImage(adminSelectedImage!, 'catalog');
+                      if (uploadedUrl != null) {
+                        finalImageUrl = uploadedUrl;
+                      } else {
+                        throw "Upload failed";
+                      }
+                    } catch (e) {
+                      setDialogState(() => isSaving = false);
+                      if (dialogContext.mounted) {
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text("Image upload failed: $e")));
+                      }
+                      return;
+                    }
+                  }
+
                   final data = {
                     'name': nameController.text.trim(),
                     'title': nameController.text.trim(),
                     'category': categoryController.text.trim(),
                     'price': double.tryParse(priceController.text.trim()) ?? 0,
                     'unit': unitController.text.trim(),
-                    'image': imageUrlController.text.trim(),
-                    'imageUrl': imageUrlController.text.trim(),
+                    'image': finalImageUrl,
+                    'imageUrl': finalImageUrl,
                     'description': descController.text.trim(),
                     'longDescription': descController.text.trim(),
                     'updatedAt': FieldValue.serverTimestamp(),

@@ -212,9 +212,6 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final isLargeScreen = size.height > 800;
-
     // Define Role-Based Themes
     List<Color> gradientColors;
     IconData decorativeIcon;
@@ -223,42 +220,34 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     switch (_userRole) {
       case 'Farmer':
         gradientColors = [
-          Colors.brown.shade900,
-          Colors.brown.shade700,
-          Colors.green.shade800,
-          Colors.green.shade600,
+          const Color(0xFF432818),
+          const Color(0xFF1D9E75),
         ];
         decorativeIcon = Icons.agriculture_rounded;
         roleMessage = "Your digital farm hub";
         break;
       case 'Delivery Person':
         gradientColors = [
-          Colors.orange.shade900,
-          Colors.deepOrange.shade700,
-          Colors.blue.shade900,
-          Colors.blue.shade700,
+          const Color(0xFFE65100),
+          const Color(0xFF1A237E),
         ];
-        decorativeIcon = Icons.local_shipping_outlined;
+        decorativeIcon = Icons.local_shipping_rounded;
         roleMessage = "Ready for the next delivery?";
         break;
       case 'Admin':
         gradientColors = [
-          Colors.blueGrey.shade900,
-          Colors.blueGrey.shade700,
-          Colors.teal.shade800,
-          Colors.teal.shade600,
+          const Color(0xFF263238),
+          const Color(0xFF004D40),
         ];
-        decorativeIcon = Icons.admin_panel_settings_outlined;
+        decorativeIcon = Icons.admin_panel_settings_rounded;
         roleMessage = "System Overview Control";
         break;
       default: // Customer or Guest
         gradientColors = [
-          Colors.green.shade900,
-          Colors.green.shade700,
-          Colors.green.shade500,
-          Colors.lightGreen.shade400,
+          const Color(0xFF1B5E20),
+          const Color(0xFF4CAF50),
         ];
-        decorativeIcon = Icons.eco;
+        decorativeIcon = Icons.eco_rounded;
         roleMessage = "Fresh from farm to your home";
     }
 
@@ -268,27 +257,26 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
         height: double.infinity,
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
             colors: gradientColors,
-            stops: const [0.0, 0.3, 0.7, 1.0],
           ),
         ),
         child: Stack(
           children: [
             Positioned(
-              top: -50,
-              right: -50,
+              top: -40,
+              right: -40,
               child: Opacity(
                 opacity: 0.1,
-                child: Icon(decorativeIcon, size: isLargeScreen ? 300 : 200, color: Colors.white),
+                child: Icon(decorativeIcon, size: 300, color: Colors.white),
               ),
             ),
             
             SafeArea(
               child: Column(
                 children: [
-                  const Spacer(),
+                  const Spacer(flex: 2),
                   Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -327,51 +315,69 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                             ),
                           ),
                         ),
-                        const SizedBox(height: 30),
+                        const SizedBox(height: 35),
                         
-                        // Main App Title (Consistent)
                         const Text(
                           "AgriDirect Nepal",
                           style: TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 36,
+                            fontWeight: FontWeight.w900,
                             color: Colors.white,
-                            letterSpacing: 1.2,
+                            letterSpacing: -0.5,
                           ),
                         ),
                         
                         const SizedBox(height: 8),
                         
-                        // Dynamic Role-Based Message
                         Text(
                           roleMessage,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
-                            color: Colors.white70,
+                            color: Colors.white.withValues(alpha: 0.7),
                             fontStyle: FontStyle.italic,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                         
-                        const SizedBox(height: 50),
+                        const SizedBox(height: 80),
+
+                        if (_userRole != "Default") ...[
+                          const Text(
+                            "-",
+                            style: TextStyle(color: Colors.white70, fontSize: 24, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            "Welcome back, $_userRole!",
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              fontSize: 14,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ],
+                        
+                        const SizedBox(height: 40),
                         
                         if (_errorMessage == null) ...[
-                          Column(
-                            children: [
-                              const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation(Colors.white),
-                                  strokeWidth: 2,
+                          if (_userRole == "Default")
+                            Column(
+                              children: [
+                                const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    valueColor: AlwaysStoppedAnimation(Colors.white),
+                                    strokeWidth: 2,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 20),
-                              Text(
-                                _loadingMessage,
-                                style: const TextStyle(color: Colors.white60, fontSize: 13),
-                              ),
-                            ],
-                          ),
+                                const SizedBox(height: 20),
+                                Text(
+                                  _loadingMessage,
+                                  style: const TextStyle(color: Colors.white60, fontSize: 12),
+                                ),
+                              ],
+                            ),
                           if (_showSkipButton)
                             Padding(
                               padding: const EdgeInsets.only(top: 20),
@@ -410,14 +416,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                       ],
                     ),
                   ),
-                  const Spacer(),
+                  const Spacer(flex: 3),
                   
-                  // App Version at Bottom
                   Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
+                    padding: const EdgeInsets.only(bottom: 30),
                     child: Text(
                       "Version $_appVersion",
-                      style: const TextStyle(color: Colors.white30, fontSize: 12),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.2), fontSize: 12, fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
