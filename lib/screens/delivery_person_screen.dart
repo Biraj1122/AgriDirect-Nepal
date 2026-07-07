@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../services/location_service.dart';
 import '../services/storage_service.dart';
+import '../Success/exit_wrapper.dart';
 import '../Success/shared_widgets.dart';
 import '../viewmodels/delivery_viewmodel.dart';
 import 'auth/login_screen.dart';
@@ -224,46 +225,48 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator(color: primaryTeal)));
     }
 
-    return Scaffold(
-      backgroundColor: backgroundColor,
-      body: SafeArea(
-        child: IndexedStack(
-          index: vm.tabIndex,
-          children: [
-            _HomeMapTab(user: FirebaseAuth.instance.currentUser!, driverPos: vm.driverPos, activeOrderData: vm.activeOrderData),
-            _ShipmentsTab(user: FirebaseAuth.instance.currentUser!, onSwitchToMap: () => vm.setTabIndex(0)),
-            _EarningsTab(user: FirebaseAuth.instance.currentUser!),
-            _ProfileTab(user: FirebaseAuth.instance.currentUser!, logoutCallback: _logout),
-          ],
+    return DoubleBackExitWrapper(
+      child: Scaffold(
+        backgroundColor: backgroundColor,
+        body: SafeArea(
+          child: IndexedStack(
+            index: vm.tabIndex,
+            children: [
+              _HomeMapTab(user: FirebaseAuth.instance.currentUser!, driverPos: vm.driverPos, activeOrderData: vm.activeOrderData),
+              _ShipmentsTab(user: FirebaseAuth.instance.currentUser!, onSwitchToMap: () => vm.setTabIndex(0)),
+              _EarningsTab(user: FirebaseAuth.instance.currentUser!),
+              _ProfileTab(user: FirebaseAuth.instance.currentUser!, logoutCallback: _logout),
+            ],
+          ),
         ),
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: vm.tabIndex,
-          onTap: (i) => vm.setTabIndex(i),
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: primaryTeal,
-          unselectedItemColor: Colors.grey.shade400,
-          backgroundColor: Colors.white,
-          elevation: 0,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.map_outlined), activeIcon: Icon(Icons.map_rounded), label: "Map"),
-            BottomNavigationBarItem(icon: Icon(Icons.local_shipping_outlined), activeIcon: Icon(Icons.local_shipping_rounded), label: "Shipments"),
-            BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), activeIcon: Icon(Icons.account_balance_wallet_rounded), label: "Wallet"),
-            BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded), activeIcon: Icon(Icons.person_rounded), label: "Profile"),
-          ],
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: BottomNavigationBar(
+            currentIndex: vm.tabIndex,
+            onTap: (i) => vm.setTabIndex(i),
+            type: BottomNavigationBarType.fixed,
+            selectedItemColor: primaryTeal,
+            unselectedItemColor: Colors.grey.shade400,
+            backgroundColor: Colors.white,
+            elevation: 0,
+            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+            items: const [
+              BottomNavigationBarItem(icon: Icon(Icons.map_outlined), activeIcon: Icon(Icons.map_rounded), label: "Map"),
+              BottomNavigationBarItem(icon: Icon(Icons.local_shipping_outlined), activeIcon: Icon(Icons.local_shipping_rounded), label: "Shipments"),
+              BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), activeIcon: Icon(Icons.account_balance_wallet_rounded), label: "Wallet"),
+              BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded), activeIcon: Icon(Icons.person_rounded), label: "Profile"),
+            ],
+          ),
         ),
       ),
     );

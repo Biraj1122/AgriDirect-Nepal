@@ -13,6 +13,7 @@ import '../profile/edit_profile_screen.dart';
 import '../misc/farmer_screen.dart';
 import '../delivery_person_screen.dart';
 import '../auth/login_screen.dart';
+import '../../Success/exit_wrapper.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String userName;
@@ -169,30 +170,32 @@ class _NavigationScreenState extends State<NavigationScreen> {
       ),
     ];
 
-    return Scaffold(
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 400),
-        child: screens[currentIndex],
-      ),
-      bottomNavigationBar: Container(
-        margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 20, offset: const Offset(0, 8))],
+    return DoubleBackExitWrapper(
+      child: Scaffold(
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 400),
+          child: screens[currentIndex],
         ),
-        child: SafeArea(
-          top: false,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: [
-              navItem(Icons.home_rounded, "Home", 0),
-              navItem(Icons.grid_view_rounded, "Catalog", 1),
-              navItem(Icons.shopping_cart_rounded, "Cart", 2),
-              navItem(Icons.receipt_long_rounded, "Orders", 3),
-              navItem(Icons.person_rounded, "Profile", 4),
-            ],
+        bottomNavigationBar: Container(
+          margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 20, offset: const Offset(0, 8))],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                navItem(Icons.home_rounded, "Home", 0),
+                navItem(Icons.grid_view_rounded, "Catalog", 1),
+                navItem(Icons.shopping_cart_rounded, "Cart", 2),
+                navItem(Icons.receipt_long_rounded, "Orders", 3),
+                navItem(Icons.person_rounded, "Profile", 4),
+              ],
+            ),
           ),
         ),
       ),

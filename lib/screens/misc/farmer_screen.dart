@@ -13,6 +13,7 @@ import 'package:farmtech_agridirect/models/product.dart';
 import 'package:farmtech_agridirect/Success/skeleton_loader.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../Success/exit_wrapper.dart';
 import '../../Success/shared_widgets.dart';
 import 'farm_osm_screen.dart';
 
@@ -40,51 +41,53 @@ class FarmerScreen extends StatelessWidget {
       const _FarmerProfileScreen(),
     ];
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
+    return DoubleBackExitWrapper(
+      child: Scaffold(
         backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: false,
-        title: Text(
-          farmName,
-          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 20),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-            onPressed: () => vm.logout(context, const LoginScreen()),
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: pages[vm.currentIndex],
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5)),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: vm.currentIndex,
-          onTap: (i) => vm.setCurrentIndex(i),
-          type: BottomNavigationBarType.fixed,
+        appBar: AppBar(
           backgroundColor: Colors.white,
-          selectedItemColor: primaryTeal,
-          unselectedItemColor: Colors.grey.shade400,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
           elevation: 0,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'Home'),
-            BottomNavigationBarItem(icon: Icon(Icons.storefront_rounded), label: 'My Store'),
-            BottomNavigationBarItem(icon: Icon(Icons.local_shipping_rounded), label: 'Orders'),
-            BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
+          centerTitle: false,
+          title: Text(
+            farmName,
+            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 20),
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+              onPressed: () => vm.logout(context, const LoginScreen()),
+            ),
+            const SizedBox(width: 8),
           ],
+        ),
+        body: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: pages[vm.currentIndex],
+        ),
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, -5)),
+            ],
+          ),
+          child: BottomNavigationBar(
+            currentIndex: vm.currentIndex,
+            onTap: (i) => vm.setCurrentIndex(i),
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: Colors.white,
+            selectedItemColor: primaryTeal,
+            unselectedItemColor: Colors.grey.shade400,
+            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+            elevation: 0,
+            items: const [
+              BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'Home'),
+              BottomNavigationBarItem(icon: Icon(Icons.storefront_rounded), label: 'My Store'),
+              BottomNavigationBarItem(icon: Icon(Icons.local_shipping_rounded), label: 'Orders'),
+              BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
+            ],
+          ),
         ),
       ),
     );
@@ -196,12 +199,12 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
           stream: vm.getNewOrders(),
           builder: (context, snap) {
             if (snap.connectionState == ConnectionState.waiting) {
-              return const SkeletonLoader(height: 220, borderRadius: 32);
+              return const SkeletonLoader(height: 250, borderRadius: 32);
             }
             final docs = snap.data ?? [];
             
             return SizedBox(
-              height: 220,
+              height: 250,
               child: Stack(
                 children: [
                   PageView.builder(
@@ -1366,42 +1369,45 @@ class _TrackRiderMapScreenState extends State<_TrackRiderMapScreen> {
                 left: 20,
                 right: 20,
                 child: Container(
+                  constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.4),
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            backgroundColor: Colors.green.shade50,
-                            child: const Icon(Icons.person, color: Colors.green),
-                          ),
-                          const SizedBox(width: 15),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(riderData?['fullName'] ?? 'Rider', style: const TextStyle(fontWeight: FontWeight.bold)),
-                                Text(riderData?['phone'] ?? 'No phone info', style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                              ],
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: Colors.green.shade50,
+                              child: const Icon(Icons.person, color: Colors.green),
                             ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.phone, color: Colors.green),
-                            onPressed: () {
-                              // Dialer link here
-                            },
-                          ),
-                        ],
-                      ),
-                      const Divider(height: 30),
-                      Text("Status: ${widget.orderData['status']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                    ],
+                            const SizedBox(width: 15),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(riderData?['fullName'] ?? 'Rider', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  Text(riderData?['phone'] ?? 'No phone info', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.phone, color: Colors.green),
+                              onPressed: () {
+                                // Dialer link here
+                              },
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 30),
+                        Text("Status: ${widget.orderData['status']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                      ],
+                    ),
                   ),
                 ),
               ),
