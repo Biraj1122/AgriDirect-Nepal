@@ -21,7 +21,10 @@ class FarmerRepository {
         .where('status', isEqualTo: 'Pending Farmer')
         .snapshots()
         .map((snap) => snap.docs
-            .where((d) => (d.data() as Map)['farmerUid'] == null)
+            .where((d) {
+              final data = d.data();
+              return data['farmerUid'] == null || data['farmerUid'] == "";
+            })
             .map((d) => OrderModel.fromFirestore(d))
             .toList());
   }
