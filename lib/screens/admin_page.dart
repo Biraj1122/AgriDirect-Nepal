@@ -146,22 +146,43 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
             ),
           ],
         ),
-        bottomNavigationBar: isWide || viewModel.currentIndex >= 5
+        bottomNavigationBar: isWide || viewModel.currentIndex >= 9
             ? null
             : BottomNavigationBar(
-          currentIndex: viewModel.currentIndex,
-          onTap: (index) => viewModel.setCurrentIndex(index),
+          currentIndex: viewModel.currentIndex < 5 
+              ? viewModel.currentIndex 
+              : (viewModel.currentIndex == 8 ? 4 : 0),
+          onTap: (index) {
+            if (index == 4) {
+              viewModel.setCurrentIndex(8);
+            } else {
+              viewModel.setCurrentIndex(index);
+            }
+          },
           selectedItemColor: primaryTeal,
           unselectedItemColor: Colors.grey.shade400,
           backgroundColor: Colors.white,
           elevation: 20,
           type: BottomNavigationBarType.fixed,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: "Dash"),
-            BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_rounded), label: "Orders"),
-            BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: "Catalog"),
-            BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: "Users"),
-            BottomNavigationBarItem(icon: Icon(Icons.verified_user_rounded), label: "Approvals"),
+          items: [
+            const BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: "Dash"),
+            const BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_rounded), label: "Orders"),
+            const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: "Catalog"),
+            const BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: "Users"),
+            BottomNavigationBarItem(
+              icon: StreamBuilder<int>(
+                stream: viewModel.pendingProductCount,
+                builder: (context, snapshot) {
+                  final count = snapshot.data ?? 0;
+                  if (count == 0) return const Icon(Icons.verified_user_rounded);
+                  return Badge(
+                    label: Text(count.toString()),
+                    child: const Icon(Icons.verified_user_rounded),
+                  );
+                }
+              ),
+              label: "Approvals",
+            ),
           ],
         ),
       ),
@@ -208,8 +229,8 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                 _panelItem(context, viewModel, 3, Icons.people_alt_rounded, "User Database"),
                 _panelItem(context, viewModel, 4, Icons.campaign_rounded, "Announcements"),
                 _panelItem(context, viewModel, 5, Icons.science_rounded, "Research Insights"),
-                _panelItem(context, viewModel, 7, Icons.price_change_rounded, "Price Updates"),
-                _panelItem(context, viewModel, 8, Icons.verified_user_rounded, "System Approvals"),
+                _panelItem(context, viewModel, 7, Icons.price_change_rounded, "Price Updates", badgeStream: viewModel.pendingPriceRequestCount),
+                _panelItem(context, viewModel, 8, Icons.verified_user_rounded, "System Approvals", badgeStream: viewModel.pendingProductCount),
                 const Padding(
                   padding: EdgeInsets.fromLTRB(24, 24, 24, 8),
                   child: Text("INSIGHTS", style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.2)),
@@ -236,7 +257,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _panelItem(BuildContext context, AdminViewModel viewModel, int index, IconData icon, String label) {
+  Widget _panelItem(BuildContext context, AdminViewModel viewModel, int index, IconData icon, String label, {Stream<int>? badgeStream}) {
     bool selected = viewModel.currentIndex == index;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -244,7 +265,19 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
         selected: selected,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         selectedTileColor: primaryTeal.withValues(alpha: 0.1),
-        leading: Icon(icon, color: selected ? primaryTeal : Colors.grey.shade400, size: 22),
+        leading: badgeStream != null 
+          ? StreamBuilder<int>(
+              stream: badgeStream,
+              builder: (context, snapshot) {
+                final count = snapshot.data ?? 0;
+                if (count == 0) return Icon(icon, color: selected ? primaryTeal : Colors.grey.shade400, size: 22);
+                return Badge(
+                  label: Text(count.toString()),
+                  child: Icon(icon, color: selected ? primaryTeal : Colors.grey.shade400, size: 22),
+                );
+              }
+            )
+          : Icon(icon, color: selected ? primaryTeal : Colors.grey.shade400, size: 22),
         title: Text(label, style: TextStyle(
           color: selected ? primaryTeal : const Color(0xFF1A1D25),
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
@@ -374,6 +407,65 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                     },
                   ),
                   const SizedBox(height: 40),
+                  
+                  StreamBuilder<List<dynamic>>(
+                    stream: viewModel.getCombinedPendingRequests(),
+                    builder: (context, snapshot) {
+                      final pending = snapshot.data ?? [];
+                      if (pending.isEmpty) return const SizedBox();
+                      
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("Pending Actions", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF1A1D25))),
+                              TextButton(onPressed: () => viewModel.setCurrentIndex(8), child: const Text("View All")),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white, 
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [BoxShadow(color: Colors.redAccent.withValues(alpha: 0.05), blurRadius: 15)],
+                              border: Border.all(color: Colors.redAccent.withValues(alpha: 0.1)),
+                            ),
+                            child: ListView.separated(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: pending.length > 3 ? 3 : pending.length,
+                              separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade100),
+                              itemBuilder: (context, index) {
+                                final item = pending[index];
+                                if (item is Product) {
+                                  return ListTile(
+                                    leading: const Icon(Icons.new_releases_rounded, color: Colors.orange),
+                                    title: Text("New Product: ${item.title}"),
+                                    subtitle: Text("From: ${item.farmName ?? 'Farmer'}"),
+                                    trailing: const Icon(Icons.chevron_right_rounded),
+                                    onTap: () => viewModel.setCurrentIndex(8),
+                                  );
+                                } else if (item is PriceRequestModel) {
+                                  return ListTile(
+                                    leading: const Icon(Icons.price_change_rounded, color: Colors.blue),
+                                    title: Text("Price Update: ${item.productName}"),
+                                    subtitle: Text("Rs. ${item.oldPrice} -> Rs. ${item.newPrice}"),
+                                    trailing: const Icon(Icons.chevron_right_rounded),
+                                    onTap: () => viewModel.setCurrentIndex(7),
+                                  );
+                                }
+                                return const SizedBox();
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 30),
+                        ],
+                      );
+                    }
+                  ),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -541,7 +633,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                       ),
                       subtitle: Padding(
                         padding: const EdgeInsets.only(top: 8.0),
-                        child: Text("Customer: ${order.userName ?? 'Guest'} • Items: ${order.items?.length ?? 0}", 
+                        child: Text("Customer: ${order.userName ?? 'Guest'} • Items: ${order.items.length}",
                           style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                           maxLines: 1, overflow: TextOverflow.ellipsis),
                       ),
@@ -1565,6 +1657,7 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
                             child: MapLibreMap(
                               initialCameraPosition: CameraPosition(target: LatLng(user.lat!, user.lng!), zoom: 14),
                               styleString: "https://tiles.openfreemap.org/styles/positron",
+                              logoEnabled: false,
                             ),
                           ),
                         ),

@@ -145,12 +145,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   stretch: true,
                   backgroundColor: Colors.green,
                   leading: IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
                     onPressed: () => _handleBack(context),
                   ),
                   actions: [
                     IconButton(
-                      icon: const Icon(Icons.settings_outlined, color: Colors.white),
+                      icon: const Icon(Icons.settings_rounded, color: Colors.white),
                       onPressed: () async {
                         final result = await Navigator.push(
                           context,
@@ -168,10 +168,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ],
                   flexibleSpace: FlexibleSpaceBar(
-                    stretchModes: const [
-                      StretchMode.zoomBackground,
-                      StretchMode.blurBackground,
-                    ],
                     background: Stack(
                       fit: StackFit.expand,
                       children: [
@@ -208,7 +204,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       fullName ?? widget.userName,
                                       style: const TextStyle(
                                         fontSize: 24,
-                                        fontWeight: FontWeight.bold,
+                                        fontWeight: FontWeight.w900,
                                         color: Colors.white,
                                       ),
                                       overflow: TextOverflow.ellipsis,
@@ -216,8 +212,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     Text(
                                       phone ?? "Add phone number",
                                       style: TextStyle(
-                                        fontSize: 16,
+                                        fontSize: 14,
                                         color: Colors.white.withValues(alpha: 0.9),
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                   ],
@@ -239,19 +236,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _buildSectionHeader("Account Overview"),
                         _buildMenuCard([
                           _buildMenuItem(
-                            icon: Icons.shopping_bag_outlined,
+                            icon: Icons.receipt_long_rounded,
                             title: "Order History",
                             color: Colors.blue,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const OrderHistoryScreen())),
                           ),
                           _buildMenuItem(
-                            icon: Icons.location_on_outlined,
+                            icon: Icons.location_on_rounded,
                             title: "My Addresses",
                             color: Colors.orange,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAddressesScreen())),
                           ),
                           _buildMenuItem(
-                            icon: Icons.payment_outlined,
+                            icon: Icons.payment_rounded,
                             title: "Payment Methods",
                             color: Colors.purple,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentMethodsScreen(subtotal: 0, deliveryFee: 0, total: 0))),
@@ -266,13 +263,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _buildSectionHeader("Personalization"),
                         _buildMenuCard([
                           _buildMenuItem(
-                            icon: Icons.favorite_border,
+                            icon: Icons.favorite_rounded,
                             title: "My Favorites",
-                            color: Colors.red,
+                            color: Colors.redAccent,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => MyFavouritesScreen(onFavouriteToggle: widget.onFavouriteToggle ?? (item) {}))),
                           ),
                           _buildMenuItem(
-                            icon: Icons.notifications_none_outlined,
+                            icon: Icons.notifications_rounded,
                             title: "Notifications",
                             color: Colors.amber,
                             badgeStream: FirebaseAuth.instance.currentUser?.uid != null
@@ -291,13 +288,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         _buildSectionHeader("Support & Info"),
                         _buildMenuCard([
                           _buildMenuItem(
-                            icon: Icons.help_outline,
+                            icon: Icons.help_outline_rounded,
                             title: "Help & Support",
                             color: Colors.teal,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpSupportScreen())),
                           ),
                           _buildMenuItem(
-                            icon: Icons.info_outline,
+                            icon: Icons.info_outline_rounded,
                             title: "About AgriDirect",
                             color: Colors.indigo,
                             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutUsScreen())),
@@ -320,7 +317,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 right: 0,
                 child: LinearProgressIndicator(
                   backgroundColor: Colors.transparent,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   minHeight: 3,
                 ),
               ),
@@ -337,7 +334,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         border: Border.all(color: Colors.white, width: 3),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -350,7 +347,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ? CachedNetworkImageProvider(profileImageUrl!)
             : null,
         child: profileImageUrl == null || profileImageUrl!.isEmpty
-            ? const Icon(Icons.person, size: 40, color: Colors.green)
+            ? const Icon(Icons.person_rounded, size: 40, color: Colors.green)
             : null,
       ),
     );
@@ -361,10 +358,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -378,10 +375,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
+                  color: Colors.green.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.location_on_outlined, color: Colors.green, size: 22),
+                child: const Icon(Icons.location_on_rounded, color: Colors.green, size: 22),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -389,13 +386,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Current Default Address",
-                      style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.bold),
+                      "CURRENT DEFAULT ADDRESS",
+                      style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w800, letterSpacing: 0.5),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       address ?? "No default address set",
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xff2D3142)),
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF1A1D25)),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -404,16 +401,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: _updateLocation,
-              icon: const Icon(Icons.map_outlined, size: 18),
-              label: const Text("Set New Default Location"),
+              icon: const Icon(Icons.map_rounded, size: 18),
+              label: const Text("UPDATE LOCATION", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.green,
-                side: BorderSide(color: Colors.green.withValues(alpha: 0.5)),
+                side: BorderSide(color: Colors.green.withValues(alpha: 0.3)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -429,9 +427,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Text(
         title.toUpperCase(),
         style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w700,
-          color: Colors.grey.shade600,
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+          color: Colors.grey.shade400,
           letterSpacing: 1.2,
         ),
       ),
@@ -442,10 +440,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 5),
           ),
@@ -468,18 +466,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
+                  color: color.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(icon, color: color, size: 22),
+                child: Icon(icon, color: color, size: 20),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -487,8 +485,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   title,
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xff2D3142),
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1A1D25),
                   ),
                 ),
               ),
@@ -517,7 +515,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     return const SizedBox();
                   },
                 ),
-              Icon(Icons.chevron_right, color: Colors.grey.shade400),
+              Icon(Icons.chevron_right_rounded, color: Colors.grey.shade300),
             ],
           ),
         ),
@@ -532,12 +530,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         onPressed: () => _showLogoutDialog(context),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white,
-          foregroundColor: Colors.red,
+          foregroundColor: Colors.redAccent,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: BorderSide(color: Colors.red.withValues(alpha: 0.2)),
+            side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.1)),
           ),
         ),
         child: const Row(
@@ -547,7 +545,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SizedBox(width: 12),
             Text(
               "Logout Account",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
             ),
           ],
         ),

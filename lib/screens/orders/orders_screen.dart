@@ -709,6 +709,8 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                   ),
                   onMapCreated: _onMapCreated,
                   styleString: "https://tiles.openfreemap.org/styles/positron",
+                  logoEnabled: false,
+                  myLocationEnabled: true,
                 ),
 
                 // Re-center Button

@@ -86,7 +86,7 @@ class AdminRepository {
         .where('status', isEqualTo: 'pending')
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs.map((doc) => Product.fromMap(doc.data() as Map<String, dynamic>, docId: doc.id)).toList();
+      return snapshot.docs.map((doc) => Product.fromMap(doc.data(), docId: doc.id)).toList();
     });
   }
 

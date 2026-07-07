@@ -10,7 +10,9 @@ class OrderModel {
   final double deliveryRevenue;
   final String status;
   final DateTime? createdAt;
-  final List<dynamic>? items;
+  final List<dynamic> items;
+  final String deliveryAddress;
+  final String? deliveryId;
 
   OrderModel({
     required this.id,
@@ -22,8 +24,19 @@ class OrderModel {
     this.deliveryRevenue = 0.0,
     required this.status,
     this.createdAt,
-    this.items,
+    this.items = const [],
+    this.deliveryAddress = 'Not set',
+    this.deliveryId,
   });
+
+  String get itemsSummary {
+    if (items.isEmpty) return 'No items';
+    return items.map((i) {
+      final data = i as Map<String, dynamic>;
+      final name = data['name'] ?? data['title'] ?? 'Unknown Item';
+      return "${data['quantity']}x $name";
+    }).join(', ');
+  }
 
   factory OrderModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
@@ -50,11 +63,13 @@ class OrderModel {
       deliveryRevenue: deliveryRevenue,
       status: data['status'] ?? 'Pending',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
-      items: data['items'],
+      items: data['items'] ?? [],
+      deliveryAddress: data['deliveryAddress'] ?? 'Location not set',
+      deliveryId: data['deliveryId'],
     );
   }
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toFirestore() {
     return {
       'userId': userId,
       'userName': userName,
@@ -65,6 +80,8 @@ class OrderModel {
       'status': status,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'items': items,
+      'deliveryAddress': deliveryAddress,
+      'deliveryId': deliveryId,
     };
   }
 }

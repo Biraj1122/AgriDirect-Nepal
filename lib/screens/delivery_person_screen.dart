@@ -7,9 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:provider/provider.dart';
 import '../services/location_service.dart';
 import '../services/storage_service.dart';
 import '../Success/shared_widgets.dart';
+import '../viewmodels/delivery_viewmodel.dart';
 import 'auth/login_screen.dart';
 import 'misc/farm_osm_screen.dart';
 
@@ -25,14 +27,10 @@ class DeliveryPersonScreen extends StatefulWidget {
 }
 
 class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
-  int _tab = 0;
   final LocationService _locationService = LocationService();
   StreamSubscription<Position>? _positionSub;
   StreamSubscription<QuerySnapshot>? _availableOrdersSub;
   final Set<String> _notifiedOrders = {};
-
-  LatLng? _driverPos;
-  Map<String, dynamic>? _activeOrderData;
   StreamSubscription<QuerySnapshot>? _activeOrderSub;
 
   @override
@@ -46,63 +44,40 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
   }
 
   Future<void> _startGlobalLocationTracking() async {
+    final vm = context.read<DeliveryViewModel>();
     bool granted = await _locationService.requestPermission();
     if (!granted) return;
 
     final p = await _locationService.getCurrentLocation();
     if (p != null && mounted) {
-      setState(() => _driverPos = LatLng(p.latitude, p.longitude));
+      vm.updateDriverPos(LatLng(p.latitude, p.longitude));
     }
 
     _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
     ).listen((pos) {
       if (mounted) {
-        setState(() => _driverPos = LatLng(pos.latitude, pos.longitude));
-      }
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-          'lat': pos.latitude,
-          'lng': pos.longitude,
-          'lastSeen': FieldValue.serverTimestamp(),
-        }).catchError((_) {});
+        vm.updateDriverPos(LatLng(pos.latitude, pos.longitude));
       }
     });
   }
 
   void _listenToActiveOrder() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    _activeOrderSub = FirebaseFirestore.instance
-        .collection('orders')
-        .where('deliveryId', isEqualTo: user.uid)
-        .where('status', whereIn: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
-        .limit(1)
-        .snapshots()
-        .listen((snapshot) {
+    final vm = context.read<DeliveryViewModel>();
+    _activeOrderSub = vm.activeOrderStream.listen((snapshot) {
       if (snapshot.docs.isNotEmpty) {
-        final data = snapshot.docs.first.data();
+        final data = snapshot.docs.first.data() as Map<String, dynamic>;
         data['id'] = snapshot.docs.first.id;
-        if (mounted) {
-          setState(() => _activeOrderData = data);
-        }
+        if (mounted) vm.setActiveOrder(data);
       } else {
-        if (mounted) {
-          setState(() => _activeOrderData = null);
-        }
+        if (mounted) vm.setActiveOrder(null);
       }
     });
   }
 
   void _listenForAvailableOrders() {
-    _availableOrdersSub = FirebaseFirestore.instance
-        .collection('orders')
-        .where('status', isEqualTo: 'Farmer Accepted')
-        .where('deliveryId', isNull: true)
-        .snapshots()
-        .listen((snapshot) {
+    final vm = context.read<DeliveryViewModel>();
+    _availableOrdersSub = vm.availableOrdersStream.listen((snapshot) {
       if (!mounted) return;
       for (var doc in snapshot.docs) {
         if (!_notifiedOrders.contains(doc.id)) {
@@ -174,23 +149,11 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
   }
 
   Future<void> _acceptAvailableOrder(String orderId) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    final riderDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final riderName = riderDoc.data()?['fullName'] ?? 'Rider';
-    final riderPhone = riderDoc.data()?['phone'] ?? '';
-
-    await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-      'deliveryId': user.uid,
-      'deliveryName': riderName,
-      'deliveryPhone': riderPhone,
-      'status': 'Awaiting Pickup',
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    final vm = context.read<DeliveryViewModel>();
+    await vm.acceptOrder(orderId);
 
     if (mounted) {
-      setState(() => _tab = 0);
+      vm.setTabIndex(0);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Order accepted! Directions loaded on map."), backgroundColor: primaryTeal),
       );
@@ -213,16 +176,17 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
     }
 
     final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-    final role = doc.data()?['role'];
+    final role = (doc.data()?['role'] ?? '').toString().toLowerCase();
 
-    if (role != 'Delivery Person') {
+    if (role != 'delivery person') {
       _logout();
     }
   }
 
   void _logout() {
     if (mounted) {
-      FirebaseAuth.instance.signOut();
+      final vm = context.read<DeliveryViewModel>();
+      vm.logout();
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           Navigator.pushAndRemoveUntil(
@@ -255,8 +219,8 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    final vm = context.watch<DeliveryViewModel>();
+    if (vm.uid == null) {
       return const Scaffold(body: Center(child: CircularProgressIndicator(color: primaryTeal)));
     }
 
@@ -264,12 +228,12 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
       backgroundColor: backgroundColor,
       body: SafeArea(
         child: IndexedStack(
-          index: _tab,
+          index: vm.tabIndex,
           children: [
-            _HomeMapTab(user: user, driverPos: _driverPos, activeOrderData: _activeOrderData),
-            _ShipmentsTab(user: user, onSwitchToMap: () => setState(() => _tab = 0)),
-            _EarningsTab(user: user),
-            _ProfileTab(user: user, logoutCallback: _logout),
+            _HomeMapTab(user: FirebaseAuth.instance.currentUser!, driverPos: vm.driverPos, activeOrderData: vm.activeOrderData),
+            _ShipmentsTab(user: FirebaseAuth.instance.currentUser!, onSwitchToMap: () => vm.setTabIndex(0)),
+            _EarningsTab(user: FirebaseAuth.instance.currentUser!),
+            _ProfileTab(user: FirebaseAuth.instance.currentUser!, logoutCallback: _logout),
           ],
         ),
       ),
@@ -285,8 +249,8 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
           ],
         ),
         child: BottomNavigationBar(
-          currentIndex: _tab,
-          onTap: (i) => setState(() => _tab = i),
+          currentIndex: vm.tabIndex,
+          onTap: (i) => vm.setTabIndex(i),
           type: BottomNavigationBarType.fixed,
           selectedItemColor: primaryTeal,
           unselectedItemColor: Colors.grey.shade400,
@@ -368,12 +332,8 @@ class _HomeMapTabState extends State<_HomeMapTab> {
       final orderId = widget.activeOrderData!['id'];
       if (orderId == null) return;
 
-      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-        'deliveryId': null,
-        'deliveryName': null,
-        'deliveryPhone': null,
-        'status': 'Farmer Accepted',
-      });
+      final vm = context.read<DeliveryViewModel>();
+      await vm.unassignOrder(orderId);
     }
   }
 
@@ -590,15 +550,16 @@ class _HomeMapTabState extends State<_HomeMapTab> {
         MapLibreMap(
           initialCameraPosition: CameraPosition(target: widget.driverPos ?? _kDefaultCenter, zoom: 14),
           myLocationEnabled: true,
+          logoEnabled: false,
           styleString: "https://tiles.openfreemap.org/styles/positron",
           onMapCreated: (controller) {
             _mapController = controller;
-            Future.delayed(const Duration(milliseconds: 500), () {
-              if (mounted) {
-                _updateDirections(force: true);
-                _centerOnDriver();
-              }
-            });
+          },
+          onStyleLoadedCallback: () {
+            if (mounted) {
+              _updateDirections(force: true);
+              _centerOnDriver();
+            }
           },
           onMapClick: (point, latlng) => _centerOnDriver(),
         ),
@@ -765,16 +726,18 @@ class _ShipmentsTab extends StatelessWidget {
   }
 
   Widget _buildOrderList(BuildContext context, List<String> statuses, bool isActionable) {
+    final vm = context.watch<DeliveryViewModel>();
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('orders')
-          .where('status', whereIn: statuses)
-          .snapshots(),
+      stream: vm.getOrdersByStatuses(statuses),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
         final docs = snapshot.data!.docs.where((d) {
           final data = d.data() as Map;
-          return data['deliveryId'] == null || data['deliveryId'] == user.uid;
+          if (isActionable) {
+            return data['deliveryId'] == null || data['deliveryId'] == user.uid;
+          } else {
+            return data['deliveryId'] == user.uid;
+          }
         }).toList();
 
         if (docs.isEmpty) {
@@ -844,7 +807,7 @@ class _ShipmentsTab extends StatelessWidget {
                               ),
                             );
                             if (confirm == true && context.mounted) {
-                              await _acceptOrder(docs[i].id, user.uid);
+                              await vm.acceptOrder(docs[i].id);
                               onSwitchToMap();
                             }
                           }
@@ -855,7 +818,7 @@ class _ShipmentsTab extends StatelessWidget {
                           icon: Icons.arrow_forward_rounded,
                           isLoading: false,
                           teal: primaryTeal, blue: secondaryBlue,
-                          onTap: () => _updateStatus(docs[i].id, data['status'])
+                          onTap: () => vm.updateOrderStatus(docs[i].id, data['status'])
                       ),
                   ] else ...[
                     Text("Completed: ${data['updatedAt'] != null ? (data['updatedAt'] as Timestamp).toDate().toString().substring(0, 16) : 'N/A'}",
@@ -912,7 +875,8 @@ class _ShipmentsTab extends StatelessWidget {
       case 'Awaiting Pickup': return 'Mark as Picked Up';
       case 'Picked Up': return 'Start Delivery';
       case 'On the way': return 'I have Arrived';
-      case 'Arrived': return 'Mark as Delivered';
+      case 'Arrived': return 'Confirm Delivery';
+      case 'Confirm Received': return 'Customer Acknowledged';
       default: return 'Update Progress';
     }
   }
@@ -1033,10 +997,12 @@ class _EarningsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final vm = context.watch<DeliveryViewModel>();
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('orders').where('deliveryId', isEqualTo: user.uid).where('status', whereIn: ['Delivered', 'Confirm Received']).snapshots(),
+      stream: vm.getOrdersByStatuses(['Delivered', 'Confirm Received']),
       builder: (context, snapshot) {
-        final docs = snapshot.data?.docs ?? [];
+        final allDocs = snapshot.data?.docs ?? [];
+        final docs = allDocs.where((d) => (d.data() as Map)['deliveryId'] == user.uid).toList();
         double total = 0;
         for (var d in docs) {
           final data = d.data() as Map;
@@ -1164,6 +1130,7 @@ class _ProfileTabState extends State<_ProfileTab> {
   }
 
   Future<void> _updateProfilePhoto() async {
+    final vm = context.read<DeliveryViewModel>();
     final img = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
     if (img == null) return;
 
@@ -1172,9 +1139,7 @@ class _ProfileTabState extends State<_ProfileTab> {
       final storage = StorageService();
       final url = await storage.uploadImage(img, 'profile_pics');
       if (url != null) {
-        await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
-          'profileImageUrl': url,
-        });
+        await vm.updateProfileImage(url);
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile photo updated!")));
       }
     } catch (e) {
@@ -1279,6 +1244,7 @@ class _ProfileTabState extends State<_ProfileTab> {
   }
 
   Future<void> _updateLocation() async {
+    final vm = context.read<DeliveryViewModel>();
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const FarmOsmScreen()),
@@ -1289,11 +1255,7 @@ class _ProfileTabState extends State<_ProfileTab> {
       final double lat = result['lat'];
       final double lng = result['lng'];
 
-      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
-        'address': address,
-        'lat': lat,
-        'lng': lng,
-      });
+      await vm.updateRiderAddress(address, lat, lng);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Current location updated successfully!")));
@@ -1303,8 +1265,9 @@ class _ProfileTabState extends State<_ProfileTab> {
 
   @override
   Widget build(BuildContext context) {
+    final vm = context.watch<DeliveryViewModel>();
     return StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(widget.user.uid).snapshots(),
+        stream: vm.userStream,
         builder: (context, snapshot) {
           final data = snapshot.data?.data() as Map<String, dynamic>?;
           final name = data?['fullName'] ?? 'Rider Name';
@@ -1378,7 +1341,7 @@ class _ProfileTabState extends State<_ProfileTab> {
                   value: data?['isOnline'] ?? true,
                   activeTrackColor: primaryTeal,
                   onChanged: (val) async {
-                    await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({'isOnline': val});
+                    await vm.updateOnlineStatus(val);
                   },
                 ),
               ),
