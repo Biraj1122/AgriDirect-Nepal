@@ -209,7 +209,13 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
                 children: [
                   PageView.builder(
                     controller: _pageController,
-                    onPageChanged: (i) => setState(() => _currentCarouselIndex = i % (docs.isEmpty ? 1 : docs.length)),
+                    onPageChanged: (i) {
+                      if (docs.isNotEmpty) {
+                        setState(() => _currentCarouselIndex = i % docs.length);
+                      } else {
+                        setState(() => _currentCarouselIndex = 0);
+                      }
+                    },
                     itemBuilder: (context, i) {
                       if (docs.isEmpty) {
                         return _buildEmptyOrderBanner();
@@ -227,16 +233,19 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: List.generate(
                           docs.length,
-                          (index) => AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            margin: const EdgeInsets.only(left: 6),
-                            width: _currentCarouselIndex == index ? 24 : 8,
-                            height: 6,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(4),
-                              color: _currentCarouselIndex == index ? Colors.white : Colors.white.withValues(alpha: 0.3),
-                            ),
-                          ),
+                          (index) {
+                            final bool isActive = (_currentCarouselIndex % docs.length) == index;
+                            return AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              margin: const EdgeInsets.only(left: 6),
+                              width: isActive ? 24 : 8,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(4),
+                                color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.3),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     )
