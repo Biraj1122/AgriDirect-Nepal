@@ -57,7 +57,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   Future<void> _fetchCategories() async {
     try {
-      // Add a timeout to prevent hanging on poor connections
       final snapshot = await FirebaseFirestore.instance
           .collection('categories')
           .get()
@@ -66,15 +65,25 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       if (snapshot.docs.isNotEmpty) {
         final fetched = snapshot.docs.map((doc) {
           final data = doc.data();
-          final iconCode = data['iconCode'] as int?;
+          final name = data['name'] ?? 'Category';
           return {
-            'name': data['name'] ?? 'Category',
-            'icon': iconCode != null
-                // ignore: non_const_argument_for_const_parameter
-                ? IconData(iconCode, fontFamily: 'MaterialIcons')
-                : Icons.category_rounded,
+            'name': name,
+            'icon': _getCategoryIcon(name),
           };
         }).toList();
+
+        // Sort categories: Vegetables first, then Fruits, then others
+        fetched.sort((a, b) {
+          final nameA = a['name'].toString().toLowerCase();
+          final nameB = b['name'].toString().toLowerCase();
+          
+          if (nameA == 'vegetables') return -1;
+          if (nameB == 'vegetables') return 1;
+          if (nameA == 'fruits') return -1;
+          if (nameB == 'fruits') return 1;
+          
+          return nameA.compareTo(nameB);
+        });
 
         if (mounted) {
           setState(() {
@@ -83,13 +92,31 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             _setInitialCategoryIndex();
           });
         }
-        return;
+      } else {
+        _useFallbackCategories();
       }
     } catch (e) {
-      debugPrint("Firestore Categories Error: $e. Using local defaults.");
+      debugPrint("Error fetching categories: $e");
+      _useFallbackCategories();
     }
+  }
 
-    // Fallback to local categories if Firestore fails or is empty
+  IconData _getCategoryIcon(String name) {
+    switch (name.toLowerCase()) {
+      case 'vegetables': return Icons.eco_rounded;
+      case 'fruits': return Icons.apple_rounded;
+      case 'dairy': return Icons.water_drop_rounded;
+      case 'grains': return Icons.grain_rounded;
+      case 'pulses': return Icons.lens_blur;
+      case 'mushrooms': return Icons.spa;
+      case 'tea & coffee': return Icons.local_cafe_outlined;
+      case 'spices': return Icons.flare;
+      case 'specialty': return Icons.star_border;
+      default: return Icons.category_rounded;
+    }
+  }
+
+  void _useFallbackCategories() {
     if (mounted) {
       setState(() {
         _categories = [
@@ -102,6 +129,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           {'name': 'Mushrooms', 'icon': Icons.spa},
           {'name': 'Tea & Coffee', 'icon': Icons.local_cafe_outlined},
           {'name': 'Spices', 'icon': Icons.flare},
+          {'name': 'Specialty', 'icon': Icons.star_border},
         ];
         _isLoadingCategories = false;
         _setInitialCategoryIndex();
@@ -120,12 +148,33 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       return [];
     }
     final selectedCategory = _categories[_selectedCategoryIndex]['name'];
-    return liveProducts.where((product) {
-      final matchesCategory = selectedCategory == 'All' || product['category'] == selectedCategory;
-      final name = (product['name'] ?? '').toString().toLowerCase();
-      final matchesSearch = _searchQuery.isEmpty || name.contains(_searchQuery.toLowerCase());
-      return matchesCategory && matchesSearch;
-    }).toList();
+    
+    final Map<String, Map<String, dynamic>> uniqueProducts = {};
+
+    for (var product in liveProducts) {
+      final String name = (product['name'] ?? product['title'] ?? '').toString();
+      if (name.isEmpty) continue;
+
+      final String category = (product['category'] ?? '').toString();
+      
+      final bool matchesCategory = selectedCategory == 'All' || category == selectedCategory;
+      final bool matchesSearch = _searchQuery.isEmpty || 
+          name.toLowerCase().contains(_searchQuery.toLowerCase());
+
+      if (matchesCategory && matchesSearch) {
+        if (!uniqueProducts.containsKey(name)) {
+          uniqueProducts[name] = product;
+        } else {
+          final double existingPrice = double.tryParse(uniqueProducts[name]!['price'].toString()) ?? double.infinity;
+          final double currentPrice = double.tryParse(product['price'].toString()) ?? double.infinity;
+          if (currentPrice < existingPrice) {
+            uniqueProducts[name] = product;
+          }
+        }
+      }
+    }
+
+    return uniqueProducts.values.toList();
   }
 
   void _addToCart(Map<String, dynamic> product) {

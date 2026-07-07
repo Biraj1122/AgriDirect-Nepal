@@ -234,6 +234,7 @@ class _CartScreenState extends State<CartScreen> {
                                   total: cartModel.total,
                                   selectedLat: selectedLat,
                                   selectedLng: selectedLng,
+                                  isCheckout: true,
                                 ),
                               ),
                             );

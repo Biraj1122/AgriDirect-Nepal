@@ -8,9 +8,11 @@ import 'package:farmtech_agridirect/screens/shop/categories_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/orders_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/profile_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/my_favourites.dart';
-import 'package:farmtech_agridirect/screens/misc/farmer_screen.dart';
-import 'package:farmtech_agridirect/screens/delivery_person_screen.dart';
-import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
+import '../profile/edit_profile_screen.dart';
+import '../misc/farmer_screen.dart';
+import '../delivery_person_screen.dart';
+import '../admin_page.dart';
+import '../auth/login_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String userName;
@@ -27,6 +29,9 @@ class NavigationScreen extends StatefulWidget {
 }
 
 class _NavigationScreenState extends State<NavigationScreen> {
+  static const Color primaryTeal = Color(0xFF1D9E75);
+  static const Color secondaryBlue = Color(0xFF2E5BFF);
+  
   late int currentIndex;
   String selectedCategory = "All";
   bool _isCheckingRole = true;
@@ -47,18 +52,32 @@ class _NavigationScreenState extends State<NavigationScreen> {
     try {
       final snapshot = await FirebaseFirestore.instance.collection('categories').get();
       if (snapshot.docs.isNotEmpty && mounted) {
+        final fetched = snapshot.docs.map((doc) {
+          final data = doc.data();
+          final iconCode = data['iconCode'] as int?;
+          return {
+            'name': data['name'] ?? 'Category',
+            'icon': iconCode != null
+                ? IconData(iconCode, fontFamily: 'MaterialIcons')
+                : Icons.category,
+          };
+        }).toList();
+
+        // Sort categories: Vegetables first, then Fruits, then others
+        fetched.sort((a, b) {
+          final nameA = a['name'].toString().toLowerCase();
+          final nameB = b['name'].toString().toLowerCase();
+          
+          if (nameA == 'vegetables') return -1;
+          if (nameB == 'vegetables') return 1;
+          if (nameA == 'fruits') return -1;
+          if (nameB == 'fruits') return 1;
+          
+          return nameA.compareTo(nameB);
+        });
+
         setState(() {
-          _categories = snapshot.docs.map((doc) {
-            final data = doc.data();
-            final iconCode = data['iconCode'] as int?;
-            return {
-              'name': data['name'] ?? 'Category',
-              'icon': iconCode != null
-                  // ignore: non_const_argument_for_const_parameter
-                  ? IconData(iconCode, fontFamily: 'MaterialIcons')
-                  : Icons.category,
-            };
-          }).toList();
+          _categories = fetched;
         });
       }
     } catch (e) {
@@ -74,7 +93,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
     }
 
     try {
-      // Add a 6-second timeout to prevent the app from hanging if Firestore is unresponsive
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -85,6 +103,20 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
       if (mounted) {
         if (role != 'Customer' && role != null && role != 'Admin') {
+          // Mandatory Profile Photo Check for Partners
+          final profileImg = doc.data()?['profileImageUrl'];
+          if (profileImg == null || profileImg.toString().isEmpty) {
+            Navigator.pushReplacement(
+              context, 
+              MaterialPageRoute(builder: (_) => EditProfileScreen(
+                currentName: doc.data()?['fullName'] ?? user.displayName ?? "Partner",
+                currentPhone: doc.data()?['phone'] ?? "Not set",
+                mandatoryPhoto: true,
+              ))
+            );
+            return;
+          }
+
           Widget target;
           if (role == 'Farmer') {
             target = const FarmerScreen();
@@ -158,7 +190,6 @@ class _NavigationScreenState extends State<NavigationScreen> {
     final String name = (product['name'] ?? product['title'] ?? '').toString().trim();
     if (name.isEmpty) return;
 
-    // Use a more flexible check to find existing favorite
     final existing = _favouriteProducts.firstWhere(
       (p) {
         final pName = (p['name'] ?? p['title'] ?? '').toString().trim();
@@ -183,12 +214,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
         await favRef.delete();
       } else {
         final Map<String, dynamic> favData = Map.from(product);
-        
-        // Ensure both 'name' and 'title' are saved so the list can find them
         favData['name'] = name;
         favData['title'] = name;
-        
-        // Ensure images are mapped correctly
         final String img = (product['image'] ?? product['imageUrl'] ?? product['imagePath'] ?? '').toString();
         favData['image'] = img;
         favData['imagePath'] = img;
@@ -213,6 +240,34 @@ class _NavigationScreenState extends State<NavigationScreen> {
     setState(() {
       currentIndex = index;
     });
+    // Clear notifications if Home (index 0), Orders (index 3) or Profile (index 4) is tapped
+    if (index == 0 || index == 3 || index == 4) {
+      _markNotificationsAsRead();
+    }
+  }
+
+  Future<void> _markNotificationsAsRead() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final query = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('notifications')
+          .where('isRead', isEqualTo: false)
+          .get();
+
+      if (query.docs.isNotEmpty) {
+        final batch = FirebaseFirestore.instance.batch();
+        for (var doc in query.docs) {
+          batch.update(doc.reference, {'isRead': true});
+        }
+        await batch.commit();
+      }
+    } catch (e) {
+      debugPrint("Error marking notifications as read: $e");
+    }
   }
 
   @override
@@ -223,7 +278,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(color: Colors.green),
+              CircularProgressIndicator(color: primaryTeal),
               SizedBox(height: 15),
               Text("Securing session...", style: TextStyle(color: Colors.grey)),
             ],
@@ -285,17 +340,18 @@ class _NavigationScreenState extends State<NavigationScreen> {
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: currentIndex,
-        children: screens,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 400),
+        transitionBuilder: (child, animation) => FadeTransition(opacity: animation, child: child),
+        child: screens[currentIndex],
       ),
 
       bottomNavigationBar: Container(
-        margin: const EdgeInsets.all(12),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(25),
+          borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.08),
@@ -310,7 +366,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               navItem(Icons.home_rounded, "Home", 0),
-              navItem(Icons.grid_view_rounded, "Categories", 1),
+              navItem(Icons.grid_view_rounded, "Catalog", 1),
               navItem(Icons.shopping_cart_rounded, "Cart", 2),
               navItem(Icons.receipt_long_rounded, "Orders", 3),
               navItem(Icons.person_rounded, "Profile", 4),
@@ -323,40 +379,74 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   Widget navItem(IconData icon, String label, int index) {
     final bool isSelected = currentIndex == index;
+    final user = FirebaseAuth.instance.currentUser;
 
     return GestureDetector(
       onTap: () => changeTab(index),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? Colors.green.withOpacity(0.12)
+              ? primaryTeal.withValues(alpha: 0.1)
               : Colors.transparent,
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AnimatedScale(
-              scale: isSelected ? 1.2 : 1.0,
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                icon,
-                size: 26,
-                color: isSelected ? Colors.green : Colors.grey,
-              ),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  icon,
+                  size: 24,
+                  color: isSelected ? primaryTeal : Colors.grey.shade400,
+                ),
+                if (!isSelected && (index == 0 || index == 3 || index == 4) && user != null)
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .collection('notifications')
+                        .where('isRead', isEqualTo: false)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
+                        return Positioned(
+                          right: -4,
+                          top: -4,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                            constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                            child: Text(
+                              "${snapshot.data!.docs.length}",
+                              style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        );
+                      }
+                      return const SizedBox();
+                    },
+                  ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: isSelected ? Colors.green : Colors.grey,
-                fontWeight:
-                isSelected ? FontWeight.bold : FontWeight.w500,
+            if (isSelected) ...[
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: primaryTeal,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
-            ),
+            ]
           ],
         ),
       ),

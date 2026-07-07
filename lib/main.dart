@@ -56,6 +56,7 @@ class AgriDirectApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'AgriDirect Nepal',
+      themeMode: ThemeMode.light, // Forced Light Mode
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),

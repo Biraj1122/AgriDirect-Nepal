@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../orders/orders_screen.dart';
+import '../home/navigation_screen.dart';
 import '../../models/cart_model.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
@@ -11,6 +12,7 @@ class PaymentMethodsScreen extends StatefulWidget {
   final double total;
   final double? selectedLat;
   final double? selectedLng;
+  final bool isCheckout;
 
   const PaymentMethodsScreen({
     super.key,
@@ -19,6 +21,7 @@ class PaymentMethodsScreen extends StatefulWidget {
     required this.total,
     this.selectedLat,
     this.selectedLng,
+    this.isCheckout = false,
   });
 
   @override
@@ -145,12 +148,24 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () {
+                  final user = FirebaseAuth.instance.currentUser;
+                  // First, go to Home (NavigationScreen) and clear stack
                   Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => NavigationScreen(
+                        userName: user?.displayName ?? "User",
+                        initialTabIndex: 0, // Go to home first
+                      ),
+                    ),
+                    (route) => false,
+                  );
+                  // Then push the Order Tracking screen on top
+                  Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (_) => OrderScreen(orderId: orderId),
                     ),
-                        (route) => false,
                   );
                 },
                 style: ElevatedButton.styleFrom(
@@ -213,24 +228,25 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
 
             const SizedBox(height: 40),
 
-            SizedBox(
-              width: double.infinity,
-              height: 55,
-              child: ElevatedButton(
-                onPressed: _isProcessing ? null : _processPayment,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  elevation: 0,
+            if (widget.isCheckout)
+              SizedBox(
+                width: double.infinity,
+                height: 55,
+                child: ElevatedButton(
+                  onPressed: _isProcessing ? null : _processPayment,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    elevation: 0,
+                  ),
+                  child: _isProcessing
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          "Confirm Order", 
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
+                        ),
                 ),
-                child: _isProcessing
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text(
-                        "Confirm Order", 
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)
-                      ),
               ),
-            ),
           ],
         ),
       ),

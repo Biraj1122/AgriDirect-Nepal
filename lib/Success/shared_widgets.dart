@@ -2,31 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
 
-ImageProvider? getImageProvider(String? imageUrl) {
-  if (imageUrl == null || imageUrl.isEmpty) return null;
-
-  if (imageUrl.startsWith('data:image')) {
-    try {
-      final base64String = imageUrl.split(',').last;
-      return MemoryImage(base64Decode(base64String));
-    } catch (e) {
-      debugPrint("Error decoding base64 image: $e");
-      return null;
-    }
-  }
-
-  if (imageUrl.startsWith('http')) {
-    return CachedNetworkImageProvider(imageUrl);
-  }
-
-  // Handle assets
-  String assetPath = imageUrl;
-  if (!assetPath.startsWith('assets/')) {
-    assetPath = 'assets/images/$imageUrl';
-  }
-  return AssetImage(assetPath);
-}
-
 class SafeProductImage extends StatelessWidget {
   final String imageUrl;
   final double? width;
@@ -47,17 +22,27 @@ class SafeProductImage extends StatelessWidget {
       return _buildPlaceholder();
     }
 
+    // Handle Network URLs
     if (imageUrl.startsWith('http')) {
       return CachedNetworkImage(
         imageUrl: imageUrl,
         width: width,
         height: height,
         fit: fit,
-        placeholder: (context, url) => Container(color: Colors.grey.shade100),
-        errorWidget: (context, url, error) => _buildPlaceholder(),
+        placeholder: (context, url) => Container(
+          width: width,
+          height: height,
+          color: Colors.grey.shade100,
+          child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1D9E75))),
+        ),
+        errorWidget: (context, url, error) {
+          debugPrint("SafeProductImage: Error loading network image: $imageUrl - $error");
+          return _buildPlaceholder();
+        },
       );
     }
 
+    // Handle Data URLs (Base64)
     if (imageUrl.startsWith('data:image')) {
       try {
         final base64String = imageUrl.split(',').last;
@@ -66,14 +51,18 @@ class SafeProductImage extends StatelessWidget {
           width: width,
           height: height,
           fit: fit,
-          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint("SafeProductImage: Error loading memory image: $error");
+            return _buildPlaceholder();
+          },
         );
       } catch (e) {
+        debugPrint("SafeProductImage: Exception decoding base64: $e");
         return _buildPlaceholder();
       }
     }
 
-    // Assume asset
+    // Handle Assets
     String assetPath = imageUrl;
     if (!assetPath.startsWith('assets/')) {
       assetPath = 'assets/images/$imageUrl';
@@ -84,7 +73,13 @@ class SafeProductImage extends StatelessWidget {
       width: width,
       height: height,
       fit: fit,
-      errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+      errorBuilder: (context, error, stackTrace) {
+        // Only log if it's not a common expected failure (like missing dummy assets)
+        if (!imageUrl.contains('.png')) {
+           debugPrint("SafeProductImage: Error loading asset: $assetPath");
+        }
+        return _buildPlaceholder();
+      },
     );
   }
 
@@ -92,9 +87,63 @@ class SafeProductImage extends StatelessWidget {
     return Container(
       width: width,
       height: height,
-      color: Colors.green.shade50,
+      decoration: BoxDecoration(
+        color: Colors.green.shade50,
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: const Center(
         child: Icon(Icons.eco_rounded, color: Color(0xFF1D9E75), size: 32),
+      ),
+    );
+  }
+}
+
+class StatusBadge extends StatelessWidget {
+  final String status;
+  const StatusBadge({super.key, required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    Color color = Colors.grey;
+    IconData icon = Icons.help_outline_rounded;
+    String label = status;
+
+    switch (status.toLowerCase()) {
+      case 'approved':
+      case 'verified':
+        color = const Color(0xFF1D9E75);
+        icon = Icons.check_circle_rounded;
+        label = "Approved";
+        break;
+      case 'pending':
+        color = Colors.orange;
+        icon = Icons.hourglass_empty_rounded;
+        label = "Pending Approval";
+        break;
+      case 'rejected':
+      case 'declined':
+        color = Colors.redAccent;
+        icon = Icons.cancel_rounded;
+        label = "Rejected";
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 12),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
+          ),
+        ],
       ),
     );
   }

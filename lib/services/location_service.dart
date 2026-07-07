@@ -24,6 +24,14 @@ class LocationService {
     return true;
   }
 
+  Future<Position?> getCurrentLocation() async {
+    bool hasPermission = await requestPermission();
+    if (!hasPermission) return null;
+    return await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
+  }
+
   Future<String> getAddressFromLatLng(double lat, double lng) async {
     String fallback = "Location (${lat.toStringAsFixed(4)}, ${lng.toStringAsFixed(4)})";
     
@@ -85,7 +93,7 @@ class LocationService {
 
   Future<Map<String, dynamic>> getRouteData(double startLat, double startLng, double endLat, double endLng) async {
     try {
-      final url = "https://router.project-osrm.org/route/v1/driving/$startLng,$startLat;$endLng,$endLat?overview=full&geometries=geojson";
+      final url = "https://router.project-osrm.org/route/v1/driving/$startLng,$startLat;$endLng,$endLat?overview=full&geometries=geojson&steps=true";
       final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
 
       if (response.statusCode == 200) {
@@ -95,18 +103,19 @@ class LocationService {
           final coordinates = route['geometry']['coordinates'] as List;
           return {
             'points': coordinates.map((c) => [c[1] as double, c[0] as double]).toList(),
-            'distance': route['distance'] as num, // in meters
-            'duration': route['duration'] as num, // in seconds
+            'distance': (route['distance'] as num) / 1000, // to km
+            'duration': (route['duration'] as num) / 60, // to minutes
           };
         }
       }
     } catch (e) {
       debugPrint("OSRM Routing Error: $e");
     }
+    double dist = Geolocator.distanceBetween(startLat, startLng, endLat, endLng) / 1000;
     return {
       'points': [[startLat, startLng], [endLat, endLng]],
-      'distance': Geolocator.distanceBetween(startLat, startLng, endLat, endLng),
-      'duration': 0,
+      'distance': dist,
+      'duration': dist * 3, // rough estimate: 3 mins per km
     };
   }
 }

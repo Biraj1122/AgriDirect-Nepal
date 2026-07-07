@@ -83,6 +83,7 @@ class AdminViewModel extends ChangeNotifier {
 
   Stream<List<OrderModel>> getOrders() => _repository.getOrders();
   Stream<List<Product>> getProducts() => _repository.getProducts();
+  Stream<List<Product>> getPendingProducts() => _repository.getPendingProducts();
   Stream<List<UserModel>> getUsers() => _repository.getUsers();
   Stream<List<ResearchSubmissionModel>> getResearchSubmissions() => _repository.getResearchSubmissions();
   Stream<List<PriceRequestModel>> getPriceRequests() => _repository.getPriceRequests();
@@ -93,6 +94,16 @@ class AdminViewModel extends ChangeNotifier {
 
   Future<void> declinePriceRequest(PriceRequestModel request) async {
     await _repository.declinePriceRequest(request.id, request.farmerUid, request.productName);
+  }
+
+  Future<void> approveProduct(Product product) async {
+    await _repository.approveProduct(product);
+    notifyListeners();
+  }
+
+  Future<void> rejectProduct(Product product) async {
+    await _repository.rejectProduct(product.id!, product.farmerUid, product.title);
+    notifyListeners();
   }
 
   Future<void> updateOrderStatus(String id, String status) async {
@@ -107,6 +118,11 @@ class AdminViewModel extends ChangeNotifier {
     await _repository.deleteProduct(id);
   }
 
+  Future<void> updateMasterProduct(String id, Map<String, dynamic> data) async {
+    await _repository.updateMasterProduct(id, data);
+    notifyListeners();
+  }
+
   Future<void> updateAnnouncement(String title, String content) async {
     await _repository.updateAnnouncement(AnnouncementModel(title: title, content: content));
   }
@@ -115,8 +131,8 @@ class AdminViewModel extends ChangeNotifier {
     await _repository.sendGlobalNotification(title, body);
   }
 
-  Future<void> seedDatabase() async {
-    await _repository.seedDatabase();
+  Future<void> seedDatabase({List<String>? selectedProductNames}) async {
+    await _repository.seedDatabase(selectedProductNames: selectedProductNames);
   }
 
   void logout(BuildContext context, Widget loginScreen) {

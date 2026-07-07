@@ -1,22 +1,21 @@
-
 import 'dart:async';
-import 'dart:io';
-import 'dart:math';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../services/location_service.dart';
 import '../services/storage_service.dart';
+import '../Success/shared_widgets.dart';
 import 'auth/login_screen.dart';
+import 'misc/farm_osm_screen.dart';
 
-const _kGreen = Color(0xFF2E7D32);
-const _kBg = Color(0xFFF4F6F0);
+const Color primaryTeal = Color(0xFF1D9E75);
+const Color secondaryBlue = Color(0xFF2E5BFF);
+const Color backgroundColor = Color(0xFFF8FAFC);
 
 class DeliveryPersonScreen extends StatefulWidget {
   const DeliveryPersonScreen({super.key});
@@ -29,6 +28,12 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
   int _tab = 0;
   final LocationService _locationService = LocationService();
   StreamSubscription<Position>? _positionSub;
+  StreamSubscription<QuerySnapshot>? _availableOrdersSub;
+  final Set<String> _notifiedOrders = {};
+
+  LatLng? _driverPos;
+  Map<String, dynamic>? _activeOrderData;
+  StreamSubscription<QuerySnapshot>? _activeOrderSub;
 
   @override
   void initState() {
@@ -36,15 +41,25 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
     _checkRole();
     _setupFCM();
     _startGlobalLocationTracking();
+    _listenForAvailableOrders();
+    _listenToActiveOrder();
   }
 
   Future<void> _startGlobalLocationTracking() async {
     bool granted = await _locationService.requestPermission();
     if (!granted) return;
 
+    final p = await _locationService.getCurrentLocation();
+    if (p != null && mounted) {
+      setState(() => _driverPos = LatLng(p.latitude, p.longitude));
+    }
+
     _positionSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
     ).listen((pos) {
+      if (mounted) {
+        setState(() => _driverPos = LatLng(pos.latitude, pos.longitude));
+      }
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         FirebaseFirestore.instance.collection('users').doc(user.uid).update({
@@ -56,9 +71,137 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
     });
   }
 
+  void _listenToActiveOrder() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _activeOrderSub = FirebaseFirestore.instance
+        .collection('orders')
+        .where('deliveryId', isEqualTo: user.uid)
+        .where('status', whereIn: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.docs.isNotEmpty) {
+        final data = snapshot.docs.first.data();
+        data['id'] = snapshot.docs.first.id;
+        if (mounted) {
+          setState(() => _activeOrderData = data);
+        }
+      } else {
+        if (mounted) {
+          setState(() => _activeOrderData = null);
+        }
+      }
+    });
+  }
+
+  void _listenForAvailableOrders() {
+    _availableOrdersSub = FirebaseFirestore.instance
+        .collection('orders')
+        .where('status', isEqualTo: 'Farmer Accepted')
+        .where('deliveryId', isNull: true)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      for (var doc in snapshot.docs) {
+        if (!_notifiedOrders.contains(doc.id)) {
+          _notifiedOrders.add(doc.id);
+          _showNewOrderDialog(doc);
+        }
+      }
+    });
+  }
+
+  void _showNewOrderDialog(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Row(
+          children: [
+            Icon(Icons.delivery_dining_rounded, color: primaryTeal, size: 28),
+            SizedBox(width: 12),
+            Text("New Shipment!", style: TextStyle(fontWeight: FontWeight.w900)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("A new order is ready for pickup near you.", style: TextStyle(color: Colors.grey)),
+            const SizedBox(height: 16),
+            _dialogInfo(Icons.storefront_rounded, "From: ${data['farmName'] ?? 'Farm'}"),
+            _dialogInfo(Icons.location_on_rounded, "To: ${data['deliveryAddress'] ?? 'Customer'}"),
+            _dialogInfo(Icons.payments_rounded, "Fee: Rs. ${data['deliveryFee'] ?? 40}"),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Dismiss", style: TextStyle(color: Colors.grey.shade600)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await _acceptAvailableOrder(doc.id);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryTeal,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text("Accept Order", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dialogInfo(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: primaryTeal),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14))),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _acceptAvailableOrder(String orderId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final riderDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final riderName = riderDoc.data()?['fullName'] ?? 'Rider';
+    final riderPhone = riderDoc.data()?['phone'] ?? '';
+
+    await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+      'deliveryId': user.uid,
+      'deliveryName': riderName,
+      'deliveryPhone': riderPhone,
+      'status': 'Awaiting Pickup',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    if (mounted) {
+      setState(() => _tab = 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Order accepted! Directions loaded on map."), backgroundColor: primaryTeal),
+      );
+    }
+  }
+
   @override
   void dispose() {
     _positionSub?.cancel();
+    _availableOrdersSub?.cancel();
+    _activeOrderSub?.cancel();
     super.dispose();
   }
 
@@ -100,7 +243,12 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
       if (!mounted) return;
       final body = message.notification?.body ?? 'New Order Alert!';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(body), backgroundColor: _kGreen, behavior: SnackBarBehavior.floating),
+        SnackBar(
+          content: Text(body),
+          backgroundColor: primaryTeal,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       );
     });
   }
@@ -109,69 +257,48 @@ class _DeliveryPersonScreenState extends State<DeliveryPersonScreen> {
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      return const Scaffold(body: Center(child: Text("Please log in")));
+      return const Scaffold(body: Center(child: CircularProgressIndicator(color: primaryTeal)));
     }
 
-    final pages = [
-      _HomeMapTab(user: user),
-      _ShipmentsTab(user: user),
-      _NotificationsTab(user: user),
-      _EarningsTab(user: user),
-      _ProfileTab(user: user),
-    ];
-
     return Scaffold(
-      backgroundColor: _kBg,
-      body: SafeArea(child: pages[_tab]),
-      bottomNavigationBar: _BottomNav(
-        currentTab: _tab,
-        onTap: (i) => setState(() => _tab = i),
-      ),
-    );
-  }
-}
-
-class _BottomNav extends StatelessWidget {
-  final int currentTab;
-  final ValueChanged<int> onTap;
-
-  const _BottomNav({required this.currentTab, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))],
-      ),
-      child: SafeArea(
-        child: SizedBox(
-          height: 64,
-          child: Row(
-            children: [
-              _navItem(0, Icons.map, "Home"),
-              _navItem(1, Icons.local_shipping, "Shipments"),
-              _navItem(2, Icons.assignment, "Details"),
-              _navItem(3, Icons.account_balance_wallet, "Payments"),
-              _navItem(4, Icons.person, "Profile"),
-            ],
-          ),
+      backgroundColor: backgroundColor,
+      body: SafeArea(
+        child: IndexedStack(
+          index: _tab,
+          children: [
+            _HomeMapTab(user: user, driverPos: _driverPos, activeOrderData: _activeOrderData),
+            _ShipmentsTab(user: user, onSwitchToMap: () => setState(() => _tab = 0)),
+            _EarningsTab(user: user),
+            _ProfileTab(user: user, logoutCallback: _logout),
+          ],
         ),
       ),
-    );
-  }
-
-  Widget _navItem(int idx, IconData icon, String label) {
-    final isSel = currentTab == idx;
-    return Expanded(
-      child: InkWell(
-        onTap: () => onTap(idx),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: isSel ? _kGreen : Colors.grey.shade400, size: 24),
-            const SizedBox(height: 2),
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: isSel ? FontWeight.bold : FontWeight.normal, color: isSel ? _kGreen : Colors.grey.shade600)),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _tab,
+          onTap: (i) => setState(() => _tab = i),
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: primaryTeal,
+          unselectedItemColor: Colors.grey.shade400,
+          backgroundColor: Colors.white,
+          elevation: 0,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.map_outlined), activeIcon: Icon(Icons.map_rounded), label: "Map"),
+            BottomNavigationBarItem(icon: Icon(Icons.local_shipping_outlined), activeIcon: Icon(Icons.local_shipping_rounded), label: "Shipments"),
+            BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), activeIcon: Icon(Icons.account_balance_wallet_rounded), label: "Wallet"),
+            BottomNavigationBarItem(icon: Icon(Icons.person_outline_rounded), activeIcon: Icon(Icons.person_rounded), label: "Profile"),
           ],
         ),
       ),
@@ -181,626 +308,560 @@ class _BottomNav extends StatelessWidget {
 
 class _HomeMapTab extends StatefulWidget {
   final User user;
-  const _HomeMapTab({required this.user});
+  final LatLng? driverPos;
+  final Map<String, dynamic>? activeOrderData;
+  const _HomeMapTab({required this.user, this.driverPos, this.activeOrderData});
 
   @override
   State<_HomeMapTab> createState() => _HomeMapTabState();
 }
 
-class _HomeMapTabState extends State<_HomeMapTab> with TickerProviderStateMixin {
-  MapLibreMapController? _mapController;
+class _HomeMapTabState extends State<_HomeMapTab> {
   final LocationService _locationService = LocationService();
-  final TextEditingController _searchController = TextEditingController();
-
   static const LatLng _kDefaultCenter = LatLng(27.7172, 85.3240);
 
-  LatLng? _driverPos;
-  LatLng? _customPickupPoint;
-  StreamSubscription<Position>? _localPosSub;
-  StreamSubscription<QuerySnapshot>? _orderSub;
+  LatLng? _lastRouteUpdatePos;
+  MapLibreMapController? _mapController;
+  Line? _routeLine;
+  double? _routeDistance;
+  double? _routeDuration;
+  String? _targetLabel;
 
-  final List<Symbol> _customerSymbols = [];
-  final List<Circle> _customerCircles = [];
-
-  String _currentAddress = "Fetching location...";
-  bool _isMoving = false;
-  List<Map<String, dynamic>> _searchResults = [];
-  bool _isSearching = false;
-
-  late AnimationController _pinController;
-  late Animation<double> _pinAnimation;
+  Symbol? _riderSymbol;
+  Symbol? _targetSymbol;
+  Circle? _riderCircle;
+  Circle? _targetCircle;
 
   @override
-  void initState() {
-    super.initState();
-    _pinController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-    _pinAnimation = Tween<double>(begin: 0, end: -15).animate(
-      CurvedAnimation(parent: _pinController, curve: Curves.easeOut),
-    );
-    _startLocalTracking();
-    _listenToActiveOrders();
-    _loadCustomPickupPoint();
-  }
-
-  Future<void> _loadCustomPickupPoint() async {
-    final snap = await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).get();
-    if (snap.exists && mounted) {
-      final data = snap.data();
-      if (data != null && data['pickupLat'] != null && data['pickupLng'] != null) {
-        setState(() {
-          _customPickupPoint = LatLng(data['pickupLat'], data['pickupLng']);
-        });
+  void didUpdateWidget(_HomeMapTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.activeOrderData != oldWidget.activeOrderData) {
+      if (widget.activeOrderData?['id'] != oldWidget.activeOrderData?['id'] ||
+          widget.activeOrderData?['status'] != oldWidget.activeOrderData?['status']) {
+        _lastRouteUpdatePos = null;
       }
+      _updateDirections(force: true);
+    } else if (widget.driverPos != oldWidget.driverPos) {
+      _updateDirections();
     }
   }
 
-  Future<void> _startLocalTracking() async {
-    try {
-      final pos = await Geolocator.getCurrentPosition();
-      if (mounted) setState(() => _driverPos = LatLng(pos.latitude, pos.longitude));
-    } catch (_) {}
+  Future<void> _cancelActiveOrderAssignment() async {
+    if (widget.activeOrderData == null) return;
 
-    _localPosSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 10),
-    ).listen((pos) {
-      if (mounted) setState(() => _driverPos = LatLng(pos.latitude, pos.longitude));
-    });
-  }
-
-  Future<void> _updateAddress(LatLng position) async {
-    String address = await _locationService.getAddressFromLatLng(
-      position.latitude,
-      position.longitude,
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Unassign Order?"),
+        content: const Text("Are you sure you want to remove yourself from this delivery? It will be available for other riders."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Keep")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text("Unassign", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
     );
-    if (mounted) {
-      setState(() {
-        _currentAddress = address;
+
+    if (confirm == true) {
+      final orderId = widget.activeOrderData!['id'];
+      if (orderId == null) return;
+
+      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+        'deliveryId': null,
+        'deliveryName': null,
+        'deliveryPhone': null,
+        'status': 'Farmer Accepted',
       });
     }
   }
 
-  void _listenToActiveOrders() {
-    _orderSub = FirebaseFirestore.instance
-        .collection('orders')
-        .where('status', whereIn: ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
-        .snapshots()
-        .listen((snap) {
-      if (!mounted || _mapController == null) return;
-
-      final myUid = widget.user.uid;
-      final relevantDocs = snap.docs.where((doc) {
-        final data = doc.data();
-        final dId = data['deliveryId'];
-        return dId == null || dId == '' || dId == myUid;
-      }).toList();
-
-      _updateMarkersOnMap(relevantDocs);
-    });
+  void _centerOnDriver() {
+    if (widget.driverPos != null && _mapController != null) {
+      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(widget.driverPos!, 16));
+    }
   }
 
-  Future<void> _updateMarkersOnMap(List<QueryDocumentSnapshot<Map<String, dynamic>>> docs) async {
+  Future<void> _updateDirections({bool force = false}) async {
     if (_mapController == null) return;
 
-    for (var s in _customerSymbols) {
-      await _mapController!.removeSymbol(s);
-    }
-    _customerSymbols.clear();
-
-    for (var c in _customerCircles) {
-      await _mapController!.removeCircle(c);
-    }
-    _customerCircles.clear();
-
-    for (final doc in docs) {
-      final data = doc.data();
-      
-      // Customer Marker (Red Pinpoint)
-      final lat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
-      final lng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
-
-      if (lat != null && lng != null) {
-        final pos = LatLng(lat, lng);
-        
-        final circle = await _mapController!.addCircle(
-          CircleOptions(
-            geometry: pos,
-            circleRadius: 8.0,
-            circleColor: "#FF5252",
-            circleStrokeWidth: 2.0,
-            circleStrokeColor: "#FFFFFF",
-          ),
-        );
-        _customerCircles.add(circle);
-
-        final symbol = await _mapController!.addSymbol(
-          SymbolOptions(
-            geometry: pos,
-            textField: "Customer",
-            textSize: 10,
-            textColor: "#FF5252",
-            textHaloColor: "#FFFFFF",
-            textHaloWidth: 1.0,
-            textOffset: const Offset(0, 1.5),
-          ),
-        );
-        _customerSymbols.add(symbol);
+    if (widget.activeOrderData == null) {
+      if (_routeLine != null) {
+        try { await _mapController!.removeLine(_routeLine!); } catch (_) {}
+        _routeLine = null;
       }
-
-      // Farmer Marker (Orange)
-      final fLat = (data['farmerLat'] as num?)?.toDouble();
-      final fLng = (data['farmerLng'] as num?)?.toDouble();
-
-      if (fLat != null && fLng != null) {
-        final fPos = LatLng(fLat, fLng);
-
-        final circle = await _mapController!.addCircle(
-          CircleOptions(
-            geometry: fPos,
-            circleRadius: 8.0,
-            circleColor: "#FFA000",
-            circleStrokeWidth: 2.0,
-            circleStrokeColor: "#FFFFFF",
-          ),
-        );
-        _customerCircles.add(circle);
-
-        final symbol = await _mapController!.addSymbol(
-          SymbolOptions(
-            geometry: fPos,
-            textField: "Farmer/Hub",
-            textSize: 10,
-            textColor: "#FFA000",
-            textHaloColor: "#FFFFFF",
-            textHaloWidth: 1.0,
-            textOffset: const Offset(0, 1.5),
-          ),
-        );
-        _customerSymbols.add(symbol);
+      if (mounted) {
+        setState(() {
+          _routeDistance = null;
+          _routeDuration = null;
+          _targetLabel = null;
+          _lastRouteUpdatePos = null;
+        });
       }
-    }
-
-    if (_customPickupPoint != null) {
-      final circle = await _mapController!.addCircle(
-        CircleOptions(
-          geometry: _customPickupPoint!,
-          circleRadius: 8.0,
-          circleColor: "#2E7D32",
-          circleStrokeWidth: 2.0,
-          circleStrokeColor: "#FFFFFF",
-        ),
-      );
-      _customerCircles.add(circle);
-
-      final symbol = await _mapController!.addSymbol(
-        SymbolOptions(
-          geometry: _customPickupPoint!,
-          textField: "Saved Pickup",
-          textSize: 10,
-          textColor: "#2E7D32",
-          textHaloColor: "#FFFFFF",
-          textHaloWidth: 1.0,
-          textOffset: const Offset(0, 1.5),
-        ),
-      );
-      _customerSymbols.add(symbol);
-    }
-  }
-
-  void _onMapCreated(MapLibreMapController controller) {
-    _mapController = controller;
-    FirebaseFirestore.instance
-        .collection('orders')
-        .where('status', whereIn: ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
-        .get()
-        .then((snap) {
-      if (!mounted) return;
-      final myUid = widget.user.uid;
-      final relevantDocs = snap.docs.where((doc) {
-        final data = doc.data();
-        final dId = data['deliveryId'];
-        return dId == null || dId == '' || dId == myUid;
-      }).toList();
-      _updateMarkersOnMap(relevantDocs);
-    });
-  }
-
-  void _onCameraIdle() {
-    setState(() => _isMoving = false);
-    _pinController.reverse();
-    if (_mapController != null) {
-      _updateAddress(_mapController!.cameraPosition!.target);
-    }
-  }
-
-  void _handleSearch(String query) async {
-    if (query.length < 3) {
-      setState(() {
-        _searchResults = [];
-        _isSearching = false;
-      });
+      if (_mapController != null) {
+        if (_targetSymbol != null) { try { await _mapController!.removeSymbol(_targetSymbol!); } catch (_) {} _targetSymbol = null; }
+        if (_targetCircle != null) { try { await _mapController!.removeCircle(_targetCircle!); } catch (_) {} _targetCircle = null; }
+        if (_riderSymbol != null) { try { await _mapController!.removeSymbol(_riderSymbol!); } catch (_) {} _riderSymbol = null; }
+        if (_riderCircle != null) { try { await _mapController!.removeCircle(_riderCircle!); } catch (_) {} _riderCircle = null; }
+      }
       return;
     }
 
-    setState(() => _isSearching = true);
-    final results = await _locationService.searchLocation(query);
-    if (mounted) {
-      setState(() {
-        _searchResults = results;
-        _isSearching = false;
-      });
+    if (widget.driverPos == null) return;
+
+    if (!force && _lastRouteUpdatePos != null) {
+      final dist = Geolocator.distanceBetween(
+          widget.driverPos!.latitude, widget.driverPos!.longitude,
+          _lastRouteUpdatePos!.latitude, _lastRouteUpdatePos!.longitude
+      );
+      if (dist < 50) return;
+    }
+
+    try {
+      LatLng startPos = widget.driverPos!;
+      LatLng? target;
+      String label = "";
+
+      final data = widget.activeOrderData!;
+      final status = data['status'];
+
+      final fLat = (data['farmerLat'] as num?)?.toDouble();
+      final fLng = (data['farmerLng'] as num?)?.toDouble();
+      final cLat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
+      final cLng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
+
+      if (status == 'Farmer Accepted' || status == 'Awaiting Pickup') {
+        if (fLat != null && fLng != null) {
+          target = LatLng(fLat, fLng);
+          label = "Farm (Pickup)";
+        }
+      } else if (status == 'Picked Up' || status == 'On the way' || status == 'Arrived' || status == 'Confirm Received') {
+        if (cLat != null && cLng != null) {
+          target = LatLng(cLat, cLng);
+          label = "Customer (Delivery)";
+        }
+      }
+
+      if (target == null && (cLat != null && cLng != null)) {
+        target = LatLng(cLat, cLng);
+        label = "Destination";
+      }
+
+      if (target != null) {
+        final routeData = await _locationService.getRouteData(
+          startPos.latitude, startPos.longitude,
+          target.latitude, target.longitude,
+        );
+
+        final List<LatLng> polyline = (routeData['points'] as List).map((p) => LatLng((p[0] as num).toDouble(), (p[1] as num).toDouble())).toList();
+
+        if (mounted) {
+          setState(() {
+            _routeDistance = routeData['distance'];
+            _routeDuration = routeData['duration'];
+            _targetLabel = label;
+            _lastRouteUpdatePos = startPos;
+          });
+        }
+
+        if (_routeLine == null) {
+          _routeLine = await _mapController!.addLine(LineOptions(
+            geometry: polyline,
+            lineColor: "#2E5BFF",
+            lineWidth: 5,
+            lineOpacity: 0.8,
+            lineJoin: "round",
+          ));
+        } else {
+          await _mapController!.updateLine(_routeLine!, LineOptions(geometry: polyline));
+        }
+      } else {
+        if (_routeLine != null) {
+          try { await _mapController!.removeLine(_routeLine!); } catch (_) {}
+          _routeLine = null;
+        }
+        if (mounted) {
+          setState(() {
+            _routeDistance = null;
+            _routeDuration = null;
+            _targetLabel = null;
+          });
+        }
+      }
+
+      _updateMarkers(widget.driverPos, target, label);
+    } catch (e) {
+      debugPrint("Error updating rider directions: $e");
     }
   }
 
-  void _selectSearchResult(Map<String, dynamic> result) {
-    final lat = result['lat'] as double;
-    final lng = result['lng'] as double;
-    final address = result['display_name'] as String;
-
-    _mapController?.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(target: LatLng(lat, lng), zoom: 16, tilt: 45),
-      ),
-    );
-
-    setState(() {
-      _currentAddress = address;
-      _searchResults = [];
-      _searchController.text = "";
-    });
-    FocusScope.of(context).unfocus();
-  }
-
-  void _confirmPickupLocation() async {
+  Future<void> _updateMarkers(LatLng? rider, LatLng? target, String label) async {
     if (_mapController == null) return;
-    final point = _mapController!.cameraPosition!.target;
 
-    setState(() {
-      _customPickupPoint = point;
-    });
-
-    FirebaseFirestore.instance
-        .collection('orders')
-        .where('deliveryId', isEqualTo: widget.user.uid)
-        .where('status', whereIn: ['Picked Up', 'On the way'])
-        .get()
-        .then((snap) => _updateMarkersOnMap(snap.docs));
-
-    await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
-      'pickupLat': point.latitude,
-      'pickupLng': point.longitude,
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Pickup location saved")),
-      );
+    if (rider != null) {
+      if (_riderSymbol == null) {
+        try {
+          _riderCircle = await _mapController!.addCircle(CircleOptions(
+            geometry: rider, circleRadius: 10, circleColor: "#2E5BFF", circleStrokeWidth: 3, circleStrokeColor: "#FFFFFF",
+          ));
+          _riderSymbol = await _mapController!.addSymbol(SymbolOptions(
+            geometry: rider, textField: "Me (Rider)", textSize: 12, textColor: "#2E5BFF", textHaloColor: "#FFFFFF", textHaloWidth: 2, textOffset: const Offset(0, -2), textAnchor: "bottom",
+          ));
+        } catch (e) {
+          debugPrint("Error adding rider marker: $e");
+        }
+      } else {
+        _mapController!.updateSymbol(_riderSymbol!, SymbolOptions(geometry: rider));
+        if (_riderCircle != null) {
+          _mapController!.updateCircle(_riderCircle!, CircleOptions(geometry: rider));
+        }
+      }
     }
+
+    if (target != null) {
+      final String colorHex = label.contains("Farm") ? "#F59E0B" : "#EF4444";
+
+      if (_targetSymbol == null) {
+        try {
+          _targetCircle = await _mapController!.addCircle(CircleOptions(
+            geometry: target, circleRadius: 12, circleColor: colorHex, circleStrokeWidth: 3, circleStrokeColor: "#FFFFFF",
+          ));
+          _targetSymbol = await _mapController!.addSymbol(SymbolOptions(
+            geometry: target, textField: label, textSize: 12, textColor: colorHex, textHaloColor: "#FFFFFF", textHaloWidth: 2, textOffset: const Offset(0, -2), textAnchor: "bottom",
+          ));
+        } catch (e) {
+          debugPrint("Error adding target marker: $e");
+        }
+      } else {
+        _mapController!.updateSymbol(_targetSymbol!, SymbolOptions(
+          geometry: target, textField: label, textColor: colorHex,
+        ));
+        if (_targetCircle != null) {
+          _mapController!.updateCircle(_targetCircle!, CircleOptions(
+            geometry: target, circleColor: colorHex,
+          ));
+        }
+      }
+    } else {
+      if (_targetSymbol != null) {
+        try { await _mapController!.removeSymbol(_targetSymbol!); } catch (_) {}
+        _targetSymbol = null;
+      }
+      if (_targetCircle != null) {
+        try { await _mapController!.removeCircle(_targetCircle!); } catch (_) {}
+        _targetCircle = null;
+      }
+    }
+    _fitCamera(rider, target);
   }
 
-  void _handleMapLongPress(LatLng point) async {
-    setState(() {
-      _customPickupPoint = point;
-    });
+  void _fitCamera(LatLng? rider, LatLng? target) {
+    if (_mapController == null || rider == null) return;
 
-    FirebaseFirestore.instance
-        .collection('orders')
-        .where('deliveryId', isEqualTo: widget.user.uid)
-        .where('status', whereIn: ['Picked Up', 'On the way'])
-        .get()
-        .then((snap) => _updateMarkersOnMap(snap.docs));
-
-    await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
-      'pickupLat': point.latitude,
-      'pickupLng': point.longitude,
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Pickup location saved")),
-      );
+    if (target == null) {
+      _mapController!.animateCamera(CameraUpdate.newLatLngZoom(rider, 16));
+      return;
     }
-  }
 
-  @override
-  void dispose() {
-    _localPosSub?.cancel();
-    _orderSub?.cancel();
-    _searchController.dispose();
-    _pinController.dispose();
-    super.dispose();
+    List<LatLng> points = [rider, target];
+
+    double south = points[0].latitude, north = points[0].latitude, west = points[0].longitude, east = points[0].longitude;
+    for (var p in points) {
+      if (p.latitude < south) south = p.latitude;
+      if (p.latitude > north) north = p.latitude;
+      if (p.longitude < west) west = p.longitude;
+      if (p.longitude > east) east = p.longitude;
+    }
+
+    if (south == north) { south -= 0.001; north += 0.001; }
+    if (west == east) { west -= 0.001; east += 0.001; }
+
+    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(
+      LatLngBounds(southwest: LatLng(south, west), northeast: LatLng(north, east)),
+      left: 70, right: 70, top: 160, bottom: 100,
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          MapLibreMap(
-            initialCameraPosition: CameraPosition(
-              target: _driverPos ?? _kDefaultCenter,
-              zoom: 14.5,
-              tilt: 45,
-            ),
-            onMapCreated: _onMapCreated,
-            myLocationEnabled: true,
-            onCameraMove: (pos) {
-              if (!_isMoving) {
-                setState(() => _isMoving = true);
-                _pinController.forward();
+    return Stack(
+      children: [
+        MapLibreMap(
+          initialCameraPosition: CameraPosition(target: widget.driverPos ?? _kDefaultCenter, zoom: 14),
+          myLocationEnabled: true,
+          styleString: "https://tiles.openfreemap.org/styles/positron",
+          onMapCreated: (controller) {
+            _mapController = controller;
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted) {
+                _updateDirections(force: true);
+                _centerOnDriver();
               }
-            },
-            onCameraIdle: _onCameraIdle,
-            onMapLongClick: (point, latlng) => _handleMapLongPress(latlng),
-            styleString: "https://tiles.openfreemap.org/styles/positron",
-          ),
+            });
+          },
+          onMapClick: (point, latlng) => _centerOnDriver(),
+        ),
 
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: Column(
+        // CENTER ON ME BUTTON
+        Positioned(
+          bottom: 20,
+          right: 20,
+          child: FloatingActionButton(
+            mini: true,
+            backgroundColor: Colors.white,
+            onPressed: _centerOnDriver,
+            child: const Icon(Icons.my_location_rounded, color: primaryTeal),
+          ),
+        ),
+
+        if (_routeDistance != null)
+          Positioned(
+            top: 100, left: 20, right: 20,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A1D25),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
+              ),
+              child: Row(
                 children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
-                      boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, offset: const Offset(0, 5))],
-                    ),
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: _handleSearch,
-                      decoration: InputDecoration(
-                        hintText: "Search pickup/delivery point...",
-                        prefixIcon: const Icon(Icons.search, color: Colors.green),
-                        suffixIcon: _isSearching
-                            ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green))
-                            : null,
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 15),
-                      ),
+                  const CircleAvatar(backgroundColor: secondaryBlue, child: Icon(Icons.navigation_rounded, color: Colors.white, size: 20)),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text("Heading to ${_targetLabel ?? 'Destination'}", style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text("${_routeDistance!.toStringAsFixed(1)} km • ${_routeDuration!.toStringAsFixed(0)} mins",
+                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                      ],
                     ),
                   ),
-                  if (_searchResults.isNotEmpty)
-                    Container(
-                      margin: const EdgeInsets.only(top: 10),
-                      constraints: const BoxConstraints(maxHeight: 250),
-                      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)]),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: _searchResults.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
-                        itemBuilder: (ctx, i) {
-                          final res = _searchResults[i];
-                          return ListTile(
-                            leading: const Icon(Icons.location_on_outlined, color: Colors.green),
-                            title: Text(res['display_name'], maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-                            onTap: () => _selectSearchResult(res),
-                          );
-                        },
-                      ),
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.cancel_rounded, color: Colors.white54, size: 24),
+                    onPressed: _cancelActiveOrderAssignment,
+                  ),
                 ],
               ),
             ),
           ),
 
-          Center(
-            child: AnimatedBuilder(
-              animation: _pinAnimation,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, _pinAnimation.value - 20),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+        Positioned(
+          top: 25, left: 25, right: 25,
+          child: StreamBuilder<DocumentSnapshot>(
+              stream: FirebaseFirestore.instance.collection('users').doc(widget.user.uid).snapshots(),
+              builder: (context, snapshot) {
+                final userData = snapshot.data?.data() as Map<String, dynamic>?;
+                final isOnline = userData?['isOnline'] ?? true;
+
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(8)),
-                        child: const Text("Set Pickup", style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                        width: 70,
+                        height: 70,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: isOnline 
+                              ? [const Color(0xFF1D9E75), const Color(0xFF2E5BFF)]
+                              : [Colors.grey.shade400, Colors.grey.shade600],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(Icons.delivery_dining_rounded, color: Colors.white, size: 36),
                       ),
-                      const Icon(Icons.location_on, size: 40, color: Colors.green),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              "Status: ${isOnline ? 'Online' : 'Offline'}",
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 16,
+                                color: isOnline ? primaryTeal : Colors.grey.shade600
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _routeDistance != null 
+                                ? "Current Task: $_targetLabel" 
+                                : (isOnline ? "Waiting for new orders..." : "Go online to see orders"),
+                              style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 );
-              },
-            ),
+              }
           ),
-
-          Positioned(
-            bottom: 0, left: 0, right: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -10))],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
-                  const SizedBox(height: 15),
-                  Row(
-                    children: [
-                      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.location_on, color: Colors.green, size: 20)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(_isMoving ? "Updating map..." : _currentAddress, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: _isMoving ? null : _confirmPickupLocation,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                      child: const Text("SAVE PICKUP POINT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          Positioned(
-            bottom: 200,
-            right: 20,
-            child: FloatingActionButton(
-              backgroundColor: Colors.white,
-              mini: true,
-              onPressed: () {
-                if (_driverPos != null) _mapController?.animateCamera(CameraUpdate.newLatLng(_driverPos!));
-              },
-              child: const Icon(Icons.my_location, color: Colors.green),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _ShipmentsTab extends StatefulWidget {
+class _ShipmentsTab extends StatelessWidget {
   final User user;
-  const _ShipmentsTab({required this.user});
-
-  @override
-  State<_ShipmentsTab> createState() => _ShipmentsTabState();
-}
-
-class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderStateMixin {
-  late TabController _shipmentController;
-
-  @override
-  void initState() {
-    super.initState();
-    _shipmentController = TabController(length: 2, vsync: this);
-  }
+  final VoidCallback onSwitchToMap;
+  const _ShipmentsTab({required this.user, required this.onSwitchToMap});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _kBg,
-      appBar: AppBar(
-        title: const Text("Shipments Ledger", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        bottom: TabBar(
-          controller: _shipmentController,
-          labelColor: _kGreen,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: _kGreen,
-          tabs: const [Tab(text: "Active Delivery Requests"), Tab(text: "Past Finished History")],
-        ),
-      ),
-      body: TabBarView(
-        controller: _shipmentController,
+    return DefaultTabController(
+      length: 2,
+      child: Column(
         children: [
-          _buildLiveStream(context),
-          _buildHistoryStream(context),
+          const SizedBox(height: 20),
+          const Heading(title: "Shipments", subtitle: "Manage your delivery workload"),
+          const SizedBox(height: 10),
+          TabBar(
+            labelColor: primaryTeal,
+            unselectedLabelColor: Colors.grey.shade400,
+            indicatorColor: primaryTeal,
+            indicatorWeight: 3,
+            indicatorSize: TabBarIndicatorSize.label,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            dividerColor: Colors.transparent,
+            tabs: const [
+              Tab(text: "Active"),
+              Tab(text: "History"),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildOrderList(context, ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived', 'Confirm Received'], true),
+                _buildOrderList(context, ['Delivered', 'Cancelled'], false),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildLiveStream(BuildContext context) {
+  Widget _buildOrderList(BuildContext context, List<String> statuses, bool isActionable) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('orders')
-          .where('status', whereIn: ['Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'])
+          .where('status', whereIn: statuses)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: _kGreen));
-        final docs = snapshot.data!.docs;
-        final myOrders = docs.where((d) => (d.data() as Map<String, dynamic>)['deliveryId'] == widget.user.uid).toList();
-        final available = docs.where((d) {
-          final data = d.data() as Map<String, dynamic>;
-          // Show orders that are ready for pickup and not yet taken by a rider
-          return (data['deliveryId'] == null || data['deliveryId'] == '') && data['status'] == 'Awaiting Pickup';
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: primaryTeal));
+        final docs = snapshot.data!.docs.where((d) {
+          final data = d.data() as Map;
+          return data['deliveryId'] == null || data['deliveryId'] == user.uid;
         }).toList();
 
-        if (myOrders.isEmpty && available.isEmpty) {
-          return const Center(child: Text("No active requests found", style: TextStyle(color: Colors.grey)));
-        }
-
-        return ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            if (myOrders.isNotEmpty) ...[
-              _headerSection("Assigned to Me", myOrders.length),
-              ...myOrders.map((doc) => _OrderCard(doc: doc, user: widget.user)),
+        if (docs.isEmpty) {
+          return Center(child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(isActionable ? Icons.local_shipping_outlined : Icons.receipt_long_rounded, size: 80, color: Colors.grey.shade100),
+              const SizedBox(height: 16),
+              Text(isActionable ? "No active shipments" : "No delivery history", style: TextStyle(color: Colors.grey.shade400, fontWeight: FontWeight.bold)),
             ],
-            if (available.isNotEmpty) ...[
-              _headerSection("Available Hub Orders", available.length),
-              ...available.map((doc) => _OrderCard(doc: doc, user: widget.user)),
-            ],
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildHistoryStream(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('orders')
-          .where('deliveryId', isEqualTo: widget.user.uid)
-          .where('status', isEqualTo: 'Delivered')
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: _kGreen));
-        final historyDocs = snapshot.data!.docs;
-
-        if (historyDocs.isEmpty) {
-          return const Center(child: Text("No completed orders", style: TextStyle(color: Colors.grey)));
+          ));
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: historyDocs.length,
-          itemBuilder: (context, idx) {
-            final data = historyDocs[idx].data() as Map<String, dynamic>;
-            final paymentMethod = data['paymentMethod'] ?? 'COD';
-            final isCOD = paymentMethod == 'COD';
-            final shortId = historyDocs[idx].id.substring(0, min(6, historyDocs[idx].id.length));
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          itemCount: docs.length,
+          itemBuilder: (context, i) {
+            final data = docs[i].data() as Map<String, dynamic>;
+            final isMyOrder = data['deliveryId'] == user.uid;
 
-            return Card(
-              color: Colors.white,
-              margin: const EdgeInsets.only(bottom: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                leading: const Icon(Icons.check_circle, color: _kGreen, size: 32),
-                title: Text("Order #$shortId Delivered", style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 4),
-                    Text(data['deliveryAddress'] ?? 'No Address', style: const TextStyle(fontSize: 12)),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: isCOD ? Colors.red.withValues(alpha: 0.1) : Colors.blue.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            isCOD ? "COD" : "ONLINE",
-                            style: TextStyle(color: isCOD ? Colors.red : Colors.blue, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                trailing: Text("Rs. ${data['total'] ?? '0'}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen)),
-                onTap: () {
-                  if (!isCOD) {
-                    _showReceipt(context, shortId, data);
-                  }
-                },
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text("Order #${docs[i].id.substring(0, 8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: Color(0xFF1A1D25))),
+                      _statusChip(data['status'] ?? 'Pending'),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _locationRow(Icons.storefront_rounded, "Pickup: ${data['farmName'] ?? 'Farm'}"),
+                  const SizedBox(height: 12),
+                  _locationRow(Icons.location_on_rounded, "Deliver: ${data['deliveryAddress'] ?? 'Customer'}"),
+                  const SizedBox(height: 20),
+                  if (isActionable) ...[
+                    if (!isMyOrder)
+                      GradientButton(
+                          label: "Accept Shipment",
+                          icon: Icons.check_rounded,
+                          isLoading: false,
+                          teal: primaryTeal, blue: secondaryBlue,
+                          onTap: () async {
+                            final confirm = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                title: const Text("Accept Shipment?"),
+                                content: const Text("Are you sure you want to accept this delivery?"),
+                                actions: [
+                                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text("Accept", style: TextStyle(color: primaryTeal, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirm == true && context.mounted) {
+                              await _acceptOrder(docs[i].id, user.uid);
+                              onSwitchToMap();
+                            }
+                          }
+                      )
+                    else
+                      GradientButton(
+                          label: _getNextStatusLabel(data['status']),
+                          icon: Icons.arrow_forward_rounded,
+                          isLoading: false,
+                          teal: primaryTeal, blue: secondaryBlue,
+                          onTap: () => _updateStatus(docs[i].id, data['status'])
+                      ),
+                  ] else ...[
+                    Text("Completed: ${data['updatedAt'] != null ? (data['updatedAt'] as Timestamp).toDate().toString().substring(0, 16) : 'N/A'}",
+                        style: TextStyle(color: Colors.grey.shade400, fontSize: 12, fontWeight: FontWeight.w500)),
+                  ]
+                ],
               ),
             );
           },
@@ -809,1250 +870,585 @@ class _ShipmentsTabState extends State<_ShipmentsTab> with SingleTickerProviderS
     );
   }
 
-  void _showReceipt(BuildContext context, String shortId, Map<String, dynamic> data) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Receipt #$shortId"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("Status: Paid Online", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Text("Customer: ${data['userName'] ?? 'N/A'}"),
-            Text("Total: Rs. ${data['total'] ?? 0}"),
-          ],
-        ),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Close"))],
+  Widget _locationRow(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F9FB),
+        borderRadius: BorderRadius.circular(16),
       ),
-    );
-  }
-
-  Widget _headerSection(String text, int count) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Text("$text ($count)", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black87)),
-    );
-  }
-}
-
-class DeliveryRouteMapScreen extends StatefulWidget {
-  final String orderId;
-  final Map<String, dynamic> orderData;
-  final String deliveryPersonName;
-
-  const DeliveryRouteMapScreen({
-    required this.orderId,
-    required this.orderData,
-    required this.deliveryPersonName,
-    super.key,
-  });
-
-  @override
-  State<DeliveryRouteMapScreen> createState() => _DeliveryRouteMapScreenState();
-}
-
-class _DeliveryRouteMapScreenState extends State<DeliveryRouteMapScreen> with TickerProviderStateMixin {
-  MapLibreMapController? _mapController;
-  LatLng? _driverPos;
-  Symbol? _driverSymbol;
-  Symbol? _customerSymbol;
-  Symbol? _farmerSymbol;
-  Circle? _customerCircle;
-  Circle? _driverCircle;
-  Line? _routeLine;
-  StreamSubscription<Position>? _positionSub;
-  StreamSubscription<DocumentSnapshot>? _orderSub;
-
-  static const LatLng _kDefaultCenter = LatLng(27.7172, 85.3240);
-
-  String _currentAddress = "Fetching destination...";
-  final LocationService _locationService = LocationService();
-
-  // Live order data (replaces the frozen widget.orderData for lat/lng)
-  LatLng? _customerPos;
-  LatLng? _farmerPos;
-  String _status = "Processing";
-  String _distanceText = "";
-  String _durationText = "";
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Seed initial values from the snapshot passed in (so UI isn't blank
-    // before the live stream below returns its first event).
-    final cLat = (widget.orderData['customerLat'] as num?)?.toDouble() ?? (widget.orderData['lat'] as num?)?.toDouble();
-    final cLng = (widget.orderData['customerLng'] as num?)?.toDouble() ?? (widget.orderData['lng'] as num?)?.toDouble();
-    if (cLat != null && cLng != null) _customerPos = LatLng(cLat, cLng);
-
-    final fLat = (widget.orderData['farmerLat'] as num?)?.toDouble();
-    final fLng = (widget.orderData['farmerLng'] as num?)?.toDouble();
-    if (fLat != null && fLng != null) _farmerPos = LatLng(fLat, fLng);
-
-    _status = widget.orderData['status'] ?? 'Processing';
-
-    _startLocationTracking();
-    _listenToOrderLive();
-  }
-
-  // NEW: keep customer/farmer/status live instead of frozen from constructor
-  void _listenToOrderLive() {
-    _orderSub = FirebaseFirestore.instance
-        .collection('orders')
-        .doc(widget.orderId)
-        .snapshots()
-        .listen((snap) {
-      if (!snap.exists || !mounted) return;
-      final data = snap.data() as Map<String, dynamic>;
-
-      final cLat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
-      final cLng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
-      final fLat = (data['farmerLat'] as num?)?.toDouble();
-      final fLng = (data['farmerLng'] as num?)?.toDouble();
-
-      setState(() {
-        _status = data['status'] ?? _status;
-        if (cLat != null && cLng != null) _customerPos = LatLng(cLat, cLng);
-        if (fLat != null && fLng != null) _farmerPos = LatLng(fLat, fLng);
-      });
-
-      if (_customerPos != null) _updateAddress(_customerPos!);
-      _updateCustomerSymbol();
-      _updateFarmerSymbol();
-      _updateRouteLine();
-    });
-  }
-
-  Future<void> _startLocationTracking() async {
-    bool granted = await _locationService.requestPermission();
-    if (!granted) return;
-
-    try {
-      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
-      _updateDriverPosition(pos);
-    } catch (_) {}
-
-    _positionSub = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 8),
-    ).listen(_updateDriverPosition);
-  }
-
-  void _updateDriverPosition(Position pos) {
-    if (!mounted) return;
-    final latlng = LatLng(pos.latitude, pos.longitude);
-    setState(() => _driverPos = latlng);
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'lat': pos.latitude,
-        'lng': pos.longitude,
-        'lastSeen': FieldValue.serverTimestamp(),
-      }).catchError((_) {});
-    }
-
-    if (_mapController != null) {
-      if (_driverSymbol == null) {
-        _mapController!.addCircle(CircleOptions(
-          geometry: latlng,
-          circleRadius: 10.0,
-          circleColor: "#2E7D32",
-          circleStrokeWidth: 3.0,
-          circleStrokeColor: "#FFFFFF",
-        )).then((c) => _driverCircle = c);
-
-        _mapController!.addSymbol(SymbolOptions(
-          geometry: latlng,
-          textField: "Me (Rider)",
-          textSize: 12,
-          textColor: "#2E7D32",
-          textHaloColor: "#FFFFFF",
-          textHaloWidth: 2.0,
-          textOffset: const Offset(0, -1.8),
-          textAnchor: "bottom",
-        )).then((s) {
-          _driverSymbol = s;
-          _fitCameraToBounds();
-        });
-      } else {
-        _mapController!.updateSymbol(_driverSymbol!, SymbolOptions(geometry: latlng));
-        if (_driverCircle != null) {
-          _mapController!.updateCircle(_driverCircle!, CircleOptions(geometry: latlng));
-        }
-      }
-    }
-    _updateRouteLine();
-    _fitCameraToBounds();
-  }
-
-  // NEW: draws/updates a road-following route line using OSRM
-  // for a much more realistic delivery experience.
-  DateTime _lastRouteUpdate = DateTime.now();
-
-  void _updateRouteLine() async {
-    if (_mapController == null || _driverPos == null || _customerPos == null) return;
-
-    // Throttle routing requests to OSRM (e.g., every 5 seconds) to avoid rate limits
-    if (DateTime.now().difference(_lastRouteUpdate).inSeconds < 5 && _routeLine != null) return;
-    _lastRouteUpdate = DateTime.now();
-
-    final routeData = await _locationService.getRouteData(
-      _driverPos!.latitude,
-      _driverPos!.longitude,
-      _customerPos!.latitude,
-      _customerPos!.longitude,
-    );
-
-    final List<dynamic> points = routeData['points'];
-    final lineCoords = points.map((p) => LatLng(p[0], p[1])).toList();
-
-    if (!mounted) return;
-
-    setState(() {
-      double distKm = (routeData['distance'] as num) / 1000;
-      double durMin = (routeData['duration'] as num) / 60;
-      _distanceText = "${distKm.toStringAsFixed(1)} km";
-      _durationText = durMin < 1 ? "< 1 min" : "${durMin.toStringAsFixed(0)} mins";
-    });
-
-    if (_routeLine == null) {
-      _mapController!.addLine(
-        LineOptions(
-          geometry: lineCoords,
-          lineColor: "#2E7D32",
-          lineWidth: 5.0,
-          lineOpacity: 0.8,
-        ),
-      ).then((l) => _routeLine = l);
-    } else {
-      _mapController!.updateLine(_routeLine!, LineOptions(geometry: lineCoords));
-    }
-  }
-
-  void _updateCustomerSymbol() {
-    if (_mapController == null || _customerPos == null) return;
-    if (_customerSymbol == null) {
-      _mapController!.addCircle(CircleOptions(
-        geometry: _customerPos!,
-        circleRadius: 10.0,
-        circleColor: "#D32F2F",
-        circleStrokeWidth: 3.0,
-        circleStrokeColor: "#FFFFFF",
-      )).then((c) => _customerCircle = c);
-
-      _mapController!.addSymbol(SymbolOptions(
-        geometry: _customerPos!,
-        textField: "Customer Point",
-        textSize: 12,
-        textColor: "#D32F2F",
-        textHaloColor: "#FFFFFF",
-        textHaloWidth: 2.0,
-        textOffset: const Offset(0, -1.8),
-        textAnchor: "bottom",
-      )).then((s) {
-        _customerSymbol = s;
-        _fitCameraToBounds();
-      });
-    } else {
-      _mapController!.updateSymbol(_customerSymbol!, SymbolOptions(geometry: _customerPos!));
-      if (_customerCircle != null) {
-        _mapController!.updateCircle(_customerCircle!, CircleOptions(geometry: _customerPos!));
-      }
-    }
-  }
-
-  void _updateFarmerSymbol() {
-    if (_mapController == null || _farmerPos == null) return;
-    if (_farmerSymbol == null) {
-      _mapController!.addCircle(CircleOptions(
-        geometry: _farmerPos!,
-        circleRadius: 10.0,
-        circleColor: "#F57C00",
-        circleStrokeWidth: 3.0,
-        circleStrokeColor: "#FFFFFF",
-      )).then((c) => _mapController!.addSymbol(SymbolOptions(
-            geometry: _farmerPos!,
-            textField: "Farmer/Hub",
-            textSize: 12,
-            textColor: "#F57C00",
-            textHaloColor: "#FFFFFF",
-            textHaloWidth: 2.0,
-            textOffset: const Offset(0, -1.8),
-            textAnchor: "bottom",
-          )).then((s) {
-            _farmerSymbol = s;
-            _fitCameraToBounds();
-          }));
-    } else {
-      _mapController!.updateSymbol(_farmerSymbol!, SymbolOptions(geometry: _farmerPos!));
-    }
-  }
-
-  // NEW: keeps rider, customer, and farmer visible on screen
-  void _fitCameraToBounds() {
-    if (_mapController == null || _driverPos == null || _customerPos == null) return;
-
-    List<LatLng> points = [_driverPos!, _customerPos!];
-    if (_farmerPos != null) points.add(_farmerPos!);
-
-    double south = points[0].latitude;
-    double north = points[0].latitude;
-    double west = points[0].longitude;
-    double east = points[0].longitude;
-
-    for (var p in points) {
-      if (p.latitude < south) south = p.latitude;
-      if (p.latitude > north) north = p.latitude;
-      if (p.longitude < west) west = p.longitude;
-      if (p.longitude > east) east = p.longitude;
-    }
-
-    _mapController!.animateCamera(
-      CameraUpdate.newLatLngBounds(
-        LatLngBounds(southwest: LatLng(south, west), northeast: LatLng(north, east)),
-        left: 80,
-        right: 80,
-        top: 180,
-        bottom: 280,
-      ),
-    );
-  }
-
-  void _onMapCreated(MapLibreMapController controller) async {
-    _mapController = controller;
-
-    // Give the map a moment to load
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    if (_farmerPos != null) {
-      _updateFarmerSymbol();
-    }
-
-    if (_customerPos != null) {
-      _updateCustomerSymbol();
-    }
-
-    if (_driverPos != null) {
-      _mapController!.addCircle(CircleOptions(
-        geometry: _driverPos!,
-        circleRadius: 8.0,
-        circleColor: "#2E7D32",
-        circleStrokeWidth: 2.0,
-        circleStrokeColor: "#FFFFFF",
-      )).then((c) => _driverCircle = c);
-
-      _driverSymbol = await _mapController!.addSymbol(SymbolOptions(
-        geometry: _driverPos!,
-        textField: "Me (Rider)",
-        textSize: 10,
-        textColor: "#FFFFFF",
-        textHaloColor: "#2E7D32",
-        textHaloWidth: 2.0,
-        textOffset: const Offset(0, -1.5),
-        textAnchor: "bottom",
-      ));
-    }
-
-    _updateRouteLine();
-    _fitCameraToBounds();
-  }
-
-  Future<void> _updateAddress(LatLng position) async {
-    String address = await _locationService.getAddressFromLatLng(
-      position.latitude,
-      position.longitude,
-    );
-    if (mounted) {
-      setState(() {
-        _currentAddress = address;
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _positionSub?.cancel();
-    _orderSub?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final status = _status;
-    final shortId = widget.orderId.substring(0, min(6, widget.orderId.length));
-
-    return Scaffold(
-      body: Stack(
+      child: Row(
         children: [
-          MapLibreMap(
-            onMapCreated: _onMapCreated,
-            initialCameraPosition: CameraPosition(
-              target: _driverPos ?? _kDefaultCenter,
-              zoom: 14.5,
-              tilt: 45,
-            ),
-            myLocationEnabled: true,
-            styleString: "https://tiles.openfreemap.org/styles/positron",
-          ),
-
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: CircleAvatar(
-                backgroundColor: Colors.white,
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.black),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ),
-            ),
-          ),
-
-          Positioned(
-            top: 80, left: 16, right: 16,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(15),
-                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 15, offset: const Offset(0, 5))],
-              ),
-              child: Row(
-                children: [
-                  const CircleAvatar(backgroundColor: _kGreen, child: Icon(Icons.delivery_dining, color: Colors.white)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text("${_distanceText.isNotEmpty ? '$_distanceText • ' : ''}${_durationText.isNotEmpty ? _durationText : 'Calculating...'}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen, fontSize: 13)),
-                        Text("Rider: ${widget.deliveryPersonName} ($status)", style: const TextStyle(color: Colors.grey, fontSize: 11)),
-                      ],
-                    ),
-                  ),
-                  // NEW: quick recenter-on-both button
-                  IconButton(
-                    icon: const Icon(Icons.center_focus_strong, color: _kGreen),
-                    onPressed: _fitCameraToBounds,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          Positioned(
-            bottom: 0, left: 0, right: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-                boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, -10))],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)))),
-                  const SizedBox(height: 15),
-                  const Text("DESTINATION", style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.1), shape: BoxShape.circle), child: const Icon(Icons.flag, color: Colors.redAccent, size: 20)),
-                      const SizedBox(width: 12),
-                      Expanded(child: Text(_currentAddress, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis)),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: _kGreen, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-                      onPressed: () => Navigator.pop(context),
-                      child: Text("ORDER #$shortId - BACK", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          Positioned(
-            bottom: 230, right: 20,
-            child: FloatingActionButton(
-              backgroundColor: Colors.white,
-              mini: true,
-              onPressed: () {
-                if (_driverPos != null) _mapController?.animateCamera(CameraUpdate.newLatLng(_driverPos!));
-              },
-              child: const Icon(Icons.my_location, color: Colors.green),
+          Icon(icon, size: 20, color: Colors.grey.shade400),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _statusChip(String status) {
+    Color color = primaryTeal;
+    if (status == 'Cancelled') color = Colors.redAccent;
+    if (status == 'Delivered' || status == 'Confirm Received') color = Colors.green;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+      child: Text(status, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w900)),
+    );
+  }
+
+  String _getNextStatusLabel(String? current) {
+    switch (current) {
+      case 'Farmer Accepted': return 'Mark as Picked Up';
+      case 'Awaiting Pickup': return 'Mark as Picked Up';
+      case 'Picked Up': return 'Start Delivery';
+      case 'On the way': return 'I have Arrived';
+      case 'Arrived': return 'Mark as Delivered';
+      default: return 'Update Progress';
+    }
+  }
+
+  Future<void> _acceptOrder(String orderId, String uid) async {
+    final riderDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final riderName = riderDoc.data()?['fullName'] ?? 'Rider';
+    final riderPhone = riderDoc.data()?['phone'] ?? '';
+
+    await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+      'deliveryId': uid,
+      'deliveryName': riderName,
+      'deliveryPhone': riderPhone,
+      'status': 'Awaiting Pickup',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> _updateStatus(String orderId, String? current) async {
+    String next = 'Delivered';
+    if (current == 'Farmer Accepted' || current == 'Awaiting Pickup') {
+      next = 'Picked Up';
+    } else if (current == 'Picked Up') {
+      next = 'On the way';
+    } else if (current == 'On the way') {
+      next = 'Arrived';
+    } else if (current == 'Arrived') {
+      next = 'Confirm Received';
+    }
+
+    await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+      'status': next,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  }
 }
 
-class _NotificationsTab extends StatelessWidget {
+class _EarningsTab extends StatelessWidget {
   final User user;
-  const _NotificationsTab({required this.user});
+  const _EarningsTab({required this.user});
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _kBg,
-      appBar: AppBar(backgroundColor: Colors.white, elevation: 0, title: const Text("Customer & Product Details", style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold))),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('orders')
-            .where('deliveryId', isEqualTo: user.uid)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Padding(padding: EdgeInsets.all(24.0), child: Text("No order details assigned", style: TextStyle(color: Colors.grey))));
-          }
+  void _showRevenueDetails(BuildContext context, List<QueryDocumentSnapshot> docs, double total) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: const BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2))),
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Heading(title: "Income Breakdown", subtitle: "Total earnings after 20% platform fee"),
+            ),
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                itemCount: docs.length,
+                itemBuilder: (context, i) {
+                  final data = docs[i].data() as Map<String, dynamic>;
+                  final gross = (data['deliveryFee'] ?? 40).toDouble();
+                  final net = gross * 0.8;
+                  final fee = gross * 0.2;
 
-          final alerts = snapshot.data!.docs;
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: alerts.length,
-            itemBuilder: (context, idx) {
-              final data = alerts[idx].data() as Map<String, dynamic>;
-              final name = data['customerName'] ?? data['userName'] ?? 'Customer';
-              final phone = data['customerPhone'] ?? data['userPhone'] ?? 'No Number';
-              final itemsSummary = data['itemsSummary'] ?? 'Items';
-
-              return Card(
-                  color: Colors.white,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text("Order ID: #${alerts[idx].id.substring(0, min(5, alerts[idx].id.length))}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen)),
-                            Text("${data['status']}", style: const TextStyle(color: Colors.orange, fontSize: 12, fontWeight: FontWeight.bold))
+                            Text("Order #${docs[i].id.substring(0,8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                            Text("Rs. ${gross.toStringAsFixed(0)}", style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                           ],
                         ),
-                        const Divider(height: 16),
-                        Row(children: [const Icon(Icons.person, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Customer: $name")]),
-                        const SizedBox(height: 6),
-                        Row(children: [const Icon(Icons.phone, size: 16, color: Colors.grey), const SizedBox(width: 8), Text("Phone: $phone")]),
-                        const SizedBox(height: 6),
-                        Row(children: [const Icon(Icons.shopping_bag, size: 16, color: Colors.grey), const SizedBox(width: 8), Expanded(child: Text("Details: $itemsSummary", maxLines: 2, overflow: TextOverflow.ellipsis))]),
-                        const SizedBox(height: 10),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(color: _kBg, borderRadius: BorderRadius.circular(8)),
-                          child: Text("Drop: ${data['deliveryAddress'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.black87)),
-                        )
+                        const Divider(height: 32),
+                        _incomeRow("Gross Delivery Fee", gross),
+                        const SizedBox(height: 8),
+                        _incomeRow("Platform Fee (20%)", -fee, isNegative: true),
+                        const Divider(height: 32),
+                        _incomeRow("Your Net Earnings", net, isBold: true, color: Colors.green),
                       ],
                     ),
-                  )
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _EarningsTab extends StatefulWidget {
-  final User user;
-  const _EarningsTab({required this.user});
-
-  @override
-  State<_EarningsTab> createState() => _EarningsTabState();
-}
-
-class _EarningsTabState extends State<_EarningsTab> {
-  String? _qrCodeImgPath;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSavedQR();
-  }
-
-  Future<void> _loadSavedQR() async {
-    final snap = await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).get();
-    if (snap.exists && mounted) {
-      setState(() {
-        _qrCodeImgPath = snap.data()?['paymentQrCode'];
-      });
-    }
-  }
-
-  void _showImageOptions() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.image, color: _kGreen),
-              title: const Text("Upload QR Photo"),
-              onTap: () {
-                Navigator.pop(context);
-                _pickQrCodeImage();
-              },
-            ),
-            if (_qrCodeImgPath != null)
-              ListTile(
-                leading: const Icon(Icons.delete, color: Colors.redAccent),
-                title: const Text("Delete QR Photo"),
-                onTap: () {
-                  Navigator.pop(context);
-                  _deleteQrCodeImage();
+                  );
                 },
               ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Future<void> _pickQrCodeImage() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      final storageService = StorageService();
-      final imageUrl = await storageService.uploadImage(pickedFile, 'qrcodes');
-
-      if (imageUrl != null) {
-        setState(() {
-          _qrCodeImgPath = imageUrl;
-        });
-        await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set({
-          'paymentQrCode': imageUrl,
-        }, SetOptions(merge: true));
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("QR updated")));
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to upload QR")));
-        }
-      }
-    }
-  }
-
-  Future<void> _deleteQrCodeImage() async {
-    setState(() {
-      _qrCodeImgPath = null;
-    });
-    await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
-      'paymentQrCode': FieldValue.delete(),
-    });
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("QR removed")));
-    }
+  Widget _incomeRow(String label, double amount, {bool isBold = false, bool isNegative = false, Color? color}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label, style: TextStyle(color: Colors.grey.shade600, fontWeight: isBold ? FontWeight.w800 : FontWeight.w600, fontSize: 14)),
+        Text(
+          "${isNegative ? '-' : ''}Rs. ${amount.abs().toStringAsFixed(2)}",
+          style: TextStyle(
+            fontWeight: isBold ? FontWeight.w900 : FontWeight.w700, 
+            color: color ?? (isNegative ? Colors.redAccent : Colors.black87),
+            fontSize: isBold ? 16 : 14,
+          ),
+        ),
+      ],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('orders')
-            .where('deliveryId', isEqualTo: widget.user.uid)
-            .where('status', isEqualTo: 'Delivered')
-            .snapshots(),
-        builder: (context, snapshot) {
-          double totalEarnings = 0;
-          List<Map<String, dynamic>> recentEarnings = [];
+      stream: FirebaseFirestore.instance.collection('orders').where('deliveryId', isEqualTo: user.uid).where('status', whereIn: ['Delivered', 'Confirm Received']).snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? [];
+        double total = 0;
+        for (var d in docs) {
+          final data = d.data() as Map;
+          total += ((data['deliveryFee'] ?? 40).toDouble() * 0.8);
+        }
 
-          if (snapshot.hasData) {
-            for (var doc in snapshot.data!.docs) {
-              final data = doc.data() as Map<String, dynamic>;
-              final earning = (data['deliveryFee'] ?? 100).toDouble();
-              totalEarnings += earning;
-              recentEarnings.add({
-                'id': doc.id.substring(0, min(6, doc.id.length)),
-                'amount': earning,
-              });
-            }
-          }
-
-          return Container(
-            color: Colors.white,
-            padding: const EdgeInsets.all(16),
-            child: ListView(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [_kGreen, Colors.teal]),
-                      borderRadius: BorderRadius.circular(16)
+        return ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            const Heading(title: "My Earnings", subtitle: "Track your delivery revenue and payouts"),
+            const SizedBox(height: 30),
+            GestureDetector(
+              onTap: () => _showRevenueDetails(context, docs, total),
+              child: Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1D9E75), Color(0xFF2196F3)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("WALLET BALANCE", style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      Text("Rs. ${totalEarnings.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      const Text("Total Earned", style: TextStyle(color: Colors.white60, fontSize: 10)),
-                    ],
-                  ),
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(color: primaryTeal.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10)),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                const Text("Payment Modes", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                const SizedBox(height: 12),
-                _paymentModeRow("COD", Icons.payments, Colors.amber.shade900),
-                const SizedBox(height: 12),
-                GestureDetector(
-                  onTap: _showImageOptions,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
-                    child: Column(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Icon(Icons.qr_code_scanner, color: Colors.blue.shade800),
-                            const SizedBox(width: 12),
-                            const Text("Manage QR Code", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                          ],
-                        ),
-                        if (_qrCodeImgPath != null) ...[
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            height: 180,
-                            width: double.infinity,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: kIsWeb || _qrCodeImgPath!.startsWith('http')
-                                  ? CachedNetworkImage(
-                                imageUrl: _qrCodeImgPath!,
-                                fit: BoxFit.contain,
-                                placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-                                errorWidget: (context, url, error) => const Icon(Icons.error),
-                              )
-                                  : Image.file(File(_qrCodeImgPath!), fit: BoxFit.contain),
-                            ),
-                          )
-                        ]
+                        Text("Wallet Balance", style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontWeight: FontWeight.w600, fontSize: 16)),
+                        Icon(Icons.arrow_forward_ios_rounded, color: Colors.white.withValues(alpha: 0.6), size: 16),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    Text("Rs. ${total.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white, fontSize: 42, fontWeight: FontWeight.w900)),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                const Text("Recent Income", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                if (recentEarnings.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Text("No earnings", style: TextStyle(color: Colors.grey, fontSize: 12)),
-                  )
-                else
-                  ...recentEarnings.reversed.take(10).map((e) => _paymentHistoryRow("Delivery complete #${e['id']}", "Rs. ${e['amount']}")),
-              ],
+              ),
             ),
-          );
-        }
-    );
-  }
-
-  Widget _paymentModeRow(String title, IconData ico, Color col) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade200), borderRadius: BorderRadius.circular(12)),
-      child: Row(
-        children: [
-          Icon(ico, color: col, size: 24),
-          const SizedBox(width: 12),
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-        ],
-      ),
-    );
-  }
-
-  Widget _paymentHistoryRow(String title, String amt) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      title: Text(title, style: const TextStyle(fontSize: 13)),
-      trailing: Text(amt, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 40),
+            Text(
+              "RECENT TRANSACTIONS",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Colors.grey.shade400,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ...docs.map((d) {
+              final data = d.data() as Map;
+              final net = (data['deliveryFee'] ?? 40).toDouble() * 0.8;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.02), blurRadius: 10, offset: const Offset(0, 4)),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(Icons.add_rounded, color: Colors.green, size: 28),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text("Delivery Reward", style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Color(0xFF1A1D25))),
+                        const SizedBox(height: 2),
+                        Text("Order #${d.id.substring(0,6).toUpperCase()}", style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w500)),
+                      ],
+                    )),
+                    Text("+Rs. ${net.toStringAsFixed(2)}", style: const TextStyle(fontWeight: FontWeight.w900, color: Colors.green, fontSize: 16)),
+                  ],
+                ),
+              );
+            }),
+          ],
+        );
+      },
     );
   }
 }
 
 class _ProfileTab extends StatefulWidget {
   final User user;
-  const _ProfileTab({required this.user});
+  final VoidCallback logoutCallback;
+  const _ProfileTab({required this.user, required this.logoutCallback});
 
   @override
   State<_ProfileTab> createState() => _ProfileTabState();
 }
 
 class _ProfileTabState extends State<_ProfileTab> {
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _vehicleController = TextEditingController();
-  final _picker = ImagePicker();
-  bool _isSaving = false;
-
-  String? _profileImgPath;
-  String? _licenseImgPath;
+  String _currentAddress = "Fetching location...";
+  bool _isUploading = false;
 
   @override
   void initState() {
     super.initState();
-    _loadProfileMetadata();
+    _fetchCurrentAddress();
   }
 
-  Future<void> _loadProfileMetadata() async {
-    final doc = await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).get();
-    if (doc.exists && mounted) {
-      final data = doc.data();
-      if (data != null) {
-        setState(() {
-          _nameController.text = data['name'] ?? '';
-          _phoneController.text = data['phone'] ?? '';
-          _vehicleController.text = data['vehicleDetails'] ?? 'Motorbike';
-          _profileImgPath = data['profileImageUrl'];
-          _licenseImgPath = data['licenseImageUrl'];
-        });
-      }
-    }
-  }
-
-  void _showImageOptions({required bool isProfile}) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Wrap(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library, color: _kGreen),
-              title: Text("Choose ${isProfile ? 'Profile' : 'License'} Photo"),
-              onTap: () {
-                Navigator.pop(context);
-                _pickImage(isProfile);
-              },
-            ),
-            if (isProfile ? _profileImgPath != null : _licenseImgPath != null)
-              ListTile(
-                leading: const Icon(Icons.delete, color: Colors.redAccent),
-                title: Text("Delete Photo"),
-                onTap: () {
-                  Navigator.pop(context);
-                  _deleteImage(isProfile);
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickImage(bool isProfile) async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        if (isProfile) {
-          _profileImgPath = pickedFile.path;
-        } else {
-          _licenseImgPath = pickedFile.path;
-        }
-      });
-    }
-  }
-
-  void _deleteImage(bool isProfile) {
-    setState(() {
-      if (isProfile) {
-        _profileImgPath = null;
-      } else {
-        _licenseImgPath = null;
-      }
-    });
-  }
-
-  Future<void> _persistProfile() async {
-    setState(() => _isSaving = true);
-
-    String? finalProfileUrl = _profileImgPath;
-    String? finalLicenseUrl = _licenseImgPath;
-
+  Future<void> _fetchCurrentAddress() async {
     try {
-      final storageService = StorageService();
+      final pos = await Geolocator.getCurrentPosition();
+      final address = await LocationService().getAddressFromLatLng(pos.latitude, pos.longitude);
+      if (mounted) setState(() => _currentAddress = address);
+    } catch (e) {
+      if (mounted) setState(() => _currentAddress = "Location unavailable");
+    }
+  }
 
-      if (_profileImgPath != null && !(_profileImgPath!.startsWith('http'))) {
-        finalProfileUrl = await storageService.uploadImage(XFile(_profileImgPath!), 'profile_pics');
-      }
+  Future<void> _updateProfilePhoto() async {
+    final img = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
+    if (img == null) return;
 
-      if (_licenseImgPath != null && !(_licenseImgPath!.startsWith('http'))) {
-        finalLicenseUrl = await storageService.uploadImage(XFile(_licenseImgPath!), 'licenses');
-      }
-
-      final updates = <String, dynamic>{
-        'fullName': _nameController.text.trim(),
-        'name': _nameController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'vehicleDetails': _vehicleController.text.trim(),
-        'updatedAt': FieldValue.serverTimestamp()
-      };
-
-      if (finalProfileUrl == null) {
-        updates['profileImageUrl'] = FieldValue.delete();
-      } else {
-        updates['profileImageUrl'] = finalProfileUrl;
-      }
-
-      if (finalLicenseUrl == null) {
-        updates['licenseImageUrl'] = FieldValue.delete();
-      } else {
-        updates['licenseImageUrl'] = finalLicenseUrl;
-      }
-
-      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).set(
-          updates,
-          SetOptions(merge: true)
-      );
-
-      await FirebaseFirestore.instance.collection('riders').doc(widget.user.uid).set(
-          updates,
-          SetOptions(merge: true)
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile saved")));
+    setState(() => _isUploading = true);
+    try {
+      final storage = StorageService();
+      final url = await storage.uploadImage(img, 'profile_pics');
+      if (url != null) {
+        await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
+          'profileImageUrl': url,
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile photo updated!")));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Update failed: $e")));
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+      if (mounted) setState(() => _isUploading = false);
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Center(
-            child: Stack(
-              children: [
-                GestureDetector(
-                  onTap: () => _showImageOptions(isProfile: true),
-                  child: CircleAvatar(
-                    radius: 44,
-                    backgroundColor: _kGreen.withValues(alpha: 0.1),
-                    backgroundImage: _profileImgPath != null
-                        ? (kIsWeb || _profileImgPath!.startsWith('http')
-                        ? CachedNetworkImageProvider(_profileImgPath!) as ImageProvider
-                        : FileImage(File(_profileImgPath!)) as ImageProvider)
-                        : null,
-                    child: _profileImgPath == null ? const Icon(Icons.person, size: 44, color: _kGreen) : null,
-                  ),
+  void _showChangePasswordDialog() {
+    final currentPass = TextEditingController();
+    final newPass = TextEditingController();
+    final confirmPass = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFFF0F4E8), 
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+        title: const Center(
+          child: Text(
+            "Change Password",
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: Color(0xFF1A1D25)),
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _dialogField(currentPass, "Current Password", Icons.lock_outline_rounded),
+            const SizedBox(height: 12),
+            _dialogField(newPass, "New Password", Icons.vpn_key_outlined),
+            const SizedBox(height: 12),
+            _dialogField(confirmPass, "Confirm New Password", Icons.check_circle_outline_rounded),
+          ],
+        ),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel", style: TextStyle(color: Color(0xFF1D9E75), fontWeight: FontWeight.bold)),
                 ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: GestureDetector(
-                    onTap: () => _showImageOptions(isProfile: true),
-                    child: const CircleAvatar(radius: 14, backgroundColor: _kGreen, child: Icon(Icons.edit, size: 12, color: Colors.white)),
-                  ),
-                )
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text("Rider Profile", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14), textAlign: TextAlign.center),
-          const SizedBox(height: 20),
-          _buildField("Full Name", _nameController, Icons.badge),
-          _buildField("Phone", _phoneController, Icons.phone),
-          _buildField("Vehicle Details", _vehicleController, Icons.motorcycle),
-          const SizedBox(height: 16),
-          const Text("License Document", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () => _showImageOptions(isProfile: false),
-            child: CustomPaint(
-              painter: _DashedBorderPainter(color: Colors.grey.shade400, radius: 12),
-              child: Container(
-                height: 110,
-                width: double.infinity,
-                decoration: BoxDecoration(color: _kBg, borderRadius: BorderRadius.circular(12)),
-                child: _licenseImgPath != null
-                    ? ClipRRect(
-                  borderRadius: BorderRadius.circular(11),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 110,
-                    child: kIsWeb || _licenseImgPath!.startsWith('http')
-                        ? CachedNetworkImage(
-                      imageUrl: _licenseImgPath!,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-                      errorWidget: (context, url, error) => const Icon(Icons.error),
-                    )
-                        : Image.file(File(_licenseImgPath!), fit: BoxFit.cover),
-                  ),
-                )
-                    : Column(mainAxisAlignment: MainAxisAlignment.center, children: const [Icon(Icons.assignment, color: Colors.grey), SizedBox(height: 4), Text("Manage License Image", style: TextStyle(fontSize: 12, color: Colors.grey))]),
               ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _kGreen, minimumSize: const Size.fromHeight(48), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-            onPressed: _isSaving ? null : _persistProfile,
-            child: _isSaving ? const CircularProgressIndicator(color: Colors.white) : const Text("Save Changes", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(44), side: const BorderSide(color: Colors.redAccent)),
-            onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              if (context.mounted) Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const LoginScreen()), (_) => false);
-            },
-            child: const Text("Log Out", style: TextStyle(color: Colors.redAccent)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1D9E75),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  onPressed: () async {
+                    if (newPass.text != confirmPass.text || newPass.text.length < 6) return;
+                    try {
+                      final user = FirebaseAuth.instance.currentUser;
+                      if (user == null) return;
+                      
+                      AuthCredential credential = EmailAuthProvider.credential(
+                        email: user.email!,
+                        password: currentPass.text,
+                      );
+                      
+                      await user.reauthenticateWithCredential(credential);
+                      await user.updatePassword(newPass.text);
+                      
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password updated successfully!")));
+                      }
+                    } catch (e) {
+                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+                    }
+                  },
+                  child: const Text("Update", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
           )
         ],
       ),
     );
   }
 
-  Widget _buildField(String label, TextEditingController ctrl, IconData ico) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14.0),
+  Widget _dialogField(TextEditingController ctrl, String hint, IconData icon) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: TextField(
         controller: ctrl,
-        decoration: InputDecoration(prefixIcon: Icon(ico, size: 18, color: _kGreen), labelText: label, labelStyle: const TextStyle(fontSize: 12), border: OutlineInputBorder(borderRadius: BorderRadius.circular(10))),
+        obscureText: true,
+        decoration: InputDecoration(
+          hintText: hint,
+          prefixIcon: Icon(icon, color: Colors.grey.shade400, size: 20),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        ),
       ),
     );
   }
-}
 
-class _OrderCard extends StatelessWidget {
-  final QueryDocumentSnapshot doc;
-  final User user;
-  const _OrderCard({required this.doc, required this.user});
+  Future<void> _updateLocation() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const FarmOsmScreen()),
+    );
+
+    if (result != null && result is Map<String, dynamic>) {
+      final String address = result['address'];
+      final double lat = result['lat'];
+      final double lng = result['lng'];
+
+      await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({
+        'address': address,
+        'lat': lat,
+        'lng': lng,
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Current location updated successfully!")));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final data = doc.data() as Map<String, dynamic>;
-    final status = data['status'] ?? 'Processing';
-    final shortId = doc.id.substring(0, min(6, doc.id.length));
-    final total = data['totalPrice'] ?? data['total'] ?? 0;
-    final address = data['deliveryAddress'] ?? 'No Address';
-
-    return Card(
-      color: Colors.white,
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text("Order #$shortId", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: _kGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                  child: Text(status, style: const TextStyle(color: _kGreen, fontSize: 10, fontWeight: FontWeight.bold)),
-                )
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(address, style: const TextStyle(color: Colors.black87, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 4),
-            Text("Price: Rs. ${total is num ? total.toStringAsFixed(2) : total}", style: const TextStyle(fontWeight: FontWeight.bold, color: _kGreen, fontSize: 12)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact, side: const BorderSide(color: _kGreen)),
-                    onPressed: () => _showDeliveryRoute(context, doc.id, data),
-                    child: const Text("View Route", style: TextStyle(color: _kGreen, fontSize: 11)),
-                  ),
+    return StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('users').doc(widget.user.uid).snapshots(),
+        builder: (context, snapshot) {
+          final data = snapshot.data?.data() as Map<String, dynamic>?;
+          final name = data?['fullName'] ?? 'Rider Name';
+          final pUrl = data?['profileImageUrl'];
+          
+          return ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              const Heading(title: "My Profile", subtitle: "Manage your rider account settings"),
+              const SizedBox(height: 30),
+              Center(
+                child: Column(
+                  children: [
+                    GestureDetector(
+                      onTap: _isUploading ? null : _updateProfilePhoto,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 65,
+                            backgroundColor: primaryTeal.withValues(alpha: 0.1),
+                            backgroundImage: (pUrl != null && pUrl.toString().isNotEmpty)
+                                ? CachedNetworkImageProvider(pUrl) : null,
+                            child: (pUrl == null || pUrl.toString().isEmpty)
+                                ? const Icon(Icons.person_rounded, size: 70, color: primaryTeal) : null,
+                          ),
+                          if (_isUploading)
+                            const Positioned.fill(child: CircularProgressIndicator(color: primaryTeal)),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: const BoxDecoration(color: primaryTeal, shape: BoxShape.circle),
+                              child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 18),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(name, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF1A1D25))),
+                    const SizedBox(height: 4),
+                    Text(widget.user.email ?? '', style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500, fontSize: 15)),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: primaryTeal.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.verified_rounded, color: primaryTeal, size: 18),
+                          const SizedBox(width: 8),
+                          Text("Verified Partner", style: TextStyle(color: primaryTeal, fontWeight: FontWeight.w900, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: _kGreen, visualDensity: VisualDensity.compact),
-                    onPressed: () => _advance(context, doc.id, status, data, user.uid),
-                    child: Text(_nextLabel(status), style: const TextStyle(color: Colors.white, fontSize: 11)),
-                  ),
+              ),
+              const SizedBox(height: 40),
+              
+              const FieldLabel(label: "AVAILABILITY"),
+              const SizedBox(height: 12),
+              _settingsCard(
+                icon: Icons.power_settings_new_rounded,
+                title: "Online Status",
+                trailing: Switch.adaptive(
+                  value: data?['isOnline'] ?? true,
+                  activeTrackColor: primaryTeal,
+                  onChanged: (val) async {
+                    await FirebaseFirestore.instance.collection('users').doc(widget.user.uid).update({'isOnline': val});
+                  },
                 ),
-              ],
-            )
-          ],
-        ),
-      ),
-    );
-  }
+              ),
 
-  String _nextLabel(String status) {
-    if (status == 'Awaiting Pickup') return "Accept & Pickup";
-    if (status == 'Picked Up') return "Start Delivery";
-    if (status == 'On the way') return "Mark Arrived";
-    return "Mark Delivered";
-  }
+              const SizedBox(height: 24),
+              const FieldLabel(label: "CURRENT LOCATION"),
+              const SizedBox(height: 12),
+              _settingsCard(
+                icon: Icons.location_on_rounded,
+                title: data?['address'] ?? _currentAddress,
+                onEdit: _updateLocation,
+              ),
 
-  void _showDeliveryRoute(BuildContext context, String orderId, Map<String, dynamic> orderData) {
-    final deliveryPersonName = orderData['deliveryName'] ?? 'Rider';
+              const SizedBox(height: 24),
+              const FieldLabel(label: "ACCOUNT SETTINGS"),
+              const SizedBox(height: 12),
+              _settingsCard(icon: Icons.badge_rounded, title: name, onEdit: () {}),
+              _settingsCard(icon: Icons.lock_rounded, title: "Change Password", onEdit: _showChangePasswordDialog),
+              _settingsCard(icon: Icons.phone_rounded, title: data?['phone'] ?? 'Add phone'),
 
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => DeliveryRouteMapScreen(
-          orderId: orderId,
-          orderData: orderData,
-          deliveryPersonName: deliveryPersonName,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _advance(BuildContext context, String orderId, String status, Map<String, dynamic> data, String riderUid) async {
-    String next = status;
-    if (status == 'Awaiting Pickup') {
-      next = 'Picked Up';
-    } else if (status == 'Picked Up') {
-      next = 'On the way';
-    } else if (status == 'On the way') {
-      next = 'Arrived';
-    } else if (status == 'Arrived') {
-      next = 'Delivered';
-    }
-
-    try {
-      // Direct user data fetching
-      final userDoc = await FirebaseFirestore.instance.collection('users').doc(riderUid).get();
-      final userData = userDoc.data();
-      
-      final riderName = userData?['fullName'] ?? userData?['name'] ?? "Rider";
-      final riderPhone = userData?['phone'] ?? "";
-
-      final freshSnap = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
-      final freshData = freshSnap.data();
-      
-      // Safety check for already assigned orders
-      if (freshData != null &&
-          freshData['deliveryId'] != null &&
-          freshData['deliveryId'] != "" &&
-          freshData['deliveryId'] != riderUid) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Order already accepted by another rider"), backgroundColor: Colors.red),
+              const SizedBox(height: 40),
+              GradientButton(
+                  label: "Logout Account",
+                  icon: Icons.logout_rounded,
+                  isLoading: false,
+                  teal: Colors.redAccent, blue: Colors.red.shade900,
+                  onTap: widget.logoutCallback
+              ),
+              const SizedBox(height: 40),
+            ],
           );
         }
-        return;
-      }
-
-      final Map<String, dynamic> updates = {
-        'status': next,
-        'deliveryId': riderUid,
-        'deliveryPersonId': riderUid, // Dual compatibility
-        'deliveryName': riderName,
-        'deliveryPhone': riderPhone,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      await FirebaseFirestore.instance.collection('orders').doc(orderId).update(updates);
-
-      final shortId = orderId.substring(0, min(6, orderId.length));
-      final customerId = data['userId'];
-
-      if (customerId != null) {
-        String title = 'Order Update';
-        String body = 'Order #$shortId status is $next';
-
-        if (next == 'Picked Up') {
-          title = 'Order Picked Up';
-          body = 'Rider has picked up package #$shortId';
-        } else if (next == 'On the way') {
-          title = 'On The Way';
-          body = 'Rider is coming with package #$shortId';
-        } else if (next == 'Arrived') {
-          title = 'Rider Arrived';
-          body = 'Your rider has reached the location. Please collect package #$shortId';
-        } else if (next == 'Delivered') {
-          title = 'Delivered';
-          body = 'Package #$shortId has been dropped off';
-        }
-
-        await FirebaseFirestore.instance.collection('users').doc(customerId).collection('notifications').add({
-          'title': title,
-          'body': body,
-          'type': 'delivery_status',
-          'status': next,
-          'orderId': orderId,
-          'createdAt': FieldValue.serverTimestamp(),
-          'isRead': false,
-        });
-      }
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Status is now $next"), backgroundColor: _kGreen)
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red)
-        );
-      }
-    }
-  }
-}
-
-class _DashedBorderPainter extends CustomPainter {
-  final Color color;
-  final double radius;
-
-  _DashedBorderPainter({required this.color, required this.radius});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-
-    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
-    final path = Path()..addRRect(rrect);
-
-    const dashWidth = 5.0;
-    const dashSpace = 4.0;
-    double distance = 0.0;
-
-    for (final pathMetric in path.computeMetrics()) {
-      while (distance < pathMetric.length) {
-        canvas.drawPath(
-          pathMetric.extractPath(distance, distance + dashWidth),
-          paint,
-        );
-        distance += dashWidth + dashSpace;
-      }
-      distance = 0.0;
-    }
+    );
   }
 
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  Widget _settingsCard({
+    required IconData icon, 
+    required String title, 
+    Widget? trailing, 
+    VoidCallback? onEdit,
+    bool isVerified = false,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.grey.shade100),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: primaryTeal, size: 24),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF1A1D25)),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (trailing != null) trailing
+          else if (isVerified) const Icon(Icons.check_circle_rounded, color: primaryTeal, size: 20)
+          else if (onEdit != null) IconButton(
+            icon: Icon(Icons.edit_rounded, color: Colors.grey.shade300, size: 18),
+            onPressed: onEdit,
+          ),
+        ],
+      ),
+    );
+  }
 }
