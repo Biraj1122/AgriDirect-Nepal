@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/services/storage_service.dart';
 import 'package:farmtech_agridirect/viewmodels/farmer_viewmodel.dart';
@@ -209,6 +210,7 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
                 children: [
                   PageView.builder(
                     controller: _pageController,
+                    itemCount: docs.isEmpty ? 1 : 10000, // Large number for pseudo-infinite scroll
                     onPageChanged: (i) {
                       if (docs.isNotEmpty) {
                         setState(() => _currentCarouselIndex = i % docs.length);
@@ -1340,6 +1342,16 @@ class _TrackRiderMapScreen extends StatefulWidget {
 
 class _TrackRiderMapScreenState extends State<_TrackRiderMapScreen> {
   MapLibreMapController? mapController;
+  Symbol? riderSymbol;
+  Circle? riderCircle;
+
+  void _fitCamera(LatLng riderPos) {
+    if (mapController == null) return;
+    
+    // We only have rider position here, so we just zoom into them.
+    // If we had order target (farm or customer), we would fit both.
+    mapController!.animateCamera(CameraUpdate.newLatLngZoom(riderPos, 16));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1349,6 +1361,15 @@ class _TrackRiderMapScreenState extends State<_TrackRiderMapScreen> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.zoom_out_map_rounded, color: primaryTeal),
+            onPressed: () {
+              // We'll use a local copy of riderPos if available
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('users').doc(widget.riderId).snapshots(),
@@ -1365,14 +1386,44 @@ class _TrackRiderMapScreenState extends State<_TrackRiderMapScreen> {
 
           final riderPos = LatLng(riderLat, riderLng);
 
+          // Update marker if map is ready
+          if (mapController != null) {
+            if (riderSymbol == null) {
+              mapController!.addCircle(CircleOptions(
+                geometry: riderPos, circleRadius: 10, circleColor: "#2E5BFF", circleStrokeWidth: 3, circleStrokeColor: "#FFFFFF",
+              )).then((c) => riderCircle = c);
+              mapController!.addSymbol(SymbolOptions(
+                geometry: riderPos, textField: "Rider (Live)", textSize: 12, textColor: "#2E5BFF", textHaloColor: "#FFFFFF", textHaloWidth: 2, textOffset: const Offset(0, -2), textAnchor: "bottom",
+              )).then((s) => riderSymbol = s);
+            } else {
+              mapController!.updateSymbol(riderSymbol!, SymbolOptions(geometry: riderPos));
+              if (riderCircle != null) mapController!.updateCircle(riderCircle!, CircleOptions(geometry: riderPos));
+            }
+          }
+
           return Stack(
             children: [
               MapLibreMap(
                 initialCameraPosition: CameraPosition(target: riderPos, zoom: 14),
-                onMapCreated: (controller) => mapController = controller,
+                onMapCreated: (controller) {
+                  mapController = controller;
+                },
                 styleString: "https://tiles.openfreemap.org/styles/positron",
                 logoEnabled: false,
+                myLocationEnabled: true,
               ),
+
+              // RE-CENTER BUTTON
+              Positioned(
+                bottom: 180,
+                right: 20,
+                child: FloatingActionButton.small(
+                  onPressed: () => _fitCamera(riderPos),
+                  backgroundColor: Colors.white,
+                  child: const Icon(Icons.my_location_rounded, color: primaryTeal),
+                ),
+              ),
+
               Positioned(
                 bottom: 20,
                 left: 20,
@@ -1408,7 +1459,8 @@ class _TrackRiderMapScreenState extends State<_TrackRiderMapScreen> {
                             IconButton(
                               icon: const Icon(Icons.phone, color: Colors.green),
                               onPressed: () {
-                                // Dialer link here
+                                final phone = riderData?['phone'];
+                                if (phone != null) launchUrl(Uri.parse("tel:$phone"));
                               },
                             ),
                           ],
