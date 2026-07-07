@@ -169,7 +169,7 @@ class IconBadge extends StatelessWidget {
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: teal.withValues(alpha: 0.25),
+              color: teal.withOpacity(0.25),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -252,7 +252,7 @@ class StepIndicator extends StatelessWidget {
                 color: isDone
                     ? _teal
                     : isActive
-                    ? _teal.withValues(alpha: 0.12)
+                    ? _teal.withOpacity(0.12)
                     : const Color(0xFFF4F6F8),
                 border: Border.all(
                   color: isActive || isDone ? _teal : _border,
@@ -339,7 +339,7 @@ class GradientButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: teal.withValues(alpha: 0.3),
+              color: teal.withOpacity(0.3),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),

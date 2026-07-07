@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -10,6 +9,8 @@ import 'package:farmtech_agridirect/services/storage_service.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import '../../Success/shared_widgets.dart';
 import 'farm_osm_screen.dart';
+
+const Color primaryTeal = Color(0xFF1D9E75);
 
 class FarmerScreen extends StatefulWidget {
   const FarmerScreen({super.key});
@@ -57,32 +58,34 @@ class _FarmerScreenState extends State<FarmerScreen> {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
+      (route) => false,
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator(color: Colors.green)));
+    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator(color: primaryTeal)));
 
     final String farmerName = _farmerData?['fullName'] ?? _farmerData?['name'] ?? 'Farmer';
     final String farmName = _farmerData?['farmName'] ?? 'AgriDirect Farm';
     final String farmLocation = _farmerData?['farmLocation'] ?? 'Location not set';
     final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+    final double? fLat = (_farmerData?['farmLat'] as num?)?.toDouble();
+    final double? fLng = (_farmerData?['farmLng'] as num?)?.toDouble();
 
     final List<Widget> pages = [
       _FarmerHomeScreen(
         farmerName: farmerName,
         farmName: farmName,
         uid: uid,
-        farmerLat: _farmerData?['farmLat'],
-        farmerLng: _farmerData?['farmLng'],
+        farmerLat: fLat,
+        farmerLng: fLng,
       ),
       _FarmerStoreScreen(
         uid: uid,
         farmName: farmName,
-        farmerLat: _farmerData?['farmLat'],
-        farmerLng: _farmerData?['farmLng'],
+        farmerLat: fLat,
+        farmerLng: fLng,
       ),
       _FarmerOrdersScreen(uid: uid),
       _FarmerProfileScreen(
@@ -177,9 +180,9 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
     _carouselTimer?.cancel();
     _carouselTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (_pageController.hasClients) {
-        int next = _currentCarouselIndex + 1;
+        int nextIndex = _currentCarouselIndex + 1;
         _pageController.animateToPage(
-          next,
+          nextIndex,
           duration: const Duration(milliseconds: 800),
           curve: Curves.easeInOut,
         );
@@ -1126,10 +1129,8 @@ class _ProfileItem extends StatelessWidget {
 class _ProductForm extends StatefulWidget {
   final String uid, farmName;
   final double? farmerLat, farmerLng;
-  final Map<String, dynamic>? existingProduct;
-  final String? productId;
 
-  const _ProductForm({required this.uid, required this.farmName, this.farmerLat, this.farmerLng, this.existingProduct, this.productId});
+  const _ProductForm({required this.uid, required this.farmName, this.farmerLat, this.farmerLng});
 
   @override
   State<_ProductForm> createState() => _ProductFormState();
@@ -1138,61 +1139,78 @@ class _ProductForm extends StatefulWidget {
 class _ProductFormState extends State<_ProductForm> {
   final name = TextEditingController();
   final price = TextEditingController();
-  final stock = TextEditingController();
   final unit = TextEditingController(text: 'kg');
   XFile? selectedImage;
   bool isUploading = false;
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.existingProduct != null) {
-      name.text = widget.existingProduct!['name'] ?? '';
-      price.text = widget.existingProduct!['price']?.toString() ?? '';
-      stock.text = widget.existingProduct!['stock']?.toString() ?? '100';
-      unit.text = widget.existingProduct!['unit'] ?? 'kg';
-    }
+  void dispose() {
+    name.dispose();
+    price.dispose();
+    unit.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    bool isEditing = widget.existingProduct != null;
-    String productId = widget.productId ?? '';
-    final existingProduct = widget.existingProduct ?? {};
-
     return Container(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
+      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(isEditing ? "Edit Product" : "Add New Product", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
-            if (!isEditing) Center(
+            const Heading(title: "Add New Product", subtitle: "List your fresh produce on the market"),
+            const SizedBox(height: 24),
+            Center(
               child: GestureDetector(
                 onTap: () async {
-                  final img = await ImagePicker().pickImage(source: ImageSource.gallery);
+                  final img = await ImagePicker().pickImage(
+                    source: ImageSource.gallery,
+                    maxWidth: 600,
+                    maxHeight: 600,
+                    imageQuality: 60,
+                  );
                   if (img != null) setState(() => selectedImage = img);
                 },
                 child: Container(
-                  width: 100, height: 100,
-                  decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(15)),
+                  width: 120, height: 120,
+                  decoration: BoxDecoration(color: const Color(0xFFF4F6F8), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade200)),
                   child: selectedImage != null
-                      ? ClipRRect(borderRadius: BorderRadius.circular(15), child: Image.file(File(selectedImage!.path), fit: BoxFit.cover))
-                      : const Icon(Icons.add_a_photo, color: Colors.grey),
+                      ? ClipRRect(borderRadius: BorderRadius.circular(24), child: Image.file(File(selectedImage!.path), fit: BoxFit.cover))
+                      : const Icon(Icons.add_a_photo_rounded, color: Colors.grey, size: 32),
                 ),
               ),
             ),
+            const SizedBox(height: 24),
+            const FieldLabel(label: "PRODUCT NAME"),
+            const SizedBox(height: 8),
+            TextField(controller: name, decoration: customInputDecoration(hint: "e.g. Fresh Tomatoes", icon: Icons.eco, teal: primaryTeal)),
             const SizedBox(height: 20),
-            TextField(controller: name, decoration: const InputDecoration(labelText: "Product Name", border: OutlineInputBorder())),
-            const SizedBox(height: 15),
             Row(
               children: [
-                Expanded(child: TextField(controller: price, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Price (Rs.)", border: OutlineInputBorder()))),
-                const SizedBox(width: 15),
-                Expanded(child: TextField(controller: unit, decoration: const InputDecoration(labelText: "Unit (e.g. kg, bundle)", border: OutlineInputBorder()))),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const FieldLabel(label: "PRICE"),
+                      const SizedBox(height: 8),
+                      TextField(controller: price, keyboardType: TextInputType.number, decoration: customInputDecoration(hint: "0.00", icon: Icons.payments, teal: primaryTeal)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const FieldLabel(label: "UNIT"),
+                      const SizedBox(height: 8),
+                      TextField(controller: unit, decoration: customInputDecoration(hint: "kg/ltr/bunch", icon: Icons.scale, teal: primaryTeal)),
+                    ],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 15),
@@ -1277,15 +1295,45 @@ class _ProductFormState extends State<_ProductForm> {
                 child: isUploading ? const CircularProgressIndicator(color: Colors.white) : Text(isEditing ? "Request Price Update" : "List Product", style: const TextStyle(color: Colors.white)),
               ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 40),
           ],
         ),
       ),
     );
   }
 
-  void setModalState(VoidCallback fn) {
-    if (mounted) setState(fn);
+  Future<void> _submit() async {
+    if (name.text.isEmpty || price.text.isEmpty || selectedImage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("All fields are required")));
+      return;
+    }
+
+    setState(() => isUploading = true);
+    try {
+      final storageService = StorageService();
+      final imageUrl = await storageService.uploadImage(selectedImage!, 'products');
+      if (imageUrl == null) throw "Upload failed";
+
+      await FirebaseFirestore.instance.collection('products').add({
+        'name': name.text,
+        'title': name.text,
+        'price': double.tryParse(price.text) ?? 0.0,
+        'farmerUid': widget.uid,
+        'farmName': widget.farmName,
+        'farmerLat': widget.farmerLat,
+        'farmerLng': widget.farmerLng,
+        'unit': unit.text,
+        'image': imageUrl,
+        'imageUrl': imageUrl,
+        'status': 'approved',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+    } finally {
+      if (mounted) setState(() => isUploading = false);
+    }
   }
 }
 
@@ -1417,138 +1465,68 @@ class _DeliveryCard extends StatelessWidget {
   }
 }
 
-class _TrackRiderMapScreen extends StatefulWidget {
+class _OrderAcceptanceTile extends StatelessWidget {
   final String orderId;
-  final String riderId;
-  final Map<String, dynamic> orderData;
-
-  const _TrackRiderMapScreen({
-    required this.orderId,
-    required this.riderId,
-    required this.orderData,
-  });
-
-  @override
-  State<_TrackRiderMapScreen> createState() => _TrackRiderMapScreenState();
-}
-
-class _TrackRiderMapScreenState extends State<_TrackRiderMapScreen> {
-  MapLibreMapController? _mapController;
-  LatLng? _riderPos;
-  Symbol? _riderSymbol;
-  StreamSubscription? _riderSub;
-
-  @override
-  void initState() {
-    super.initState();
-    _listenToRider();
-  }
-
-  void _listenToRider() {
-    _riderSub = FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.riderId)
-        .snapshots()
-        .listen((doc) {
-      if (doc.exists && mounted) {
-        final data = doc.data() as Map<String, dynamic>;
-        final lat = (data['lat'] as num?)?.toDouble();
-        final lng = (data['lng'] as num?)?.toDouble();
-
-        if (lat != null && lng != null) {
-          final newPos = LatLng(lat, lng);
-          setState(() => _riderPos = newPos);
-          _updateRiderMarker();
-        }
-      }
-    });
-  }
-
-  void _updateRiderMarker() {
-    if (_mapController != null && _riderPos != null) {
-      if (_riderSymbol == null) {
-        _mapController!.addSymbol(SymbolOptions(
-          geometry: _riderPos!,
-          iconImage: "airport-15",
-          iconRotate: 90,
-          iconColor: "#4CAF50",
-          iconSize: 2.5,
-          textField: "Rider",
-          textSize: 10,
-          textOffset: const Offset(0, 1.2),
-        )).then((s) => _riderSymbol = s);
-      } else {
-        _mapController!.updateSymbol(_riderSymbol!, SymbolOptions(
-          geometry: _riderPos!,
-        ));
-      }
-    }
-  }
-
-  void _onMapCreated(MapLibreMapController controller) async {
-    _mapController = controller;
-
-    // Add Farmer (Self)
-    final fLat = (widget.orderData['farmerLat'] as num?)?.toDouble();
-    final fLng = (widget.orderData['farmerLng'] as num?)?.toDouble();
-    if (fLat != null && fLng != null) {
-      await _mapController!.addSymbol(SymbolOptions(
-        geometry: LatLng(fLat, fLng),
-        iconImage: "restaurant-15",
-        iconColor: "#FFA000",
-        iconSize: 2.0,
-        textField: "My Hub",
-        textSize: 10,
-        textOffset: const Offset(0, 1.2),
-      ));
-    }
-
-    // Add Customer
-    final cLat = (widget.orderData['customerLat'] as num?)?.toDouble() ?? (widget.orderData['lat'] as num?)?.toDouble();
-    final cLng = (widget.orderData['customerLng'] as num?)?.toDouble() ?? (widget.orderData['lng'] as num?)?.toDouble();
-    if (cLat != null && cLng != null) {
-      await _mapController!.addSymbol(SymbolOptions(
-        geometry: LatLng(cLat, cLng),
-        iconImage: "marker-15",
-        iconColor: "#FF5252",
-        iconSize: 2.0,
-        textField: "Customer",
-        textSize: 10,
-        textOffset: const Offset(0, 1.2),
-      ));
-    }
-
-    _updateRiderMarker();
-  }
-
-  @override
-  void dispose() {
-    _riderSub?.cancel();
-    super.dispose();
-  }
+  final Map<String, dynamic> data;
+  final String currentFarmerUid;
+  final String currentFarmName;
+  final double? farmerLat, farmerLng;
+  const _OrderAcceptanceTile({required this.orderId, required this.data, required this.currentFarmerUid, required this.currentFarmName, this.farmerLat, this.farmerLng});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Track Rider Location", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.black), onPressed: () => Navigator.pop(context)),
-      ),
-      body: Stack(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade100)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          MapLibreMap(
-            initialCameraPosition: CameraPosition(
-              target: _riderPos ?? const LatLng(27.7172, 85.3240),
-              zoom: 13,
-            ),
-            onMapCreated: _onMapCreated,
-            myLocationEnabled: true,
-            styleString: "https://tiles.openfreemap.org/styles/positron",
+          Text(data['itemsSummary'] ?? 'New Order', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          const SizedBox(height: 4),
+          Text("Subtotal: Rs. ${data['subtotal']} • ${data['deliveryAddress']}", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+          const SizedBox(height: 16),
+          GradientButton(
+            label: "Accept Order", 
+            icon: Icons.check_circle_rounded, 
+            isLoading: false, 
+            teal: primaryTeal, blue: const Color(0xFF2E5BFF),
+            onTap: () async {
+              final double? customerLat = (data['customerLat'] as num?)?.toDouble();
+              final double? customerLng = (data['customerLng'] as num?)?.toDouble();
+              
+              double deliveryFee = 40.0;
+              
+              if (customerLat != null && customerLng != null && farmerLat != null && farmerLng != null) {
+                final double distance = Geolocator.distanceBetween(
+                  farmerLat!, farmerLng!,
+                  customerLat, customerLng,
+                ) / 1000;
+                
+                if (distance >= 1 && distance <= 3) {
+                  deliveryFee = 50.0;
+                } else if (distance > 3) {
+                  deliveryFee = 15.0 * distance;
+                }
+              }
+
+              final double subtotal = (data['subtotal'] as num?)?.toDouble() ?? 0.0;
+              final double total = subtotal + deliveryFee;
+
+              await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
+                'status': 'Farmer Accepted',
+                'farmerUid': currentFarmerUid,
+                'farmName': currentFarmName,
+                'farmerLat': farmerLat,
+                'farmerLng': farmerLng,
+                'deliveryFee': deliveryFee,
+                'total': total,
+                'farmerRevenue': subtotal * 0.8,
+                'adminRevenue': (subtotal * 0.2) + (deliveryFee * 0.2),
+                'deliveryRevenue': deliveryFee * 0.8,
+              });
+            },
           ),
-          if (_riderPos == null)
-            const Center(child: CircularProgressIndicator(color: Colors.green)),
         ],
       ),
     );

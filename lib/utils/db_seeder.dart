@@ -10,15 +10,8 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
   int categorySuccess = 0;
   int categoryError = 0;
 
-  debugPrint("Starting database seeding process...");
-
-  // Check for authentication
   final User? user = FirebaseAuth.instance.currentUser;
-  if (user == null) {
-    debugPrint("Seeding Failed: No authenticated user found.");
-    throw Exception("Authentication required. Please sign in again.");
-  }
-  debugPrint("Authenticated as: ${user.email} (UID: ${user.uid})");
+  if (user == null) throw Exception("Authentication required for seeding.");
 
   final List<Map<String, dynamic>> nepalProducts = [
     // --- VEGETABLES ---
@@ -693,7 +686,6 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
   ];
 
   final CollectionReference products = FirebaseFirestore.instance.collection('master_catalog');
-  debugPrint("Beginning catalog seeding. Target products: ${nepalProducts.length}");
 
   for (var product in nepalProducts) {
     bool nameMatch = selectedProductNames == null || selectedProductNames.contains(product['name']);
@@ -719,15 +711,13 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
         await FirebaseFirestore.instance.collection('products').doc(docId).set(liveProduct, SetOptions(merge: true));
         
         productSuccess++;
-        debugPrint("✓ Seeded Product: ${product['name']}");
       } catch (e) {
         productError++;
-        debugPrint("✗ Error seeding product ${product['name']}: $e");
       }
     }
   }
 
-  // Categories seed logic
+  // Categories seed
   final List<Map<String, dynamic>> categoriesData = [
     {"name": "Vegetables", "iconCode": Icons.eco_outlined.codePoint},
     {"name": "Fruits", "iconCode": Icons.apple_outlined.codePoint},
@@ -741,25 +731,14 @@ Future<Map<String, int>> seedProducts({List<String>? selectedCategories, List<St
   ];
 
   final CollectionReference categoriesCol = FirebaseFirestore.instance.collection('categories');
-  debugPrint("Beginning categories seeding. Target categories: ${categoriesData.length}");
-
   for (var cat in categoriesData) {
     try {
-      if (selectedCategories == null || selectedCategories.contains(cat['name'])) {
-        await categoriesCol.doc(cat['name']).set(cat, SetOptions(merge: true)).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () => throw Exception("Write timeout for category ${cat['name']}"),
-        );
-        categorySuccess++;
-        debugPrint("✓ Seeded Category: ${cat['name']}");
-      }
+      await categoriesCol.doc(cat['name']).set(cat, SetOptions(merge: true));
+      categorySuccess++;
     } catch (e) {
       categoryError++;
-      debugPrint("✗ Error seeding category ${cat['name']}: $e");
     }
   }
-
-  debugPrint("Seeding Finished. Products: $productSuccess success / $productError error. Categories: $categorySuccess success / $categoryError error.");
   
   return {
     'productSuccess': productSuccess,

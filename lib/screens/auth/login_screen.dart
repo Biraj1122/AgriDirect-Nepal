@@ -10,6 +10,9 @@ import 'package:farmtech_agridirect/screens/delivery_person_screen.dart';
 import 'package:farmtech_agridirect/screens/admin_page.dart';
 import 'package:farmtech_agridirect/services/social_auth_service.dart';
 
+import 'package:provider/provider.dart';
+import 'package:farmtech_agridirect/viewmodels/admin_viewmodel.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -68,6 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
           } else if (role == 'Delivery Person') {
             target = const DeliveryPersonScreen();
           } else if (role == 'Admin') {
+            if (mounted) context.read<AdminViewModel>().refreshAdminState();
             target = const AdminPage();
           } else {
             target = NavigationScreen(userName: user.displayName ?? user.email ?? "User");
@@ -303,6 +307,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             }, SetOptions(merge: true));
 
                             if (context.mounted) {
+                              context.read<AdminViewModel>().refreshAdminState();
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -321,6 +326,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             final userData = userDoc.data() as Map<String, dynamic>?;
 
                             if (context.mounted) {
+                              context.read<AdminViewModel>().refreshAdminState();
                               Navigator.pop(context);
                               Navigator.push(context, MaterialPageRoute(builder: (context) => VerifyEmailScreen(email: email, source: OtpSource.login, userData: userData)));
                             }
