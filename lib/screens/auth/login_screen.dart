@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import 'package:farmtech_agridirect/screens/auth/signup_screen.dart';
 import 'package:farmtech_agridirect/screens/auth/forgot_password_screen.dart';
 import 'package:farmtech_agridirect/screens/auth/verify_otp_screen.dart';
@@ -8,9 +7,7 @@ import 'package:farmtech_agridirect/screens/home/navigation_screen.dart';
 import 'package:farmtech_agridirect/screens/misc/farmer_screen.dart';
 import 'package:farmtech_agridirect/screens/delivery_person_screen.dart';
 import 'package:farmtech_agridirect/screens/admin_page.dart';
-import 'package:farmtech_agridirect/services/social_auth_service.dart';
-
-import 'package:provider/provider.dart';
+import 'package:farmtech_agridirect/viewmodels/auth_viewmodel.dart';
 import 'package:farmtech_agridirect/viewmodels/admin_viewmodel.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -21,390 +18,132 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
-  final SocialAuthService _socialAuthService = SocialAuthService();
-  bool hidePassword = true;
+  final _formKey = GlobalKey<FormState>();
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  bool _hidePass = true;
 
   @override
   void dispose() {
-    emailController.dispose();
-    passwordController.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
     super.dispose();
   }
 
-  void _handleSocialSignIn(Future<UserCredential?> signInMethod) async {
-    try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
+  Future<void> _handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+    
+    final authVm = context.read<AuthViewModel>();
+    final adminVm = context.read<AdminViewModel>();
 
-      final UserCredential? userCredential = await signInMethod;
-      if (userCredential?.user != null) {
-        if (!mounted) return;
-        Navigator.pop(context); // Pop loading
+    String email = _emailCtrl.text.trim();
+    final String pass = _passCtrl.text.trim();
+    if (!email.contains('@')) email = "$email@gmail.com";
 
-        final user = userCredential!.user!;
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-        
-        // Handle new social user creation
-        if (!userDoc.exists) {
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-            'fullName': user.displayName ?? 'New User',
-            'email': user.email,
-            'role': 'Customer', // Default role
-            'createdAt': FieldValue.serverTimestamp(),
-          });
-          userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-        }
-
-        final userData = userDoc.data() as Map<String, dynamic>?;
-
-        if (mounted) {
-          String role = userData?['role'] ?? 'Customer';
-          Widget target;
-          if (role == 'Farmer') {
-            target = const FarmerScreen();
-          } else if (role == 'Delivery Person') {
-            target = const DeliveryPersonScreen();
-          } else if (role == 'Admin') {
-            if (mounted) context.read<AdminViewModel>().refreshAdminState();
-            target = const AdminPage();
-          } else {
-            target = NavigationScreen(userName: user.displayName ?? user.email ?? "User");
-          }
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => target));
-        }
-      } else {
-        if (mounted) Navigator.pop(context); // Pop loading
+    final user = await authVm.login(email, pass);
+    if (user != null) {
+      if (email.toLowerCase() == "agrifarmadmin@gmail.com" && pass == "Farmadmin@5") {
+        await authVm.handleMasterAdmin(user, email);
+        adminVm.refreshAdminState();
+        if (mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const AdminPage()));
+        return;
       }
-    } catch (e) {
+
+      if (!user.emailVerified) {
+        final doc = await authVm.getUserData(user.uid);
+        if (mounted) Navigator.push(context, MaterialPageRoute(builder: (_) => VerifyEmailScreen(email: email, source: OtpSource.login, userData: doc?.data() as Map<String, dynamic>?)));
+        return;
+      }
+
+      final doc = await authVm.getUserData(user.uid);
+      final role = ((doc?.data() as Map?)?['role'] ?? 'Customer').toString();
+      final normalizedRole = role.trim().toLowerCase();
+      
       if (mounted) {
-        Navigator.pop(context); // Pop loading
-        String errorMsg = e.toString();
-        if (errorMsg.contains("ApiException: 10")) {
-          errorMsg = "Google Sign-In Error: Please register your SHA-1 key in Firebase Console.";
-        }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(errorMsg),
-          backgroundColor: Colors.red,
-        ));
+        Widget target;
+        if (normalizedRole == 'farmer') target = const FarmerScreen();
+        else if (normalizedRole == 'delivery person') target = const DeliveryPersonScreen();
+        else if (normalizedRole == 'admin') target = const AdminPage();
+        else target = NavigationScreen(userName: user.displayName ?? "User");
+        
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => target));
       }
+    } else if (authVm.error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(authVm.error!), backgroundColor: Colors.redAccent));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final authVm = context.watch<AuthViewModel>();
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
+          padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Form(
             key: _formKey,
             child: Column(
               children: [
-                const SizedBox(height: 50),
+                const SizedBox(height: 60),
                 Hero(
                   tag: 'app_logo',
                   child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 40,
-                          spreadRadius: 4,
-                        ),
-                      ],
-                    ),
-                    child: Image.asset(
-                      "assets/images/logo_full.png",
-                      height: 180,
-                      width: 180,
-                      fit: BoxFit.contain,
-                    ),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 40)]),
+                    child: Image.asset("assets/images/logo_full.png", height: 160, width: 160, fit: BoxFit.contain),
                   ),
                 ),
-                const SizedBox(height: 25),
-                const Text(
-                  "Welcome!",
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
+                const SizedBox(height: 30),
+                const Text("Welcome Back!", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF1A1D25))),
                 const SizedBox(height: 8),
-                Text(
-                  "Fresh from the farm to your home",
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                ),
-                const SizedBox(height: 40),
+                const Text("Fresh from the farm to your home", style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.w500)),
+                const SizedBox(height: 45),
                 
-                // Email field
                 TextFormField(
-                  controller: emailController,
-                  onChanged: (val) => setState(() {}), 
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) return "Please enter email";
-                    return null;
-                  },
-                  decoration: InputDecoration(
-                    hintText: "Email or Username",
-                    prefixIcon: const Icon(Icons.email_outlined),
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                  ),
+                  controller: _emailCtrl,
+                  onChanged: (_) => setState(() {}),
+                  validator: (v) => (v == null || v.isEmpty) ? "Enter email or username" : null,
+                  decoration: _inputDeco("Email or Username", Icons.email_outlined),
                 ),
-                const SizedBox(height: 8),
-                if (emailController.text.toLowerCase() == "agrifarmadmin@gmail.com")
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.blue.shade200),
-                    ),
-                    child: const Row(
-                      children: [
-                        Icon(Icons.admin_panel_settings, color: Colors.blue),
-                        SizedBox(width: 8),
-                        Text(
-                          "Admin Panel Login Mode",
-                          style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                  ),
-                const SizedBox(height: 10),
-                
-                // Password field
+                if (_emailCtrl.text.toLowerCase() == "agrifarmadmin@gmail.com") ...[
+                  const SizedBox(height: 12),
+                  _adminBanner(),
+                ],
+                const SizedBox(height: 16),
                 TextFormField(
-                  controller: passwordController,
-                  obscureText: hidePassword,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) return "Please enter password";
-                    return null;
-                  },
-                  decoration: InputDecoration(
-                    hintText: "Password",
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      onPressed: () => setState(() => hidePassword = !hidePassword),
-                      icon: Icon(hidePassword ? Icons.visibility_off : Icons.visibility),
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey.shade100,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                  controller: _passCtrl,
+                  obscureText: _hidePass,
+                  validator: (v) => (v == null || v.isEmpty) ? "Enter password" : null,
+                  decoration: _inputDeco("Password", Icons.lock_outline_rounded).copyWith(
+                    suffixIcon: IconButton(icon: Icon(_hidePass ? Icons.visibility_off_rounded : Icons.visibility_rounded), onPressed: () => setState(() => _hidePass = !_hidePass)),
                   ),
                 ),
                 
                 Align(
                   alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())),
-                    child: const Text("Forgot Password?", style: TextStyle(color: Colors.green)),
-                  ),
+                  child: TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ForgotPasswordScreen())), child: const Text("Forgot Password?", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold))),
                 ),
                 
-                const SizedBox(height: 20),
-                
-                // Login Button
+                const SizedBox(height: 30),
                 SizedBox(
-                  width: double.infinity,
-                  height: 52,
+                  width: double.infinity, height: 56,
                   child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    onPressed: () async {
-                      if (_formKey.currentState!.validate()) {
-                        String email = emailController.text.trim();
-                        final String password = passwordController.text.trim();
-
-                        if (!email.contains('@')) {
-                          email = "$email@gmail.com";
-                        }
-
-                        try {
-                          showDialog(
-                            context: context,
-                            barrierDismissible: false,
-                            builder: (context) => const Center(child: CircularProgressIndicator()),
-                          );
-
-                          final String normalizedEmail = email.toLowerCase();
-                          final bool isMasterAdmin = (normalizedEmail == "agrifarmadmin@gmail.com") && password == "Farmadmin@5";
-
-                          UserCredential? userCredential;
-                          
-                          try {
-                            userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-                              email: email,
-                              password: password,
-                            );
-                          } on FirebaseAuthException catch (e) {
-                            if (context.mounted) Navigator.pop(context); // Pop loading
-
-                            String errorMessage = "Login failed. Please try again.";
-                            
-                            switch (e.code) {
-                              case 'invalid-email':
-                                errorMessage = "The email address is badly formatted.";
-                                break;
-                              case 'user-disabled':
-                                errorMessage = "This user account has been disabled.";
-                                break;
-                              case 'user-not-found':
-                                errorMessage = "No user found with this email.";
-                                break;
-                              case 'wrong-password':
-                                errorMessage = "Incorrect password. Please try again.";
-                                break;
-                              case 'invalid-credential':
-                                errorMessage = "Incorrect email or password.";
-                                break;
-                              case 'too-many-requests':
-                                errorMessage = "Too many attempts. Please try again later.";
-                                break;
-                              case 'network-request-failed':
-                                errorMessage = "Network error. Please check your connection.";
-                                break;
-                            }
-
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(errorMessage),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                            return;
-                          }
-
-                          final User? user = userCredential.user;
-                          if (user == null) {
-                            if (context.mounted) Navigator.pop(context);
-                            return;
-                          }
-
-                          if (isMasterAdmin) {
-                            await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-                              'email': email,
-                              'role': 'Admin',
-                              'fullName': 'Super Admin',
-                              'lastLogin': FieldValue.serverTimestamp(),
-                            }, SetOptions(merge: true));
-
-                            if (context.mounted) {
-                              context.read<AdminViewModel>().refreshAdminState();
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text("Admin Panel Access Granted"),
-                                  backgroundColor: Colors.blue,
-                                ),
-                              );
-                              Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => const AdminPage()));
-                            }
-                            return;
-                          }
-
-                          if (!user.emailVerified) {
-                            await user.sendEmailVerification();
-                            DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-                            final userData = userDoc.data() as Map<String, dynamic>?;
-
-                            if (context.mounted) {
-                              context.read<AdminViewModel>().refreshAdminState();
-                              Navigator.pop(context);
-                              Navigator.push(context, MaterialPageRoute(builder: (context) => VerifyEmailScreen(email: email, source: OtpSource.login, userData: userData)));
-                            }
-                            return;
-                          }
-
-                          DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-                          final userData = userDoc.data() as Map<String, dynamic>?;
-
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            String role = userData?['role'] ?? 'Customer';
-                            Widget target;
-                            if (role == 'Farmer') {
-                              target = const FarmerScreen();
-                            } else if (role == 'Delivery Person') {
-                              target = const DeliveryPersonScreen();
-                            } else if (role == 'Admin') {
-                              target = const AdminPage();
-                            } else {
-                              target = NavigationScreen(userName: user.displayName ?? user.email ?? "User");
-                            }
-                            Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => target));
-                          }
-                        } on FirebaseAuthException catch (e) {
-                          if (context.mounted) {
-                            try { Navigator.pop(context); } catch (_) {}
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message ?? "Login failed")));
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            try { Navigator.pop(context); } catch (_) {}
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("An error occurred: $e")));
-                          }
-                        }
-                      }
-                    },
-                    child: const Text("Login", style: TextStyle(color: Colors.white, fontSize: 16)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), elevation: 4),
+                    onPressed: authVm.loading ? null : _handleLogin,
+                    child: authVm.loading ? const CircularProgressIndicator(color: Colors.white) : const Text("Login", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
                 
-                const SizedBox(height: 30),
-                
+                const SizedBox(height: 40),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text("Don't have an account?"),
-                    TextButton(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignupScreen())),
-                      child: const Text("Sign Up", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                    ),
+                    const Text("New here?", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
+                    TextButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SignupScreen())), child: const Text("Create Account", style: TextStyle(color: Colors.green, fontWeight: FontWeight.w900))),
                   ],
                 ),
-                
-                const SizedBox(height: 20),
-                const Row(
-                  children: [
-                    Expanded(child: Divider()),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 10),
-                      child: Text("OR", style: TextStyle(color: Colors.grey)),
-                    ),
-                    Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                
-                // Social Login Button
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _socialButton(
-                      asset: "assets/images/Gmail_icon_(2020).svg.png",
-                      onTap: () => _handleSocialSignIn(_socialAuthService.signInWithGoogle()),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 30),
               ],
             ),
           ),
@@ -413,17 +152,19 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _socialButton({required String asset, required VoidCallback onTap}) {
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Image.asset(asset, height: 30),
-      ),
+  InputDecoration _inputDeco(String hint, IconData icon) {
+    return InputDecoration(
+      hintText: hint, prefixIcon: Icon(icon), filled: true, fillColor: const Color(0xFFF7F9FB),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      contentPadding: const EdgeInsets.symmetric(vertical: 18),
+    );
+  }
+
+  Widget _adminBanner() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.blue.withValues(alpha: 0.2))),
+      child: const Row(children: [Icon(Icons.admin_panel_settings_rounded, color: Colors.blue), SizedBox(width: 12), Text("Admin Authentication Mode", style: TextStyle(color: Colors.blue, fontWeight: FontWeight.w800, fontSize: 13))]),
     );
   }
 }

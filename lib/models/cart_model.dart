@@ -12,7 +12,6 @@ class CartItem {
 
 class CartModel extends ChangeNotifier {
   final List<CartItem> _items = [];
-  double _distanceInKm = 0;
 
   List<CartItem> get items => _items;
 
@@ -56,14 +55,8 @@ class CartModel extends ChangeNotifier {
     }
   }
 
-  void setDistance(double distance) {
-    _distanceInKm = distance;
-    notifyListeners();
-  }
-
   void clear() {
     _items.clear();
-    _distanceInKm = 0;
     notifyListeners();
   }
 

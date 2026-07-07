@@ -8,6 +8,7 @@ import 'package:farmtech_agridirect/models/user_model.dart';
 import 'package:farmtech_agridirect/models/research_submission_model.dart';
 import 'package:farmtech_agridirect/models/announcement_model.dart';
 import 'package:farmtech_agridirect/models/price_request_model.dart';
+import 'package:rxdart/rxdart.dart';
 import 'dart:developer' as developer;
 
 class AdminViewModel extends ChangeNotifier {
@@ -87,6 +88,35 @@ class AdminViewModel extends ChangeNotifier {
   Stream<List<UserModel>> getUsers() => _repository.getUsers();
   Stream<List<ResearchSubmissionModel>> getResearchSubmissions() => _repository.getResearchSubmissions();
   Stream<List<PriceRequestModel>> getPriceRequests() => _repository.getPriceRequests();
+
+  Stream<int> get pendingProductCount => getPendingProducts().map((l) => l.length);
+  Stream<int> get pendingPriceRequestCount => getPriceRequests().map((l) => l.length);
+  
+  Stream<int> get totalPendingCount {
+    return Rx.combineLatest2<int, int, int>(
+      pendingProductCount,
+      pendingPriceRequestCount,
+      (a, b) => a + b,
+    );
+  }
+
+  Stream<List<dynamic>> getCombinedPendingRequests() {
+    return Rx.combineLatest2<List<Product>, List<PriceRequestModel>, List<dynamic>>(
+      getPendingProducts(),
+      getPriceRequests(),
+      (products, priceRequests) {
+        List<dynamic> combined = [...products, ...priceRequests];
+        combined.sort((a, b) {
+          DateTime? dateA = (a is Product) ? null : (a as PriceRequestModel).createdAt;
+          DateTime? dateB = (b is Product) ? null : (b as PriceRequestModel).createdAt;
+          if (dateA == null) return 1;
+          if (dateB == null) return -1;
+          return dateB.compareTo(dateA);
+        });
+        return combined;
+      },
+    );
+  }
 
   Future<void> approvePriceRequest(PriceRequestModel request) async {
     await _repository.approvePriceRequest(request);

@@ -5,6 +5,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 import 'package:farmtech_agridirect/viewmodels/admin_viewmodel.dart';
+import 'package:farmtech_agridirect/viewmodels/farmer_viewmodel.dart';
+import 'package:farmtech_agridirect/viewmodels/shop_viewmodel.dart';
+import 'package:farmtech_agridirect/viewmodels/auth_viewmodel.dart';
+import 'package:farmtech_agridirect/viewmodels/delivery_viewmodel.dart';
+import 'package:farmtech_agridirect/models/cart_model.dart';
 import 'package:farmtech_agridirect/firebase_options.dart';
 import 'package:farmtech_agridirect/screens/misc/splash_screen.dart';
 
@@ -38,6 +43,11 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => AdminViewModel()),
+          ChangeNotifierProvider(create: (_) => FarmerViewModel()),
+          ChangeNotifierProvider(create: (_) => ShopViewModel()),
+          ChangeNotifierProvider(create: (_) => AuthViewModel()),
+          ChangeNotifierProvider(create: (_) => DeliveryViewModel()),
+          ChangeNotifierProvider(create: (_) => cartModel),
         ],
         child: const AgriDirectApp(),
       ),

@@ -4,7 +4,6 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:farmtech_agridirect/services/location_service.dart';
 import 'package:farmtech_agridirect/models/user_data.dart';
-import 'package:farmtech_agridirect/models/cart_model.dart';
 
 class FarmOsmScreen extends StatefulWidget {
   const FarmOsmScreen({super.key});
@@ -99,7 +98,7 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
     
     // Check if cartModel is available globally
     try {
-       cartModel.setDistance(distance);
+       // Distance is now calculated internally by CartModel
     } catch (_) {}
 
     UserData.setAddress(
@@ -186,6 +185,7 @@ class _FarmOsmScreenState extends State<FarmOsmScreen> with TickerProviderStateM
                   },
                   onCameraIdle: _onCameraIdle,
                   myLocationEnabled: true,
+                  logoEnabled: false,
                   styleString: "https://tiles.openfreemap.org/styles/positron", 
                 ),
           

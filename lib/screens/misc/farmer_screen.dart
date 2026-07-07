@@ -1,101 +1,43 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:farmtech_agridirect/screens/auth/login_screen.dart';
 import 'package:farmtech_agridirect/services/storage_service.dart';
+import 'package:farmtech_agridirect/viewmodels/farmer_viewmodel.dart';
+import 'package:farmtech_agridirect/models/order_model.dart';
+import 'package:farmtech_agridirect/models/product.dart';
+import 'package:farmtech_agridirect/Success/skeleton_loader.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../Success/shared_widgets.dart';
 import 'farm_osm_screen.dart';
 
 const Color primaryTeal = Color(0xFF1D9E75);
 
-class FarmerScreen extends StatefulWidget {
+class FarmerScreen extends StatelessWidget {
   const FarmerScreen({super.key});
 
   @override
-  State<FarmerScreen> createState() => _FarmerScreenState();
-}
-
-class _FarmerScreenState extends State<FarmerScreen> {
-  int _currentIndex = 0;
-  Map<String, dynamic>? _farmerData;
-  bool _loading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadFarmerData();
-  }
-
-  Future<void> _loadFarmerData() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        _logout();
-        return;
-      }
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      if (mounted) {
-        if (doc.exists && doc.data()?['role'] == 'Farmer') {
-          setState(() {
-            _farmerData = doc.data();
-            _loading = false;
-          });
-        } else {
-          _logout();
-        }
-      }
-    } catch (e) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  void _logout() {
-    FirebaseAuth.instance.signOut();
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator(color: primaryTeal)));
+    final vm = context.watch<FarmerViewModel>();
 
-    final String farmerName = _farmerData?['fullName'] ?? _farmerData?['name'] ?? 'Farmer';
-    final String farmName = _farmerData?['farmName'] ?? 'AgriDirect Farm';
-    final String farmLocation = _farmerData?['farmLocation'] ?? 'Location not set';
-    final String uid = FirebaseAuth.instance.currentUser?.uid ?? '';
-    final double? fLat = (_farmerData?['farmLat'] as num?)?.toDouble();
-    final double? fLng = (_farmerData?['farmLng'] as num?)?.toDouble();
+    if (vm.loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: primaryTeal)),
+      );
+    }
+
+    final String farmName = vm.farmerData?['farmName'] ?? 'AgriDirect Farm';
 
     final List<Widget> pages = [
-      _FarmerHomeScreen(
-        farmerName: farmerName,
-        farmName: farmName,
-        uid: uid,
-        farmerLat: fLat,
-        farmerLng: fLng,
-      ),
-      _FarmerStoreScreen(
-        uid: uid,
-        farmName: farmName,
-        farmerLat: fLat,
-        farmerLng: fLng,
-      ),
-      _FarmerOrdersScreen(uid: uid),
-      _FarmerProfileScreen(
-        farmerName: farmerName,
-        email: FirebaseAuth.instance.currentUser?.email ?? '',
-        farmLocation: farmLocation,
-        uid: uid,
-        profileImageUrl: _farmerData?['profileImageUrl'],
-        phone: _farmerData?['phone'] ?? '',
-      ),
+      const _FarmerHomeScreen(),
+      const _FarmerStoreScreen(),
+      const _FarmerOrdersScreen(),
+      const _FarmerProfileScreen(),
     ];
 
     return Scaffold(
@@ -104,16 +46,22 @@ class _FarmerScreenState extends State<FarmerScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
-        title: Text(farmName, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 20)),
+        title: Text(
+          farmName,
+          style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 20),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
-            onPressed: () => _logout(),
+            onPressed: () => vm.logout(context, const LoginScreen()),
           ),
           const SizedBox(width: 8),
         ],
       ),
-      body: pages[_currentIndex],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: pages[vm.currentIndex],
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -122,11 +70,11 @@ class _FarmerScreenState extends State<FarmerScreen> {
           ],
         ),
         child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (i) => setState(() => _currentIndex = i),
+          currentIndex: vm.currentIndex,
+          onTap: (i) => vm.setCurrentIndex(i),
           type: BottomNavigationBarType.fixed,
           backgroundColor: Colors.white,
-          selectedItemColor: const Color(0xFF1D9E75),
+          selectedItemColor: primaryTeal,
           unselectedItemColor: Colors.grey.shade400,
           selectedLabelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
@@ -144,15 +92,7 @@ class _FarmerScreenState extends State<FarmerScreen> {
 }
 
 class _FarmerHomeScreen extends StatefulWidget {
-  final String farmerName, farmName, uid;
-  final double? farmerLat, farmerLng;
-  const _FarmerHomeScreen({
-    required this.farmerName,
-    required this.farmName,
-    required this.uid,
-    this.farmerLat,
-    this.farmerLng,
-  });
+  const _FarmerHomeScreen();
 
   @override
   State<_FarmerHomeScreen> createState() => _FarmerHomeScreenState();
@@ -192,37 +132,76 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final vm = context.read<FarmerViewModel>();
+    final farmerName = vm.farmerData?['fullName'] ?? vm.farmerData?['name'] ?? 'Farmer';
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      physics: const BouncingScrollPhysics(),
       children: [
-        const SizedBox(height: 10),
+        const SizedBox(height: 15),
         Center(
           child: Column(
             children: [
               Text(
-                "Namaste, ${widget.farmerName}!",
-                style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF1A1D25), letterSpacing: -0.5),
+                "Namaste, $farmerName!",
+                style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: Color(0xFF1A1D25), letterSpacing: -0.8),
               ),
-              const SizedBox(height: 6),
-              Text(
-                "Hope your harvest is plentiful today.",
-                style: TextStyle(color: Colors.grey.shade400, fontSize: 15, fontWeight: FontWeight.w500),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                decoration: BoxDecoration(
+                  color: primaryTeal.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: const Text(
+                  "Hope your harvest is plentiful today.",
+                  style: TextStyle(color: primaryTeal, fontSize: 13, fontWeight: FontWeight.w700),
+                ),
               ),
             ],
           ),
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 40),
 
-        StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('orders')
-              .where('status', isEqualTo: 'Pending Farmer')
-              .snapshots(),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "NEW ORDERS",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: Colors.grey.shade400,
+                letterSpacing: 1.5,
+              ),
+            ),
+            StreamBuilder<List<OrderModel>>(
+              stream: vm.getNewOrders(),
+              builder: (context, snap) {
+                final count = snap.data?.length ?? 0;
+                if (count == 0) return const SizedBox();
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(10)),
+                  child: Text("$count ACTIVE", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+                );
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        StreamBuilder<List<OrderModel>>(
+          stream: vm.getNewOrders(),
           builder: (context, snap) {
-            final docs = snap.data?.docs.where((d) => (d.data() as Map)['farmerUid'] == null).toList() ?? [];
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const SkeletonLoader(height: 220, borderRadius: 32);
+            }
+            final docs = snap.data ?? [];
             
             return SizedBox(
-              height: 200,
+              height: 220,
               child: Stack(
                 children: [
                   PageView.builder(
@@ -233,24 +212,26 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
                         return _buildEmptyOrderBanner();
                       }
                       final index = i % docs.length;
-                      final data = docs[index].data() as Map<String, dynamic>;
-                      return _buildNewOrderBanner(docs[index].id, data);
+                      return _buildNewOrderBanner(docs[index]);
                     },
                   ),
                   if (docs.isNotEmpty)
                     Positioned(
-                      bottom: 20,
-                      right: 25,
+                      bottom: 25,
+                      left: 0,
+                      right: 0,
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: List.generate(
                           docs.length,
-                          (index) => Container(
+                          (index) => AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
                             margin: const EdgeInsets.only(left: 6),
                             width: _currentCarouselIndex == index ? 24 : 8,
-                            height: 8,
+                            height: 6,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(4),
-                              color: _currentCarouselIndex == index ? Colors.white : Colors.white.withValues(alpha: 0.4),
+                              color: _currentCarouselIndex == index ? Colors.white : Colors.white.withValues(alpha: 0.3),
                             ),
                           ),
                         ),
@@ -262,32 +243,40 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
           },
         ),
 
-        const SizedBox(height: 35),
+        const SizedBox(height: 40),
         Text(
           "BUSINESS OVERVIEW",
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w800,
             color: Colors.grey.shade400,
-            letterSpacing: 1.2,
+            letterSpacing: 1.5,
           ),
         ),
         const SizedBox(height: 16),
         
-        StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance.collection('orders').where('farmerUid', isEqualTo: widget.uid).snapshots(),
+        StreamBuilder<List<OrderModel>>(
+          stream: vm.getFarmerOrders(),
           builder: (context, snapshot) {
-            final docs = snapshot.data?.docs ?? [];
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Row(
+                children: [
+                  Expanded(child: SkeletonLoader(height: 140, borderRadius: 32)),
+                  SizedBox(width: 16),
+                  Expanded(child: SkeletonLoader(height: 140, borderRadius: 32)),
+                ],
+              );
+            }
+            final orders = snapshot.data ?? [];
             double totalEarnings = 0;
             int activeTasks = 0;
-            List<QueryDocumentSnapshot> deliveredOrders = [];
+            List<OrderModel> deliveredOrders = [];
 
-            for (var doc in docs) {
-              final data = doc.data() as Map<String, dynamic>;
-              if (data['status'] == 'Delivered' || data['status'] == 'Confirm Received') {
-                totalEarnings += (data['farmerRevenue'] ?? 0).toDouble();
-                deliveredOrders.add(doc);
-              } else if (['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'].contains(data['status'])) {
+            for (var order in orders) {
+              if (order.status == 'Delivered' || order.status == 'Confirm Received') {
+                totalEarnings += order.farmerRevenue ?? 0;
+                deliveredOrders.add(order);
+              } else if (['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived'].contains(order.status)) {
                 activeTasks++;
               }
             }
@@ -298,7 +287,7 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
                   title: "Total Revenue",
                   value: "Rs. ${totalEarnings.toStringAsFixed(0)}",
                   icon: Icons.account_balance_wallet_rounded,
-                  colors: [const Color(0xFF1D9E75), const Color(0xFF4DB6AC)],
+                  colors: [primaryTeal, const Color(0xFF4DB6AC)],
                   onTap: () => _showIncomeDetails(context, deliveredOrders, totalEarnings),
                 ),
                 const SizedBox(width: 16),
@@ -320,14 +309,14 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
   Widget _buildEmptyOrderBanner() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF1D9E75), Color(0xFF1565C0)],
+          colors: [primaryTeal, Color(0xFF1565C0)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(32),
       ),
       child: Row(
         children: [
@@ -336,35 +325,35 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text("No New Orders", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 8),
+                const Text("No New Orders", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 12),
                 Text(
                   "Sit back and relax! We'll notify you when new orders arrive in your area.",
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14, height: 1.4),
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 15, height: 1.5),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 10),
-          Icon(Icons.eco_rounded, color: Colors.white.withValues(alpha: 0.2), size: 80),
+          Icon(Icons.eco_rounded, color: Colors.white.withValues(alpha: 0.1), size: 100),
         ],
       ),
     );
   }
 
-  Widget _buildNewOrderBanner(String orderId, Map<String, dynamic> data) {
+  Widget _buildNewOrderBanner(OrderModel order) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF1D9E75), Color(0xFF2196F3)],
+          colors: [primaryTeal, Color(0xFF2196F3)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(32),
         boxShadow: [
-          BoxShadow(color: const Color(0xFF1D9E75).withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10)),
+          BoxShadow(color: primaryTeal.withValues(alpha: 0.3), blurRadius: 20, offset: const Offset(0, 10)),
         ],
       ),
       child: Stack(
@@ -373,70 +362,70 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text("New Order Available", style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
+              const Text("New Order!", style: TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900)),
               const SizedBox(height: 12),
               Text(
-                "A new order of ${data['items']?.length ?? 0} items is available for pickup near ${data['deliveryAddress']?.toString().split(',').last.trim() ?? 'you'}...",
-                style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 14, height: 1.5, fontWeight: FontWeight.w500),
+                "Order for pickup near ${order.deliveryAddress.split(',').last.trim()}",
+                style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 15, height: 1.5, fontWeight: FontWeight.w500),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 25),
+              ElevatedButton(
+                onPressed: () => _acceptOrderDialog(context, order),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: primaryTeal,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
+                child: const Text("View & Accept", style: TextStyle(fontWeight: FontWeight.w900)),
+              ),
             ],
           ),
           Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            child: Center(
-              child: IconButton(
-                onPressed: () => _acceptOrder(orderId, data),
-                icon: Icon(Icons.info_outline_rounded, color: Colors.white.withValues(alpha: 0.3), size: 70),
-              ),
-            ),
+            right: -20,
+            bottom: -20,
+            child: Icon(Icons.shopping_basket_rounded, color: Colors.white.withValues(alpha: 0.1), size: 120),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _acceptOrder(String orderId, Map<String, dynamic> data) async {
+  Future<void> _acceptOrderDialog(BuildContext context, OrderModel order) async {
+    final vm = context.read<FarmerViewModel>();
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("Accept Order?"),
-        content: Text("Total: Rs. ${data['total']}\nItems: ${data['itemsSummary']}"),
+        content: Text("Total Items: ${order.items.length}\nItems: ${order.itemsSummary}"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text("Accept", style: TextStyle(color: Color(0xFF1D9E75), fontWeight: FontWeight.bold)),
+            child: const Text("Accept", style: TextStyle(color: primaryTeal, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
 
     if (ok == true) {
-      final fresh = await FirebaseFirestore.instance.collection('orders').doc(orderId).get();
-      if (fresh.data()?['farmerUid'] != null) {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Order already accepted by another farm.")));
-        return;
+      final farmName = vm.farmerData?['farmName'] ?? 'AgriDirect Farm';
+      final double? fLat = (vm.farmerData?['farmLat'] as num?)?.toDouble();
+      final double? fLng = (vm.farmerData?['farmLng'] as num?)?.toDouble();
+
+      await vm.acceptOrder(order.id, fLat, fLng, farmName);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Order accepted! Check 'Orders' tab for details.")),
+        );
       }
-
-      await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-        'status': 'Farmer Accepted',
-        'farmerUid': widget.uid,
-        'farmName': widget.farmName,
-        'farmerLat': widget.farmerLat,
-        'farmerLng': widget.farmerLng,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Order accepted! Check 'Orders' tab for details.")));
     }
   }
 
-  void _showIncomeDetails(BuildContext context, List<QueryDocumentSnapshot> docs, double total) {
+  void _showIncomeDetails(BuildContext context, List<OrderModel> docs, double total) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -460,9 +449,9 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 itemCount: docs.length,
                 itemBuilder: (context, i) {
-                  final data = docs[i].data() as Map<String, dynamic>;
-                  final gross = (data['total'] ?? 0).toDouble();
-                  final net = (data['farmerRevenue'] ?? 0).toDouble();
+                  final order = docs[i];
+                  final gross = order.total;
+                  final net = order.farmerRevenue ?? 0;
                   final commission = gross - net;
 
                   return Container(
@@ -481,7 +470,7 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text("Order #${docs[i].id.substring(0, 8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                            Text("Order #${order.id.substring(0, 8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                             Text("Rs. ${gross.toStringAsFixed(0)}", style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
                           ],
                         ),
@@ -490,7 +479,7 @@ class _FarmerHomeScreenState extends State<_FarmerHomeScreen> {
                         const SizedBox(height: 8),
                         _detailRow("App Commission (20%)", -commission, isNegative: true),
                         const Divider(height: 32),
-                        _detailRow("Your Earnings", net, isBold: true, color: const Color(0xFF1D9E75)),
+                        _detailRow("Your Earnings", net, isBold: true, color: primaryTeal),
                       ],
                     ),
                   );
@@ -534,35 +523,35 @@ class _BusinessCard extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(32),
             boxShadow: [
-              BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 20, offset: const Offset(0, 10)),
+              BoxShadow(
+                color: colors.first.withValues(alpha: 0.1), 
+                blurRadius: 20, 
+                offset: const Offset(0, 10)
+              ),
             ],
+            border: Border.all(color: Colors.grey.shade50),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(icon, color: Colors.white, size: 24),
-                  ),
-                  Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey.shade300, size: 14),
-                ],
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: colors, begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: colors.first.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Icon(icon, color: Colors.white, size: 24),
               ),
-              const SizedBox(height: 20),
-              Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1A1D25))),
+              const SizedBox(height: 24),
+              Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Color(0xFF1A1D25), letterSpacing: -0.5)),
               const SizedBox(height: 4),
-              Text(title, style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w600)),
+              Text(title, style: TextStyle(color: Colors.grey.shade500, fontSize: 13, fontWeight: FontWeight.w700)),
             ],
           ),
         ),
@@ -571,32 +560,28 @@ class _BusinessCard extends StatelessWidget {
   }
 }
 
-class _FarmerStoreScreen extends StatefulWidget {
-  final String uid, farmName;
-  final double? farmerLat, farmerLng;
-  const _FarmerStoreScreen({required this.uid, required this.farmName, this.farmerLat, this.farmerLng});
+class _FarmerStoreScreen extends StatelessWidget {
+  const _FarmerStoreScreen();
 
-  @override
-  State<_FarmerStoreScreen> createState() => _FarmerStoreScreenState();
-}
-
-class _FarmerStoreScreenState extends State<_FarmerStoreScreen> {
-  void _showAddProduct() {
+  void _showAddProduct(BuildContext context) {
+    final vm = context.read<FarmerViewModel>();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _ProductForm(uid: widget.uid, farmName: widget.farmName, farmerLat: widget.farmerLat, farmerLng: widget.farmerLng),
+      builder: (context) => _ProductForm(uid: vm.uid, farmName: vm.farmerData?['farmName'] ?? 'Farm'),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final vm = context.watch<FarmerViewModel>();
+
     return Scaffold(
       backgroundColor: Colors.white,
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddProduct,
-        backgroundColor: const Color(0xFF1D9E75),
+        onPressed: () => _showAddProduct(context),
+        backgroundColor: primaryTeal,
         elevation: 4,
         child: const Icon(Icons.add_rounded, color: Colors.white, size: 30),
       ),
@@ -616,13 +601,22 @@ class _FarmerStoreScreenState extends State<_FarmerStoreScreen> {
           ),
           const SizedBox(height: 20),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('products').where('farmerUid', isEqualTo: widget.uid).snapshots(),
+            child: StreamBuilder<List<Product>>(
+              stream: vm.getFarmerProducts(),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF1D9E75)));
-                final docs = snapshot.data!.docs;
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    itemCount: 5,
+                    itemBuilder: (_, __) => const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: SkeletonLoader(height: 94, borderRadius: 20),
+                    ),
+                  );
+                }
+                final products = snapshot.data ?? [];
 
-                if (docs.isEmpty) {
+                if (products.isEmpty) {
                   return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -637,9 +631,9 @@ class _FarmerStoreScreenState extends State<_FarmerStoreScreen> {
 
                 return ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: docs.length,
+                  itemCount: products.length,
                   itemBuilder: (context, i) {
-                    final data = docs[i].data() as Map<String, dynamic>;
+                    final product = products[i];
                     return Container(
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(12),
@@ -655,11 +649,14 @@ class _FarmerStoreScreenState extends State<_FarmerStoreScreen> {
                         children: [
                           ClipRRect(
                             borderRadius: BorderRadius.circular(16),
-                            child: CachedNetworkImage(
-                              imageUrl: data['image'] ?? '',
-                              width: 70, height: 70, fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(color: Colors.grey.shade100),
-                              errorWidget: (context, url, error) => Container(color: Colors.green.shade50, child: const Icon(Icons.eco_rounded, color: Color(0xFF1D9E75))),
+                            child: Hero(
+                              tag: product.id ?? 'prod_$i',
+                              child: CachedNetworkImage(
+                                imageUrl: product.image,
+                                width: 70, height: 70, fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(color: Colors.grey.shade100),
+                                errorWidget: (context, url, error) => Container(color: Colors.green.shade50, child: const Icon(Icons.eco_rounded, color: primaryTeal)),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -667,15 +664,30 @@ class _FarmerStoreScreenState extends State<_FarmerStoreScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(data['name'] ?? '', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Color(0xFF1A1D25))),
+                                Text(product.title, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 17, color: Color(0xFF1A1D25))),
                                 const SizedBox(height: 4),
-                                Text("Rs. ${data['price']} / ${data['unit'] ?? 'kg'}", style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                                Text("Rs. ${product.price} / ${product.unit}", style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
                               ],
                             ),
                           ),
                           IconButton(
+                            icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent),
+                            onPressed: () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (context) => _ProductForm(
+                                  uid: vm.uid, 
+                                  farmName: vm.farmerData?['farmName'] ?? 'Farm',
+                                  existingProduct: product.toMap()..['id'] = product.id,
+                                ),
+                              );
+                            },
+                          ),
+                          IconButton(
                             icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                            onPressed: () => _deleteProduct(docs[i].id),
+                            onPressed: () => _deleteProduct(context, product.id!),
                           ),
                         ],
                       ),
@@ -690,7 +702,8 @@ class _FarmerStoreScreenState extends State<_FarmerStoreScreen> {
     );
   }
 
-  Future<void> _deleteProduct(String id) async {
+  Future<void> _deleteProduct(BuildContext context, String id) async {
+    final vm = context.read<FarmerViewModel>();
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -705,14 +718,13 @@ class _FarmerStoreScreenState extends State<_FarmerStoreScreen> {
     );
 
     if (ok == true) {
-      await FirebaseFirestore.instance.collection('products').doc(id).delete();
+      await vm.deleteProduct(id);
     }
   }
 }
 
 class _FarmerOrdersScreen extends StatelessWidget {
-  final String uid;
-  const _FarmerOrdersScreen({required this.uid});
+  const _FarmerOrdersScreen();
 
   @override
   Widget build(BuildContext context) {
@@ -724,9 +736,9 @@ class _FarmerOrdersScreen extends StatelessWidget {
           const Heading(title: "Orders", subtitle: "Track your outgoing deliveries"),
           const SizedBox(height: 20),
           TabBar(
-            labelColor: const Color(0xFF1D9E75),
+            labelColor: primaryTeal,
             unselectedLabelColor: Colors.grey.shade400,
-            indicatorColor: const Color(0xFF1D9E75),
+            indicatorColor: primaryTeal,
             indicatorSize: TabBarIndicatorSize.label,
             dividerColor: Colors.transparent,
             labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
@@ -736,11 +748,11 @@ class _FarmerOrdersScreen extends StatelessWidget {
               Tab(text: "History"),
             ],
           ),
-          Expanded(
+          const Expanded(
             child: TabBarView(
               children: [
-                _FarmerOrderList(uid: uid, statuses: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived']),
-                _FarmerOrderList(uid: uid, statuses: ['Delivered', 'Cancelled', 'Confirm Received']),
+                _FarmerOrderList(statuses: ['Farmer Accepted', 'Awaiting Pickup', 'Picked Up', 'On the way', 'Arrived']),
+                _FarmerOrderList(statuses: ['Delivered', 'Cancelled', 'Confirm Received']),
               ],
             ),
           ),
@@ -751,22 +763,29 @@ class _FarmerOrdersScreen extends StatelessWidget {
 }
 
 class _FarmerOrderList extends StatelessWidget {
-  final String uid;
   final List<String> statuses;
-  const _FarmerOrderList({required this.uid, required this.statuses});
+  const _FarmerOrderList({required this.statuses});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('orders')
-          .where('farmerUid', isEqualTo: uid)
-          .where('status', whereIn: statuses)
-          .snapshots(),
+    final vm = context.watch<FarmerViewModel>();
+    return StreamBuilder<List<OrderModel>>(
+      stream: vm.getFarmerOrders(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF1D9E75)));
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return ListView.builder(
+            padding: const EdgeInsets.all(20),
+            itemCount: 3,
+            itemBuilder: (_, __) => const Padding(
+              padding: EdgeInsets.only(bottom: 16),
+              child: SkeletonLoader(height: 180, borderRadius: 28),
+            ),
+          );
+        }
 
-        final docs = snapshot.data!.docs;
+        final allOrders = snapshot.data ?? [];
+        final docs = allOrders.where((o) => statuses.contains(orderStatusToString(o.status))).toList();
+
         if (docs.isEmpty) {
           return Center(
             child: Column(
@@ -784,27 +803,21 @@ class _FarmerOrderList extends StatelessWidget {
           padding: const EdgeInsets.all(20),
           itemCount: docs.length,
           itemBuilder: (context, i) {
-            final data = docs[i].data() as Map<String, dynamic>;
-            return _DeliveryCard(orderId: docs[i].id, data: data, docRef: docs[i].reference);
+            return _DeliveryCard(order: docs[i]);
           },
         );
       },
     );
   }
+
+  String orderStatusToString(dynamic status) {
+    if (status is String) return status;
+    return status.toString();
+  }
 }
 
 class _FarmerProfileScreen extends StatefulWidget {
-  final String farmerName, email, farmLocation, uid;
-  final String? profileImageUrl;
-  final String phone;
-  const _FarmerProfileScreen({
-    required this.farmerName, 
-    required this.email, 
-    required this.farmLocation, 
-    required this.uid,
-    this.profileImageUrl,
-    required this.phone,
-  });
+  const _FarmerProfileScreen();
 
   @override
   State<_FarmerProfileScreen> createState() => _FarmerProfileScreenState();
@@ -814,6 +827,7 @@ class _FarmerProfileScreenState extends State<_FarmerProfileScreen> {
   bool _isUploading = false;
 
   Future<void> _updateProfilePhoto() async {
+    final vm = context.read<FarmerViewModel>();
     final img = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 50);
     if (img == null) return;
 
@@ -822,9 +836,7 @@ class _FarmerProfileScreenState extends State<_FarmerProfileScreen> {
       final storage = StorageService();
       final url = await storage.uploadImage(img, 'profile_pics');
       if (url != null) {
-        await FirebaseFirestore.instance.collection('users').doc(widget.uid).update({
-          'profileImageUrl': url,
-        });
+        await vm.updateProfileImage(url);
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Profile photo updated!")));
       }
     } catch (e) {
@@ -834,101 +846,8 @@ class _FarmerProfileScreenState extends State<_FarmerProfileScreen> {
     }
   }
 
-  void _showChangePasswordDialog() {
-    final currentPass = TextEditingController();
-    final newPass = TextEditingController();
-    final confirmPass = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFFF0F4E8), // Light natural green tint
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        title: const Center(
-          child: Text(
-            "Change Password",
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: Color(0xFF1A1D25)),
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _dialogField(currentPass, "Current Password", Icons.lock_outline_rounded),
-            const SizedBox(height: 12),
-            _dialogField(newPass, "New Password", Icons.vpn_key_outlined),
-            const SizedBox(height: 12),
-            _dialogField(confirmPass, "Confirm New Password", Icons.check_circle_outline_rounded),
-          ],
-        ),
-        actions: [
-          Row(
-            children: [
-              Expanded(
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel", style: TextStyle(color: Color(0xFF1D9E75), fontWeight: FontWeight.bold)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1D9E75),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
-                  ),
-                  onPressed: () async {
-                    if (newPass.text != confirmPass.text || newPass.text.length < 6) return;
-                    try {
-                      final user = FirebaseAuth.instance.currentUser;
-                      if (user == null) return;
-                      
-                      AuthCredential credential = EmailAuthProvider.credential(
-                        email: user.email!,
-                        password: currentPass.text,
-                      );
-                      
-                      await user.reauthenticateWithCredential(credential);
-                      await user.updatePassword(newPass.text);
-                      
-                      if (context.mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Password updated successfully!")));
-                      }
-                    } catch (e) {
-                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-                    }
-                  },
-                  child: const Text("Update", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _dialogField(TextEditingController ctrl, String hint, IconData icon) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: TextField(
-        controller: ctrl,
-        obscureText: true,
-        decoration: InputDecoration(
-          hintText: hint,
-          prefixIcon: Icon(icon, color: Colors.grey.shade400, size: 20),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-        ),
-      ),
-    );
-  }
-
   Future<void> _updateLocation() async {
+    final vm = context.read<FarmerViewModel>();
     final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const FarmOsmScreen()),
@@ -939,11 +858,7 @@ class _FarmerProfileScreenState extends State<_FarmerProfileScreen> {
       final double lat = result['lat'];
       final double lng = result['lng'];
 
-      await FirebaseFirestore.instance.collection('users').doc(widget.uid).update({
-        'farmLocation': address,
-        'farmLat': lat,
-        'farmLng': lng,
-      });
+      await vm.updateFarmLocation(address, lat, lng);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Farm location updated successfully!")));
@@ -953,6 +868,12 @@ class _FarmerProfileScreenState extends State<_FarmerProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final vm = context.watch<FarmerViewModel>();
+    final farmerName = vm.farmerData?['fullName'] ?? vm.farmerData?['name'] ?? 'Farmer';
+    final email = FirebaseAuth.instance.currentUser?.email ?? '';
+    final farmLocation = vm.farmerData?['farmLocation'] ?? 'Location not set';
+    final profileImageUrl = vm.farmerData?['profileImageUrl'];
+
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       children: [
@@ -968,20 +889,20 @@ class _FarmerProfileScreenState extends State<_FarmerProfileScreen> {
                   children: [
                     CircleAvatar(
                       radius: 65,
-                      backgroundColor: const Color(0xFF1D9E75).withValues(alpha: 0.1),
-                      backgroundImage: (widget.profileImageUrl != null && widget.profileImageUrl!.isNotEmpty)
-                          ? CachedNetworkImageProvider(widget.profileImageUrl!) : null,
-                      child: (widget.profileImageUrl == null || widget.profileImageUrl!.isEmpty)
-                          ? const Icon(Icons.agriculture_rounded, size: 70, color: Color(0xFF1D9E75)) : null,
+                      backgroundColor: primaryTeal.withValues(alpha: 0.1),
+                      backgroundImage: (profileImageUrl != null && profileImageUrl!.isNotEmpty)
+                          ? CachedNetworkImageProvider(profileImageUrl!) : null,
+                      child: (profileImageUrl == null || profileImageUrl!.isEmpty)
+                          ? const Icon(Icons.agriculture_rounded, size: 70, color: primaryTeal) : null,
                     ),
                     if (_isUploading)
-                      const Positioned.fill(child: CircularProgressIndicator(color: Color(0xFF1D9E75))),
+                      const Positioned.fill(child: CircularProgressIndicator(color: primaryTeal)),
                     Positioned(
                       bottom: 0,
                       right: 0,
                       child: Container(
                         padding: const EdgeInsets.all(8),
-                        decoration: const BoxDecoration(color: Color(0xFF1D9E75), shape: BoxShape.circle),
+                        decoration: const BoxDecoration(color: primaryTeal, shape: BoxShape.circle),
                         child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 18),
                       ),
                     ),
@@ -989,9 +910,9 @@ class _FarmerProfileScreenState extends State<_FarmerProfileScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              Text(widget.farmerName, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF1A1D25))),
+              Text(farmerName, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF1A1D25))),
               const SizedBox(height: 4),
-              Text(widget.email, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500, fontSize: 16)),
+              Text(email, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500, fontSize: 16)),
             ],
           ),
         ),
@@ -1003,7 +924,7 @@ class _FarmerProfileScreenState extends State<_FarmerProfileScreen> {
             _ProfileItem(
               icon: Icons.location_on_rounded,
               title: "Pickup Address",
-              subtitle: widget.farmLocation,
+              subtitle: farmLocation,
               trailing: const SizedBox(),
             ),
           ],
@@ -1014,41 +935,9 @@ class _FarmerProfileScreenState extends State<_FarmerProfileScreen> {
           title: "APP SETTINGS",
           items: [
             _ProfileItem(
-              icon: Icons.wb_sunny_rounded,
-              title: "Dark Mode",
-              trailing: Switch.adaptive(
-                value: false,
-                onChanged: (v) {},
-                activeTrackColor: const Color(0xFF1D9E75),
-              ),
-              iconColor: Colors.orange.shade300,
-              iconBg: Colors.orange.shade50,
-            ),
-            _ProfileItem(
               icon: Icons.map_rounded,
               title: "Update Farm Location",
               onTap: _updateLocation,
-            ),
-          ],
-        ),
-        const SizedBox(height: 30),
-
-        _ProfileSection(
-          title: "SECURITY",
-          items: [
-            _ProfileItem(
-              icon: Icons.lock_reset_rounded,
-              title: "Change Password",
-              onTap: _showChangePasswordDialog,
-              iconColor: const Color(0xFF1D9E75),
-              iconBg: const Color(0xFFE8F5E9),
-            ),
-            _ProfileItem(
-              icon: Icons.verified_user_rounded,
-              title: "Verified Farmer Partner",
-              trailing: const Icon(Icons.check_circle_rounded, color: Color(0xFF1D9E75), size: 20),
-              iconColor: const Color(0xFF1D9E75),
-              iconBg: const Color(0xFFE8F5E9),
             ),
           ],
         ),
@@ -1094,7 +983,6 @@ class _ProfileItem extends StatelessWidget {
   final String? subtitle;
   final Widget? trailing;
   final VoidCallback? onTap;
-  final Color? iconColor, iconBg;
 
   const _ProfileItem({
     required this.icon,
@@ -1102,8 +990,6 @@ class _ProfileItem extends StatelessWidget {
     this.subtitle,
     this.trailing,
     this.onTap,
-    this.iconColor,
-    this.iconBg,
   });
 
   @override
@@ -1114,10 +1000,10 @@ class _ProfileItem extends StatelessWidget {
       leading: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: iconBg ?? Colors.grey.shade50,
+          color: Colors.grey.shade50,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Icon(icon, color: iconColor ?? const Color(0xFF1D9E75), size: 22),
+        child: Icon(icon, color: primaryTeal, size: 22),
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF1A1D25))),
       subtitle: subtitle != null ? Text(subtitle!, style: TextStyle(color: Colors.grey.shade500, fontSize: 13, height: 1.4)) : null,
@@ -1128,9 +1014,13 @@ class _ProfileItem extends StatelessWidget {
 
 class _ProductForm extends StatefulWidget {
   final String uid, farmName;
-  final double? farmerLat, farmerLng;
+  final Map<String, dynamic>? existingProduct;
 
-  const _ProductForm({required this.uid, required this.farmName, this.farmerLat, this.farmerLng});
+  const _ProductForm({
+    required this.uid, 
+    required this.farmName, 
+    this.existingProduct,
+  });
 
   @override
   State<_ProductForm> createState() => _ProductFormState();
@@ -1140,19 +1030,37 @@ class _ProductFormState extends State<_ProductForm> {
   final name = TextEditingController();
   final price = TextEditingController();
   final unit = TextEditingController(text: 'kg');
+  final stock = TextEditingController(text: '100');
   XFile? selectedImage;
   bool isUploading = false;
+
+  bool get isEditing => widget.existingProduct != null;
+  String? get productId => widget.existingProduct?['id'];
+
+  @override
+  void initState() {
+    super.initState();
+    if (isEditing) {
+      name.text = widget.existingProduct!['name'] ?? '';
+      price.text = widget.existingProduct!['price']?.toString() ?? '';
+      unit.text = widget.existingProduct!['unit'] ?? 'kg';
+      stock.text = widget.existingProduct!['stock']?.toString() ?? '100';
+    }
+  }
 
   @override
   void dispose() {
     name.dispose();
     price.dispose();
     unit.dispose();
+    stock.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final vm = context.read<FarmerViewModel>();
+
     return Container(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
       decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
@@ -1161,7 +1069,7 @@ class _ProductFormState extends State<_ProductForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Heading(title: "Add New Product", subtitle: "List your fresh produce on the market"),
+            Heading(title: isEditing ? "Edit Product" : "Add New Product", subtitle: "List your fresh produce on the market"),
             const SizedBox(height: 24),
             Center(
               child: GestureDetector(
@@ -1179,7 +1087,9 @@ class _ProductFormState extends State<_ProductForm> {
                   decoration: BoxDecoration(color: const Color(0xFFF4F6F8), borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.grey.shade200)),
                   child: selectedImage != null
                       ? ClipRRect(borderRadius: BorderRadius.circular(24), child: Image.file(File(selectedImage!.path), fit: BoxFit.cover))
-                      : const Icon(Icons.add_a_photo_rounded, color: Colors.grey, size: 32),
+                      : (isEditing && widget.existingProduct!['image'] != null)
+                        ? ClipRRect(borderRadius: BorderRadius.circular(24), child: CachedNetworkImage(imageUrl: widget.existingProduct!['image'], fit: BoxFit.cover))
+                        : const Icon(Icons.add_a_photo_rounded, color: Colors.grey, size: 32),
                 ),
               ),
             ),
@@ -1214,13 +1124,18 @@ class _ProductFormState extends State<_ProductForm> {
               ],
             ),
             const SizedBox(height: 15),
-            TextField(controller: stock, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "Initial Stock Quantity", border: OutlineInputBorder())),
+            const FieldLabel(label: "STOCK QUANTITY"),
+            const SizedBox(height: 8),
+            TextField(controller: stock, keyboardType: TextInputType.number, decoration: customInputDecoration(hint: "100", icon: Icons.inventory_2_outlined, teal: primaryTeal)),
             const SizedBox(height: 25),
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1D9E75)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryTeal,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
                 onPressed: isUploading ? null : () async {
                   if (name.text.isEmpty || price.text.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Fill all required fields")));
@@ -1233,18 +1148,18 @@ class _ProductFormState extends State<_ProductForm> {
                     return;
                   }
 
-                  setModalState(() => isUploading = true);
+                  setState(() => isUploading = true);
 
                   try {
                     if (isEditing) {
-                      await FirebaseFirestore.instance.collection('price_requests').add({
+                      await vm.requestPriceUpdate({
                         'productId': productId,
                         'productName': name.text,
                         'farmerUid': widget.uid,
                         'farmName': widget.farmName,
-                        'oldPrice': double.tryParse(existingProduct['price']?.toString() ?? '0') ?? 0,
+                        'oldPrice': double.tryParse(widget.existingProduct!['price']?.toString() ?? '0') ?? 0,
                         'newPrice': priceVal,
-                        'oldUnit': existingProduct['unit'] ?? 'kg',
+                        'oldUnit': widget.existingProduct!['unit'] ?? 'kg',
                         'newUnit': unit.text,
                         'status': 'pending',
                         'createdAt': FieldValue.serverTimestamp(),
@@ -1253,7 +1168,7 @@ class _ProductFormState extends State<_ProductForm> {
                     } else {
                       if (selectedImage == null) {
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please select an image")));
-                        setModalState(() => isUploading = false);
+                        if (mounted) setState(() => isUploading = false);
                         return;
                       }
 
@@ -1265,23 +1180,20 @@ class _ProductFormState extends State<_ProductForm> {
                           throw "Upload failed. Please check your internet connection.";
                         }
                       } catch (e) {
-                        String errorMsg = "Error uploading image: $e";
-                        throw errorMsg;
+                        throw "Error uploading image: $e";
                       }
 
-                      await FirebaseFirestore.instance.collection('products').add({
+                      await vm.addProduct({
                         'name': name.text,
-                        'title': name.text, // Added for compatibility with Product model
+                        'title': name.text,
                         'price': priceVal,
                         'farmerUid': widget.uid,
                         'farmName': widget.farmName,
-                        'farmerLat': widget.farmerLat,
-                        'farmerLng': widget.farmerLng,
                         'unit': unit.text,
                         'stock': int.tryParse(stock.text) ?? 100,
                         'image': imageUrl,
                         'createdAt': FieldValue.serverTimestamp(),
-                        'status': 'pending', // New products need admin approval
+                        'status': 'pending',
                       });
                       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Product listed! Waiting for admin approval.")));
                     }
@@ -1289,10 +1201,10 @@ class _ProductFormState extends State<_ProductForm> {
                   } catch (e) {
                     if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
                   } finally {
-                    setModalState(() => isUploading = false);
+                    if (mounted) setState(() => isUploading = false);
                   }
                 },
-                child: isUploading ? const CircularProgressIndicator(color: Colors.white) : Text(isEditing ? "Request Price Update" : "List Product", style: const TextStyle(color: Colors.white)),
+                child: isUploading ? const CircularProgressIndicator(color: Colors.white) : Text(isEditing ? "Request Price Update" : "List Product", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               ),
             ),
             const SizedBox(height: 40),
@@ -1301,51 +1213,16 @@ class _ProductFormState extends State<_ProductForm> {
       ),
     );
   }
-
-  Future<void> _submit() async {
-    if (name.text.isEmpty || price.text.isEmpty || selectedImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("All fields are required")));
-      return;
-    }
-
-    setState(() => isUploading = true);
-    try {
-      final storageService = StorageService();
-      final imageUrl = await storageService.uploadImage(selectedImage!, 'products');
-      if (imageUrl == null) throw "Upload failed";
-
-      await FirebaseFirestore.instance.collection('products').add({
-        'name': name.text,
-        'title': name.text,
-        'price': double.tryParse(price.text) ?? 0.0,
-        'farmerUid': widget.uid,
-        'farmName': widget.farmName,
-        'farmerLat': widget.farmerLat,
-        'farmerLng': widget.farmerLng,
-        'unit': unit.text,
-        'image': imageUrl,
-        'imageUrl': imageUrl,
-        'status': 'approved',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      if (mounted) Navigator.pop(context);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
-    } finally {
-      if (mounted) setState(() => isUploading = false);
-    }
-  }
 }
 
 class _DeliveryCard extends StatelessWidget {
-  final String orderId;
-  final Map<String, dynamic> data;
-  final DocumentReference docRef;
-  const _DeliveryCard({required this.orderId, required this.data, required this.docRef});
+  final OrderModel order;
+  const _DeliveryCard({required this.order});
 
   @override
   Widget build(BuildContext context) {
-    String status = data['status'] ?? 'Pending';
+    final vm = context.read<FarmerViewModel>();
+    final String status = order.status;
     Color statusColor = Colors.orange;
     if (status == 'Delivered' || status == 'Confirm Received') statusColor = Colors.green;
     if (status == 'Cancelled') statusColor = Colors.red;
@@ -1369,61 +1246,30 @@ class _DeliveryCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(child: Text("Order #${orderId.substring(0, 8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: Color(0xFF1A1D25)))),
+              Expanded(child: Text("Order #${order.id.substring(0, 8).toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: Color(0xFF1A1D25)))),
               _statusChip(status, statusColor),
             ],
           ),
           const SizedBox(height: 8),
-          Text(data['itemsSummary'] ?? 'Products ordered', style: TextStyle(fontSize: 14, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+          Text(order.itemsSummary, style: TextStyle(fontSize: 14, color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
           if (!isHistory) ...[
             const Divider(height: 32),
-            Text("Total: Rs. ${data['total'] ?? 0}", style: const TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1D9E75))),
+            Text("Total: Rs. ${order.total.toStringAsFixed(0)}", style: const TextStyle(fontWeight: FontWeight.w800, color: primaryTeal)),
             const SizedBox(height: 16),
             if (status == 'Farmer Accepted')
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1D9E75),
+                    backgroundColor: primaryTeal,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  onPressed: () async {
-                    await docRef.update({'status': 'Awaiting Pickup'});
-
-                    final userId = data['userId'];
-                    if (userId != null) {
-                      await FirebaseFirestore.instance.collection('users').doc(userId).collection('notifications').add({
-                        'title': 'Order Ready for Pickup',
-                        'body': 'Your order has been packed and is ready for the delivery person.',
-                        'createdAt': FieldValue.serverTimestamp(),
-                        'isRead': false,
-                        'type': 'delivery_status',
-                        'status': 'Awaiting Pickup',
-                        'orderId': orderId,
-                      });
-                    }
-
-                    final ridersSnap = await FirebaseFirestore.instance
-                        .collection('users')
-                        .where('role', isEqualTo: 'Delivery Person')
-                        .get();
-
-                    for (var rDoc in ridersSnap.docs) {
-                      await FirebaseFirestore.instance.collection('users').doc(rDoc.id).collection('notifications').add({
-                        'title': 'New Pickup Available!',
-                        'body': 'A package is ready for pickup at ${data['farmName'] ?? 'a nearby farm'}.',
-                        'createdAt': FieldValue.serverTimestamp(),
-                        'isRead': false,
-                        'type': 'pickup_alert',
-                        'orderId': orderId,
-                      });
-                    }
-                  },
+                  onPressed: () => vm.markReadyForPickup(order.id, order.userId, vm.farmerData?['farmName'] ?? 'Farm'),
                   child: const Text("Ready for Pickup", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                 ),
               ),
-            if (data['deliveryId'] != null && data['deliveryId'] != "") ...[
+            if (order.deliveryId != null && order.deliveryId != "") ...[
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
@@ -1433,9 +1279,9 @@ class _DeliveryCard extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => _TrackRiderMapScreen(
-                          orderId: orderId,
-                          riderId: data['deliveryId'],
-                          orderData: data,
+                          orderId: order.id,
+                          riderId: order.deliveryId!,
+                          orderData: order.toFirestore(),
                         ),
                       ),
                     );
@@ -1443,8 +1289,8 @@ class _DeliveryCard extends StatelessWidget {
                   icon: const Icon(Icons.map_rounded, size: 18),
                   label: const Text("Track Rider"),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFF1D9E75),
-                    side: const BorderSide(color: Color(0xFF1D9E75)),
+                    foregroundColor: primaryTeal,
+                    side: const BorderSide(color: primaryTeal),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                 ),
@@ -1465,69 +1311,103 @@ class _DeliveryCard extends StatelessWidget {
   }
 }
 
-class _OrderAcceptanceTile extends StatelessWidget {
+class _TrackRiderMapScreen extends StatefulWidget {
   final String orderId;
-  final Map<String, dynamic> data;
-  final String currentFarmerUid;
-  final String currentFarmName;
-  final double? farmerLat, farmerLng;
-  const _OrderAcceptanceTile({required this.orderId, required this.data, required this.currentFarmerUid, required this.currentFarmName, this.farmerLat, this.farmerLng});
+  final String riderId;
+  final Map<String, dynamic> orderData;
+
+  const _TrackRiderMapScreen({
+    required this.orderId,
+    required this.riderId,
+    required this.orderData,
+  });
+
+  @override
+  State<_TrackRiderMapScreen> createState() => _TrackRiderMapScreenState();
+}
+
+class _TrackRiderMapScreenState extends State<_TrackRiderMapScreen> {
+  MapLibreMapController? mapController;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey.shade100)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(data['itemsSummary'] ?? 'New Order', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-          const SizedBox(height: 4),
-          Text("Subtotal: Rs. ${data['subtotal']} • ${data['deliveryAddress']}", style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-          const SizedBox(height: 16),
-          GradientButton(
-            label: "Accept Order", 
-            icon: Icons.check_circle_rounded, 
-            isLoading: false, 
-            teal: primaryTeal, blue: const Color(0xFF2E5BFF),
-            onTap: () async {
-              final double? customerLat = (data['customerLat'] as num?)?.toDouble();
-              final double? customerLng = (data['customerLng'] as num?)?.toDouble();
-              
-              double deliveryFee = 40.0;
-              
-              if (customerLat != null && customerLng != null && farmerLat != null && farmerLng != null) {
-                final double distance = Geolocator.distanceBetween(
-                  farmerLat!, farmerLng!,
-                  customerLat, customerLng,
-                ) / 1000;
-                
-                if (distance >= 1 && distance <= 3) {
-                  deliveryFee = 50.0;
-                } else if (distance > 3) {
-                  deliveryFee = 15.0 * distance;
-                }
-              }
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Track Rider - #${widget.orderId.substring(0, 8).toUpperCase()}"),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+      body: StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('users').doc(widget.riderId).snapshots(),
+        builder: (context, snapshot) {
+          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          
+          final riderData = snapshot.data!.data() as Map<String, dynamic>?;
+          final double? riderLat = (riderData?['lat'] as num?)?.toDouble();
+          final double? riderLng = (riderData?['lng'] as num?)?.toDouble();
 
-              final double subtotal = (data['subtotal'] as num?)?.toDouble() ?? 0.0;
-              final double total = subtotal + deliveryFee;
+          if (riderLat == null || riderLng == null) {
+            return const Center(child: Text("Rider location not available"));
+          }
 
-              await FirebaseFirestore.instance.collection('orders').doc(orderId).update({
-                'status': 'Farmer Accepted',
-                'farmerUid': currentFarmerUid,
-                'farmName': currentFarmName,
-                'farmerLat': farmerLat,
-                'farmerLng': farmerLng,
-                'deliveryFee': deliveryFee,
-                'total': total,
-                'farmerRevenue': subtotal * 0.8,
-                'adminRevenue': (subtotal * 0.2) + (deliveryFee * 0.2),
-                'deliveryRevenue': deliveryFee * 0.8,
-              });
-            },
-          ),
-        ],
+          final riderPos = LatLng(riderLat, riderLng);
+
+          return Stack(
+            children: [
+              MapLibreMap(
+                initialCameraPosition: CameraPosition(target: riderPos, zoom: 14),
+                onMapCreated: (controller) => mapController = controller,
+                styleString: "https://tiles.openfreemap.org/styles/positron",
+                logoEnabled: false,
+              ),
+              Positioned(
+                bottom: 20,
+                left: 20,
+                right: 20,
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            backgroundColor: Colors.green.shade50,
+                            child: const Icon(Icons.person, color: Colors.green),
+                          ),
+                          const SizedBox(width: 15),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(riderData?['fullName'] ?? 'Rider', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text(riderData?['phone'] ?? 'No phone info', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.phone, color: Colors.green),
+                            onPressed: () {
+                              // Dialer link here
+                            },
+                          ),
+                        ],
+                      ),
+                      const Divider(height: 30),
+                      Text("Status: ${widget.orderData['status']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

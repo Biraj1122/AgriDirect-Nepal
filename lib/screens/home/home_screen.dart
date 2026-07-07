@@ -1,20 +1,21 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:farmtech_agridirect/models/product.dart';
 import 'package:farmtech_agridirect/screens/shop/product_detail_screen.dart';
 import 'package:farmtech_agridirect/screens/profile/notifications_screen.dart';
 import 'package:farmtech_agridirect/screens/orders/orders_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:farmtech_agridirect/viewmodels/shop_viewmodel.dart';
 import 'package:farmtech_agridirect/Success/shared_widgets.dart';
+import 'package:farmtech_agridirect/Success/skeleton_loader.dart';
 
 class HomeScreen extends StatefulWidget {
   final String userName;
   final VoidCallback onCartTap;
   final VoidCallback onFavoritesTap;
   final Function(String) onCategoryTap;
-  final List<Map<String, dynamic>> favouriteProducts;
-  final Function(Map<String, dynamic>) onFavouriteToggle;
 
   const HomeScreen({
     super.key,
@@ -22,8 +23,6 @@ class HomeScreen extends StatefulWidget {
     required this.onCartTap,
     required this.onFavoritesTap,
     required this.onCategoryTap,
-    required this.favouriteProducts,
-    required this.onFavouriteToggle,
   });
 
   @override
@@ -66,14 +65,13 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final vm = context.watch<ShopViewModel>();
 
     return Scaffold(
       backgroundColor: const Color(0xffF8FAF8),
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async {
-            setState(() {});
-          },
+          onRefresh: () async => setState(() {}),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
@@ -83,18 +81,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildHeader(user),
                 const SizedBox(height: 15),
                 _buildActiveOrderBanner(user),
-                const SizedBox(height: 20),
-                const Text("Featured Items", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                const SizedBox(height: 12),
-                _buildFeaturedSection(),
                 const SizedBox(height: 25),
-                const Text("Promos & Offers", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                const Text("Featured Items", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: Color(0xFF1A1D25))),
+                const SizedBox(height: 12),
+                _buildFeaturedSection(vm),
+                const SizedBox(height: 30),
+                const Text("Promos & Offers", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: Color(0xFF1A1D25))),
                 const SizedBox(height: 12),
                 _buildPromoSection(),
-                const SizedBox(height: 25),
+                const SizedBox(height: 30),
                 _buildCategoriesHeader(),
                 const SizedBox(height: 12),
-                _buildCategoriesSection(),
+                _buildCategoriesSection(vm),
                 const SizedBox(height: 30),
               ],
             ),
@@ -112,18 +110,19 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "Hello, ${widget.userName}",
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              "Namaste, ${widget.userName}",
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF1A1D25)),
             ),
             const SizedBox(height: 2),
-            Text(_getTimeBasedGreeting(), style: TextStyle(color: Colors.grey.shade600)),
+            Text(_getTimeBasedGreeting(), style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
           ],
         ),
         Row(
           children: [
             IconButton(
               onPressed: widget.onFavoritesTap,
-              icon: const Icon(Icons.favorite_border, color: Colors.red),
+              icon: const Icon(Icons.favorite_rounded, color: Colors.redAccent),
+              style: IconButton.styleFrom(backgroundColor: Colors.white),
             ),
             _buildNotificationIcon(user),
           ],
@@ -136,13 +135,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Stack(
       children: [
         IconButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-            );
-          },
-          icon: const Icon(Icons.notifications_none_outlined),
+          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
+          icon: const Icon(Icons.notifications_rounded, color: Colors.amber),
+          style: IconButton.styleFrom(backgroundColor: Colors.white),
         ),
         if (user != null)
           StreamBuilder<QuerySnapshot>(
@@ -155,14 +150,10 @@ class _HomeScreenState extends State<HomeScreen> {
             builder: (context, snapshot) {
               if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
                 return Positioned(
-                  right: 8,
-                  top: 8,
+                  right: 8, top: 8,
                   child: Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
+                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                     constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                     child: Text(
                       "${snapshot.data!.docs.length}",
@@ -190,60 +181,35 @@ class _HomeScreenState extends State<HomeScreen> {
           .limit(1)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const SizedBox();
-        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox();
 
         final orderDoc = snapshot.data!.docs.first;
         final order = orderDoc.data() as Map<String, dynamic>;
         final status = order['status'] ?? 'Pending';
-        final orderId = orderDoc.id;
 
         return GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => OrderScreen(
-                  orderId: orderId,
-                  onBackToHome: () => Navigator.pop(context),
-                ),
-              ),
-            );
-          },
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderScreen(orderId: orderDoc.id, onBackToHome: () => Navigator.pop(context)))),
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.green.shade600, Colors.green.shade800],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(color: Colors.green.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4)),
-              ],
+              gradient: const LinearGradient(colors: [Color(0xFF1D9E75), Color(0xFF1565C0)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [BoxShadow(color: const Color(0xFF1D9E75).withValues(alpha: 0.3), blurRadius: 15, offset: const Offset(0, 8))],
             ),
             child: Row(
               children: [
-                const Icon(Icons.local_shipping_outlined, color: Colors.white, size: 30),
+                const Icon(Icons.local_shipping_rounded, color: Colors.white, size: 32),
                 const SizedBox(width: 15),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        "Track Your Delivery",
-                        style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 16),
-                      ),
-                      Text(
-                        _getStatusMessage(status),
-                        style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13),
-                      ),
+                      const Text("Track Your Delivery", style: TextStyle(fontWeight: FontWeight.w900, color: Colors.white, fontSize: 17)),
+                      Text(_getStatusMessage(status), style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 13, fontWeight: FontWeight.w500)),
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.white),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Colors.white),
               ],
             ),
           ),
@@ -252,174 +218,96 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFeaturedSection() {
-    return SizedBox(
-      height: 200,
-      child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('master_catalog').limit(6).snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Colors.green));
-          }
-          
-          List<DocumentSnapshot> docs = snapshot.hasData ? snapshot.data!.docs : [];
-          
-          if (docs.isEmpty) {
-            // Fallback to products collection if master_catalog is empty
-            return StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance.collection('products').limit(6).snapshots(),
-              builder: (context, prodSnapshot) {
-                if (prodSnapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Colors.green));
-                }
-                final pDocs = prodSnapshot.hasData ? prodSnapshot.data!.docs : <DocumentSnapshot>[];
-                if (pDocs.isEmpty) return _buildDefaultFeatured();
-                return _buildFeaturedPager(pDocs.cast<DocumentSnapshot>());
-              },
-            );
-          }
-          
-          return _buildFeaturedPager(docs);
-        },
-      ),
-    );
-  }
+  Widget _buildFeaturedSection(ShopViewModel vm) {
+    if (vm.loading) return const SkeletonLoader(height: 200, borderRadius: 28);
+    final products = vm.filteredProducts.take(6).toList();
+    if (products.isEmpty) return const SizedBox();
 
-  Widget _buildFeaturedPager(List<DocumentSnapshot> docs) {
-    if (_featuredCount != docs.length) {
+    if (_featuredCount != products.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _featuredCount = docs.length);
+        if (mounted) setState(() => _featuredCount = products.length);
       });
     }
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: (notification) {
-        if (notification is ScrollStartNotification) {
-          _featuredTimer?.cancel();
-        } else if (notification is ScrollEndNotification) {
-          _startFeaturedTimer();
-        }
-        return false;
-      },
+    return SizedBox(
+      height: 200,
       child: PageView.builder(
         controller: _featuredPageController,
-        onPageChanged: (idx) => _currentFeaturedIndex = idx,
-        itemCount: docs.length,
+        onPageChanged: (idx) => setState(() => _currentFeaturedIndex = idx),
+        itemCount: products.length,
         physics: const BouncingScrollPhysics(),
-        itemBuilder: (context, index) {
-          final data = docs[index].data() as Map<String, dynamic>;
-          final product = Product.fromMap(data, docId: docs[index].id);
-          return _buildFeaturedCard(context, product);
-        },
+        itemBuilder: (context, index) => _buildFeaturedCard(context, vm, products[index]),
       ),
     );
   }
 
-  Widget _buildFeaturedCard(BuildContext context, Product product) {
-    bool isFavourite = widget.favouriteProducts.any((p) =>
-        (p['name'] == product.title || p['title'] == product.title) ||
-        (product.id != null && (p['docId'] == product.id || p['id'] == product.id))
-    );
+  Widget _buildFeaturedCard(BuildContext context, ShopViewModel vm, Product product) {
+    final isFavourite = vm.isFavourite(product);
 
     return GestureDetector(
       onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ProductDetailScreen(
-              product: product,
-              isFavourite: isFavourite,
-              onToggleFavourite: widget.onFavouriteToggle,
-            ),
-          ),
-        );
+        Navigator.push(context, MaterialPageRoute(builder: (_) => ProductDetailScreen(
+          product: product, 
+          isFavourite: isFavourite, 
+          onToggleFavourite: (p) => vm.toggleFavourite(Product.fromMap(p))
+        )));
       },
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
+        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4)),
-          ],
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [BoxShadow(color: Colors.green.withValues(alpha: 0.2), blurRadius: 15, offset: const Offset(0, 8))],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(28),
           child: Stack(
             children: [
-              Positioned.fill(child: SafeProductImage(imageUrl: product.image)),
+              Positioned.fill(child: Hero(tag: product.id ?? product.title, child: SafeProductImage(imageUrl: product.image))),
               Positioned.fill(
                 child: Container(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, Colors.black.withValues(alpha: 0.8)],
+                      begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                      colors: [Colors.transparent, Colors.black.withValues(alpha: 0.1), Colors.black.withValues(alpha: 0.8)],
                     ),
                   ),
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(8)),
-                      child: const Text("FEATURED", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(color: Colors.green, borderRadius: BorderRadius.circular(10), boxShadow: [BoxShadow(color: Colors.green.withValues(alpha: 0.3), blurRadius: 8)]),
+                      child: const Text("ORGANIC", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
                     ),
-                    const SizedBox(height: 5),
-                    Text(product.title, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                    Text("Rs. ${product.price}", style: const TextStyle(color: Colors.white, fontSize: 16)),
+                    const SizedBox(height: 8),
+                    Text(product.title, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                    Row(
+                      children: [
+                        Text("Rs. ${product.price}", style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                        Text(" / ${product.unit}", style: TextStyle(color: Colors.white.withValues(alpha: 0.7), fontSize: 14)),
+                      ],
+                    ),
                   ],
                 ),
               ),
               Positioned(
-                top: 15,
-                right: 15,
+                top: 20, right: 20,
                 child: GestureDetector(
-                  onTap: () {
-                    final productMap = product.toMap();
-                    productMap['badge'] = 'Featured';
-                    productMap['badgeColor'] = Colors.green.toARGB32();
-                    productMap['farm'] = product.farmName ?? 'Local Farm';
-                    productMap['rating'] = 4.8;
-                    widget.onFavouriteToggle(productMap);
-                  },
-                  child: CircleAvatar(
-                    backgroundColor: Colors.white.withValues(alpha: 0.9),
-                    radius: 18,
-                    child: Icon(
-                      isFavourite ? Icons.favorite : Icons.favorite_border,
-                      color: Colors.red,
-                      size: 20,
-                    ),
+                  onTap: () => vm.toggleFavourite(product),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)]),
+                    child: Icon(isFavourite ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: Colors.redAccent, size: 22),
                   ),
                 ),
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDefaultFeatured() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: Colors.green.shade700,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.eco, color: Colors.white, size: 50),
-            SizedBox(height: 10),
-            Text("Fresh Produce Daily", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ],
         ),
       ),
     );
@@ -432,9 +320,9 @@ class _HomeScreenState extends State<HomeScreen> {
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         children: [
-          _buildPromoCard("10% OFF", "On all organic vegetables", Colors.orange, Icons.percent),
-          _buildPromoCard("FREE DELIVERY", "Orders above Rs. 2000", Colors.blue, Icons.local_shipping),
-          _buildPromoCard("COMBO DEALS", "Get freebies on every purchase over Rs.5000", Colors.purple, Icons.card_giftcard),
+          _buildPromoCard("10% OFF", "On organic vegetables", Colors.orange, Icons.percent_rounded),
+          _buildPromoCard("FREE DELIVERY", "Orders above Rs. 2000", Colors.blue, Icons.local_shipping_rounded),
+          _buildPromoCard("COMBO DEALS", "Gifts on Rs. 5000+", Colors.purple, Icons.card_giftcard_rounded),
         ],
       ),
     );
@@ -444,19 +332,26 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       width: 220,
       margin: const EdgeInsets.only(right: 15),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: color.withValues(alpha: 0.15), width: 1.5),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Icon(icon, color: color, size: 28),
-          const Spacer(),
-          Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 18)),
+                const SizedBox(height: 4),
+                Text(subtitle, style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          Icon(icon, color: color, size: 36),
         ],
       ),
     );
@@ -466,110 +361,65 @@ class _HomeScreenState extends State<HomeScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text("Categories", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+        const Text("Categories", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: Color(0xFF1A1D25))),
         TextButton(
-          onPressed: () => widget.onCategoryTap(""),
-          child: const Text("See all", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+          onPressed: () => widget.onCategoryTap("All"),
+          child: const Text("See all", style: TextStyle(color: Colors.green, fontWeight: FontWeight.w800)),
         ),
       ],
     );
   }
 
-  Widget _buildCategoriesSection() {
-    return SizedBox(
-      height: 100,
-      child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('categories').snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Colors.green));
-          }
-          
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                categoryItem(Icons.grid_view_rounded, "All"),
-                categoryItem(Icons.eco_outlined, "Vegetables"),
-                categoryItem(Icons.apple_outlined, "Fruits"),
-                categoryItem(Icons.grain, "Grains"),
-                categoryItem(Icons.local_drink_outlined, "Dairy"),
-                categoryItem(Icons.lens_blur, "Pulses"),
-              ],
-            );
-          }
-
-          final fetched = snapshot.data!.docs.map((doc) {
-            final data = doc.data() as Map<String, dynamic>;
-            return data['name'] ?? 'Category';
-          }).toList();
-
-          // Sort categories: Vegetables first, then Fruits, then others
-          fetched.sort((a, b) {
-            final nameA = a.toString().toLowerCase();
-            final nameB = b.toString().toLowerCase();
-            
-            if (nameA == 'vegetables') return -1;
-            if (nameB == 'vegetables') return 1;
-            if (nameA == 'fruits') return -1;
-            if (nameB == 'fruits') return 1;
-            
-            return nameA.compareTo(nameB);
-          });
-
-          final displayCategories = ["All", ...fetched];
-
-          return ListView.builder(
+  Widget _buildCategoriesSection(ShopViewModel vm) {
+    return StreamBuilder<List<String>>(
+      stream: vm.getCategories(),
+      builder: (context, snap) {
+        final categories = snap.data ?? ["Vegetables", "Fruits", "Grains", "Dairy", "Pulses"];
+        return SizedBox(
+          height: 100,
+          child: ListView.builder(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
-            itemCount: displayCategories.length,
-            itemBuilder: (context, index) {
-              final name = displayCategories[index];
-              final displayIcon = _getCategoryIcon(name);
-              return categoryItem(displayIcon, name);
-            },
-          );
-        },
+            itemCount: categories.length,
+            itemBuilder: (context, index) => _categoryItem(categories[index]),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _categoryItem(String title) {
+    return GestureDetector(
+      onTap: () => widget.onCategoryTap(title),
+      child: Container(
+        margin: const EdgeInsets.only(right: 20),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: Icon(_getCategoryIcon(title), color: Colors.green, size: 28),
+            ),
+            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFF1A1D25))),
+          ],
+        ),
       ),
     );
   }
 
   IconData _getCategoryIcon(String name) {
     switch (name.toLowerCase()) {
-      case 'all': return Icons.grid_view_rounded;
-      case 'vegetables': return Icons.eco_outlined;
-      case 'fruits': return Icons.apple_outlined;
-      case 'grains': return Icons.grain;
-      case 'dairy': return Icons.local_drink_outlined;
+      case 'vegetables': return Icons.eco_rounded;
+      case 'fruits': return Icons.apple_rounded;
+      case 'grains': return Icons.grain_rounded;
+      case 'dairy': return Icons.water_drop_rounded;
       case 'pulses': return Icons.lens_blur;
       default: return Icons.category_rounded;
     }
-  }
-
-  Widget categoryItem(IconData icon, String title) {
-    return GestureDetector(
-      onTap: () => widget.onCategoryTap(title),
-      child: Container(
-        margin: const EdgeInsets.only(right: 16),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 10, offset: const Offset(0, 4)),
-                ],
-              ),
-              child: Icon(icon, color: Colors.green, size: 28),
-            ),
-            const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
-    );
   }
 
   String _getStatusMessage(String status) {
@@ -585,8 +435,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _getTimeBasedGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
-    return "Good evening";
+    if (hour < 12) return "Hope you're having a great morning!";
+    if (hour < 17) return "How is your afternoon going?";
+    return "Ready for a fresh dinner tonight?";
   }
 }
