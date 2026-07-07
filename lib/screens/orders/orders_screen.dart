@@ -250,13 +250,14 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
 
   void _onMapCreated(MapLibreMapController controller) {
     mapController = controller;
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        _addMarkers();
-        _updateRouteLine();
-        _fitCameraToMarkers();
-      }
-    });
+  }
+
+  void _onStyleLoaded() {
+    if (mounted) {
+      _addMarkers();
+      _updateRouteLine();
+      _fitCameraToMarkers();
+    }
   }
 
   Future<void> _addMarkers() async {
@@ -344,8 +345,8 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
         LatLngBounds(southwest: LatLng(south, west), northeast: LatLng(north, east)),
         left: 80,
         right: 80,
-        top: 150,
-        bottom: 250,
+        top: 250,
+        bottom: 150,
       ),
     );
   }
@@ -708,6 +709,7 @@ class _OrderScreenState extends State<OrderScreen> with TickerProviderStateMixin
                     zoom: 13.5,
                   ),
                   onMapCreated: _onMapCreated,
+                  onStyleLoadedCallback: _onStyleLoaded,
                   styleString: "https://tiles.openfreemap.org/styles/positron",
                   logoEnabled: false,
                   myLocationEnabled: true,

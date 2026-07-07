@@ -12,6 +12,7 @@ import 'package:farmtech_agridirect/viewmodels/delivery_viewmodel.dart';
 import 'package:farmtech_agridirect/models/cart_model.dart';
 import 'package:farmtech_agridirect/firebase_options.dart';
 import 'package:farmtech_agridirect/screens/misc/splash_screen.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -21,6 +22,9 @@ void main() {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+
+    // Enable Hybrid Composition for MapLibre (Fixes stability on Android)
+    MapLibreMap.useHybridComposition = true;
 
     // Optimized Firestore Settings for compatibility
     if (kIsWeb) {

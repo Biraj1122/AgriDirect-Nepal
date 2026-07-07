@@ -306,10 +306,22 @@ class _HomeMapTabState extends State<_HomeMapTab> {
       if (widget.activeOrderData?['id'] != oldWidget.activeOrderData?['id'] ||
           widget.activeOrderData?['status'] != oldWidget.activeOrderData?['status']) {
         _lastRouteUpdatePos = null;
+        // Clean markers if order changed
+        _clearMarkers();
       }
       _updateDirections(force: true);
     } else if (widget.driverPos != oldWidget.driverPos) {
       _updateDirections();
+    }
+  }
+
+  void _clearMarkers() {
+    if (_mapController != null) {
+      if (_targetSymbol != null) { try { _mapController!.removeSymbol(_targetSymbol!); } catch (_) {} _targetSymbol = null; }
+      if (_targetCircle != null) { try { _mapController!.removeCircle(_targetCircle!); } catch (_) {} _targetCircle = null; }
+      if (_riderSymbol != null) { try { _mapController!.removeSymbol(_riderSymbol!); } catch (_) {} _riderSymbol = null; }
+      if (_riderCircle != null) { try { _mapController!.removeCircle(_riderCircle!); } catch (_) {} _riderCircle = null; }
+      if (_routeLine != null) { try { _mapController!.removeLine(_routeLine!); } catch (_) {} _routeLine = null; }
     }
   }
 
@@ -537,13 +549,30 @@ class _HomeMapTabState extends State<_HomeMapTab> {
       if (p.longitude > east) east = p.longitude;
     }
 
-    if (south == north) { south -= 0.001; north += 0.001; }
-    if (west == east) { west -= 0.001; east += 0.001; }
+    if (south == north) { south -= 0.002; north += 0.002; }
+    if (west == east) { west -= 0.002; east += 0.002; }
 
     _mapController!.animateCamera(CameraUpdate.newLatLngBounds(
       LatLngBounds(southwest: LatLng(south, west), northeast: LatLng(north, east)),
-      left: 70, right: 70, top: 160, bottom: 100,
+      left: 70, right: 70, top: 220, bottom: 120,
     ));
+  }
+
+  LatLng? _getCurrentTarget() {
+    if (widget.activeOrderData == null) return null;
+    final data = widget.activeOrderData!;
+    final status = data['status'];
+    final fLat = (data['farmerLat'] as num?)?.toDouble();
+    final fLng = (data['farmerLng'] as num?)?.toDouble();
+    final cLat = (data['customerLat'] as num?)?.toDouble() ?? (data['lat'] as num?)?.toDouble();
+    final cLng = (data['customerLng'] as num?)?.toDouble() ?? (data['lng'] as num?)?.toDouble();
+
+    if (status == 'Farmer Accepted' || status == 'Awaiting Pickup') {
+      if (fLat != null && fLng != null) return LatLng(fLat, fLng);
+    } else {
+      if (cLat != null && cLng != null) return LatLng(cLat, cLng);
+    }
+    return null;
   }
 
   @override
@@ -567,15 +596,27 @@ class _HomeMapTabState extends State<_HomeMapTab> {
           onMapClick: (point, latlng) => _centerOnDriver(),
         ),
 
-        // CENTER ON ME BUTTON
+        // MAP ACTION BUTTONS
         Positioned(
           bottom: 20,
           right: 20,
-          child: FloatingActionButton(
-            mini: true,
-            backgroundColor: Colors.white,
-            onPressed: _centerOnDriver,
-            child: const Icon(Icons.my_location_rounded, color: primaryTeal),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FloatingActionButton.small(
+                heroTag: "fit_route",
+                backgroundColor: Colors.white,
+                onPressed: () => _fitCamera(widget.driverPos, _getCurrentTarget()),
+                child: const Icon(Icons.zoom_out_map_rounded, color: primaryTeal),
+              ),
+              const SizedBox(height: 12),
+              FloatingActionButton.small(
+                heroTag: "center_driver",
+                backgroundColor: Colors.white,
+                onPressed: _centerOnDriver,
+                child: const Icon(Icons.my_location_rounded, color: primaryTeal),
+              ),
+            ],
           ),
         ),
 
