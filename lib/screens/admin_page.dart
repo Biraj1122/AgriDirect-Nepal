@@ -17,6 +17,7 @@ import '../models/price_request_model.dart';
 import '../Success/shared_widgets.dart';
 import '../utils/db_seeder.dart';
 import '../services/storage_service.dart';
+import '../Success/exit_wrapper.dart';
 import 'auth/login_screen.dart';
 
 class AdminPage extends StatefulWidget {
@@ -84,106 +85,108 @@ class _AdminPageState extends State<AdminPage> with WidgetsBindingObserver {
     return Listener(
       onPointerDown: (_) => _resetInactivityTimer(),
       onPointerMove: (_) => _resetInactivityTimer(),
-      child: Scaffold(
-        backgroundColor: backgroundColor,
-        appBar: AppBar(
-          title: const Text("AgriDirect Admin", 
-            style: TextStyle(color: Color(0xFF1A1D25), fontWeight: FontWeight.w700, letterSpacing: -0.5)),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: false,
-          iconTheme: const IconThemeData(color: primaryTeal),
-          actions: [
-            IconButton(
-              onPressed: () => _showSeedDatabaseDialog(context, viewModel),
-              icon: const Icon(Icons.storage_rounded, color: primaryTeal),
-              tooltip: "Seed Database",
-            ),
-            IconButton(
-              onPressed: () => viewModel.refreshAdminState(),
-              icon: const Icon(Icons.refresh_rounded, color: primaryTeal),
-            ),
-            const SizedBox(width: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16),
-              child: TextButton.icon(
-                onPressed: () => viewModel.logout(context, const LoginScreen()),
-                icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
-                label: const Text("Logout", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
-                style: TextButton.styleFrom(
-                  backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: DoubleBackExitWrapper(
+        child: Scaffold(
+          backgroundColor: backgroundColor,
+          appBar: AppBar(
+            title: const Text("AgriDirect Admin", 
+              style: TextStyle(color: Color(0xFF1A1D25), fontWeight: FontWeight.w700, letterSpacing: -0.5)),
+            backgroundColor: Colors.white,
+            elevation: 0,
+            centerTitle: false,
+            iconTheme: const IconThemeData(color: primaryTeal),
+            actions: [
+              IconButton(
+                onPressed: () => _showSeedDatabaseDialog(context, viewModel),
+                icon: const Icon(Icons.storage_rounded, color: primaryTeal),
+                tooltip: "Seed Database",
+              ),
+              IconButton(
+                onPressed: () => viewModel.refreshAdminState(),
+                icon: const Icon(Icons.refresh_rounded, color: primaryTeal),
+              ),
+              const SizedBox(width: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16),
+                child: TextButton.icon(
+                  onPressed: () => viewModel.logout(context, const LoginScreen()),
+                  icon: const Icon(Icons.logout_rounded, color: Colors.redAccent, size: 18),
+                  label: const Text("Logout", style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-        drawer: isWide ? null : _buildSidePanel(context, viewModel),
-        body: Row(
-          children: [
-            if (isWide) _buildPersistentPanel(context, viewModel),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: viewModel.currentIndex < 9 
-                  ? IndexedStack(
-                    key: ValueKey(viewModel.currentIndex),
-                    index: viewModel.currentIndex,
-                    children: [
-                      _buildDashboard(context, viewModel),
-                      _buildOrdersList(context, viewModel),
-                      _buildProductsList(context, viewModel),
-                      _buildCategorizedUsersList(context, viewModel),
-                      _buildAnnouncementManager(context, viewModel),
-                      _buildResearchManager(context, viewModel),
-                      _buildRevenueAnalyticsPage(context, viewModel),
-                      _buildPriceApprovalsList(context, viewModel),
-                      _buildCategorizedApprovalsList(context, viewModel),
-                    ],
-                  )
-                  : const Center(child: Text("Page Not Found")),
+            ],
+          ),
+          drawer: isWide ? null : _buildSidePanel(context, viewModel),
+          body: Row(
+            children: [
+              if (isWide) _buildPersistentPanel(context, viewModel),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: viewModel.currentIndex < 9 
+                    ? IndexedStack(
+                      key: ValueKey(viewModel.currentIndex),
+                      index: viewModel.currentIndex,
+                      children: [
+                        _buildDashboard(context, viewModel),
+                        _buildOrdersList(context, viewModel),
+                        _buildProductsList(context, viewModel),
+                        _buildCategorizedUsersList(context, viewModel),
+                        _buildAnnouncementManager(context, viewModel),
+                        _buildResearchManager(context, viewModel),
+                        _buildRevenueAnalyticsPage(context, viewModel),
+                        _buildPriceApprovalsList(context, viewModel),
+                        _buildCategorizedApprovalsList(context, viewModel),
+                      ],
+                    )
+                    : const Center(child: Text("Page Not Found")),
+                ),
               ),
-            ),
-          ],
-        ),
-        bottomNavigationBar: isWide || viewModel.currentIndex >= 9
-            ? null
-            : BottomNavigationBar(
-          currentIndex: viewModel.currentIndex < 5 
-              ? viewModel.currentIndex 
-              : (viewModel.currentIndex == 8 ? 4 : 0),
-          onTap: (index) {
-            if (index == 4) {
-              viewModel.setCurrentIndex(8);
-            } else {
-              viewModel.setCurrentIndex(index);
-            }
-          },
-          selectedItemColor: primaryTeal,
-          unselectedItemColor: Colors.grey.shade400,
-          backgroundColor: Colors.white,
-          elevation: 20,
-          type: BottomNavigationBarType.fixed,
-          items: [
-            const BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: "Dash"),
-            const BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_rounded), label: "Orders"),
-            const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: "Catalog"),
-            const BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: "Users"),
-            BottomNavigationBarItem(
-              icon: StreamBuilder<int>(
-                stream: viewModel.pendingProductCount,
-                builder: (context, snapshot) {
-                  final count = snapshot.data ?? 0;
-                  if (count == 0) return const Icon(Icons.verified_user_rounded);
-                  return Badge(
-                    label: Text(count.toString()),
-                    child: const Icon(Icons.verified_user_rounded),
-                  );
-                }
+            ],
+          ),
+          bottomNavigationBar: isWide || viewModel.currentIndex >= 9
+              ? null
+              : BottomNavigationBar(
+            currentIndex: viewModel.currentIndex < 5 
+                ? viewModel.currentIndex 
+                : (viewModel.currentIndex == 8 ? 4 : 0),
+            onTap: (index) {
+              if (index == 4) {
+                viewModel.setCurrentIndex(8);
+              } else {
+                viewModel.setCurrentIndex(index);
+              }
+            },
+            selectedItemColor: primaryTeal,
+            unselectedItemColor: Colors.grey.shade400,
+            backgroundColor: Colors.white,
+            elevation: 20,
+            type: BottomNavigationBarType.fixed,
+            items: [
+              const BottomNavigationBarItem(icon: Icon(Icons.dashboard_rounded), label: "Dash"),
+              const BottomNavigationBarItem(icon: Icon(Icons.shopping_bag_rounded), label: "Orders"),
+              const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: "Catalog"),
+              const BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: "Users"),
+              BottomNavigationBarItem(
+                icon: StreamBuilder<int>(
+                  stream: viewModel.pendingProductCount,
+                  builder: (context, snapshot) {
+                    final count = snapshot.data ?? 0;
+                    if (count == 0) return const Icon(Icons.verified_user_rounded);
+                    return Badge(
+                      label: Text(count.toString()),
+                      child: const Icon(Icons.verified_user_rounded),
+                    );
+                  }
+                ),
+                label: "Approvals",
               ),
-              label: "Approvals",
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
